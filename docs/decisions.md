@@ -184,21 +184,31 @@ they are re-applied.
 
 ## Custom UI
 
-Components written by hand after searching the approved registries, per section 8.1
-of the implementation plan.
+Components written by hand after searching the approved registries. Four sources are
+approved: shadcn primitives, beUI agent surfaces, ReUI operator surfaces, and
+Beautiful UI. Anything below is here because nothing in those four fit.
 
-**`components/kora/trace-timeline.tsx`** — searched beUI `agent-activity`, which the
-component map assigns to this surface. Its `AgentActivityItem` union is a flat list
-of label-and-meta rows; it has no per-row disclosure carrying full input and output
-JSON, no way to render a policy check's rule id, version and facts, and no visual
-distinction between a denied action, a simulated action and a failed one. Those four
-things are the entire point of the panel. Built by hand from `<details>` plus beUI
-`code-block`, the component that renders the JSON inside it.
+**`components/kora/trace-timeline.tsx`** — searched beUI `agent-activity`, the
+component the map assigns to this surface. Its `AgentActivityItem` union is a flat
+list of label-and-meta rows. It has no per-row disclosure carrying input and output
+JSON, no slot for a nested policy check with its rule id, version and facts, and no
+way to tell a denied action from a simulated one from a failed one. Those are the
+entire point of the panel. Bending it into shape would be surgery on a registry
+component, which is the signal that it is the wrong component. Built from `<details>`
+plus beUI `code-block`, which does render the JSON inside it.
 
-**`components/ops/insight-cards.tsx`** — the genuine Beautiful UI "Insight Cards (17)"
-source was retrieved from the site's RSC payload. It is a `liveline`-backed chart
-carousel with hardcoded demo data and no props, sharing only the name with the metric
-tile grid the overview screen needs. Nothing transferred but the type hierarchy.
+**`components/kora/stat.tsx`** — ReUI's Stats blocks require a licence key, so they
+are unavailable. shadcn has `card` but not a tile strip, and a card is the wrong
+container for a bare number anyway. Three small components on a CSS grid: `HeroStat`,
+`StatBar`, `Tile`.
+
+**`components/kora/trace-verdict.tsx`** — this is a lookup from run state to one
+sentence, not a widget. No registry ships "why did this agent run stop", because the
+answer is specific to this policy engine and this state machine.
+
+**`components/kora/status-pill.tsx`, `components/kora/copy-id.tsx`** — a span with a
+token class and a lookup table, and a button that writes to the clipboard. Both wrap
+primitives that are already installed.
 
 **`components/ops/context-cards.tsx`, `components/ops/task-rows.tsx`** — adapted from
 the genuine Beautiful UI source rather than copied. The originals take no props, carry
@@ -210,11 +220,26 @@ app's `globals.css`. The layout grammar is theirs; the props API and tokens are 
 for "describe a tool call to a customer without leaking its arguments", because it is
 a product decision rather than a widget.
 
+**The approvals chip groups and the saved-view segmented control** — ReUI `filters`
+is the filter bar and is used as one on `/ops/conversations`. Both of these are
+navigation: a list of links where exactly one is current. A filter builder would be
+the wrong grammar and would put a query tree where four fixed links belong.
+
 **`@beui/loading-states`** — listed in the beUI index but its shadcn item endpoint
 (`https://beui.dev/r/loading-states.json`) returns 404, so the CLI cannot install it.
 `components/agents/loading-states/thinking-shimmer.tsx` arrived anyway as a transitive
 dependency of `@beui/agent-activity`, and that is the piece the chat needs, so nothing
 was hand-built for it.
+
+### One edit to a registry component
+
+`components/agents/code-block.tsx` renders a green check and the word "Ready" once
+its content stops streaming. On a trace page nothing streams, so every JSON pane
+carried a permanent green tick sitting a few pixels from the real pass and fail pills
+on the same screen. There is no prop to hide it. The badge now renders only while
+streaming, marked with a `kora:` comment at the edit. Everything else in
+`components/agents`, `components/motion` and `components/reui` is untouched upstream
+source.
 
 ## `account.issuer` was added rather than pinning Better Auth back
 
