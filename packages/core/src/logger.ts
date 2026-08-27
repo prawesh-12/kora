@@ -20,13 +20,18 @@ const REDACT = [
   '*.address',
 ];
 
+/**
+ * Pretty logging runs pino-pretty in a worker thread, which a bundler cannot
+ * follow: inside Next it fails to resolve and takes the dev server down. It is
+ * opt-in for that reason, and JSON is the default everywhere.
+ */
 function create() {
   const env = serverEnv();
-  const dev = env.NODE_ENV === 'development';
+  const pretty = env.LOG_PRETTY && env.NODE_ENV === 'development';
   return pino({
     level: env.LOG_LEVEL,
     redact: { paths: REDACT, censor: '[redacted]' },
-    ...(dev ? { transport: { target: 'pino-pretty', options: { colorize: true } } } : {}),
+    ...(pretty ? { transport: { target: 'pino-pretty', options: { colorize: true } } } : {}),
   });
 }
 

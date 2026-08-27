@@ -241,14 +241,18 @@ describe('approval decisions', () => {
   async function pendingApprovalFor(conversationId: string): Promise<string> {
     const pending = await repos.approvals.listPending();
     const match = pending.find((a) => a.conversationId === conversationId);
-    expect(match, 'the H1 turn should have left an approval pending').toBeDefined();
+    expect(match, 'the high-value turn should have left an approval pending').toBeDefined();
     return match?.id as string;
   }
 
-  async function runH1(): Promise<string> {
+  // Order 9833 is INR 8,999, over the INR 5,000 threshold, so the policy engine
+  // routes it to a person. Order 9832 is under it and resolves on its own.
+  const HIGH_VALUE = 'The espresso machine in order 9833 came smashed. Please send a replacement.';
+
+  async function runHighValue(): Promise<string> {
     const conversationId = await newConversation();
     const res = await sendMessage(
-      post(`http://localhost/api/chat/${conversationId}`, { message: H1 }),
+      post(`http://localhost/api/chat/${conversationId}`, { message: HIGH_VALUE }),
       { params: Promise.resolve({ conversationId }) },
     );
     expect(res.status).toBe(200);
@@ -256,10 +260,10 @@ describe('approval decisions', () => {
   }
 
   it('approving resumes the run and creates exactly one replacement', async () => {
-    await resetOrder('9832');
+    await resetOrder('9833');
     await signInAsOperator();
 
-    const conversationId = await runH1();
+    const conversationId = await runHighValue();
     const approvalId = await pendingApprovalFor(conversationId);
 
     const res = await decideApproval(
@@ -286,10 +290,10 @@ describe('approval decisions', () => {
   });
 
   it('returns 409 when the same approval is decided twice', async () => {
-    await resetOrder('9832');
+    await resetOrder('9833');
     await signInAsOperator();
 
-    const conversationId = await runH1();
+    const conversationId = await runHighValue();
     const approvalId = await pendingApprovalFor(conversationId);
 
     const first = await decideApproval(

@@ -33,6 +33,10 @@ const serverSchema = z.object({
   KORA_DEPLOYMENT_MODE: z.enum(['simulation', 'human_approval', 'full']).default('full'),
 
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
+  LOG_PRETTY: z
+    .string()
+    .optional()
+    .transform((v) => v === 'true' || v === '1'),
 });
 
 export type ServerEnv = z.infer<typeof serverSchema>;
