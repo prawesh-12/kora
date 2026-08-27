@@ -1,5 +1,10 @@
 import { acme, acmeFetch } from './clients/acme.js';
-import type { OrderResponse, ReplacementResponse } from './clients/acme.js';
+import type {
+  CancellationResponse,
+  OrderResponse,
+  RefundResponse,
+  ReplacementResponse,
+} from './clients/acme.js';
 
 const TIMEOUT_MS = 5000;
 
@@ -20,6 +25,14 @@ export const acmeReader = {
 
   listReplacements(orderId: string): Promise<ReplacementResponse[]> {
     return acme.listReplacements(orderId, { signal: AbortSignal.timeout(TIMEOUT_MS) });
+  },
+
+  listRefunds(orderId: string): Promise<RefundResponse[]> {
+    return acme.listRefunds(orderId, { signal: AbortSignal.timeout(TIMEOUT_MS) });
+  },
+
+  listCancellations(orderId: string): Promise<CancellationResponse[]> {
+    return acme.listCancellations(orderId, { signal: AbortSignal.timeout(TIMEOUT_MS) });
   },
 };
 

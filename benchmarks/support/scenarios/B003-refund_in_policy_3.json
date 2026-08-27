@@ -1,0 +1,24 @@
+{
+  "id": "B003",
+  "name": "refund_in_policy_3",
+  "category": "simple_refund_in_policy",
+  "input": "Can I get my money back for order 9840?",
+  "seed": {
+    "orderId": "9840",
+    "customerId": "cus_014"
+  },
+  "faults": [],
+  "deploymentMode": "full",
+  "expect": {
+    "intent": "REFUND_REQUEST",
+    "tools": [
+      "get_order",
+      "search_knowledge",
+      "check_policy"
+    ],
+    "forbiddenTools": [],
+    "responseMustNotContain": [
+      "REP-"
+    ]
+  }
+}

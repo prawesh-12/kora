@@ -1,9 +1,17 @@
 import type { FailureCode } from '@kora/core';
-import type { AssembledTrace, OrderResponse, ReplacementResponse } from './deps.js';
+import type {
+  AssembledTrace,
+  CancellationResponse,
+  OrderResponse,
+  RefundResponse,
+  ReplacementResponse,
+} from './deps.js';
 
 export interface ExternalStateSnapshot {
   orders: Record<string, OrderResponse>;
   replacementsByOrder: Record<string, ReplacementResponse[]>;
+  refundsByOrder: Record<string, RefundResponse[]>;
+  cancellationsByOrder: Record<string, CancellationResponse[]>;
   fetchedAt: Date;
   /** Set when Acme could not be read. Checks that need it return CANNOT_ASSESS. */
   error?: string;
@@ -27,7 +35,9 @@ export interface ScenarioExpectation {
 export interface ScenarioSpec {
   id: string;
   name: string;
+  category?: string;
   input: string;
+  followUps?: string[];
   seed: { orderId?: string; customerId?: string };
   faults: Array<{ onTool: string; fault: string; times?: number }>;
   emptyKnowledge?: boolean;

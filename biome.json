@@ -1,5 +1,5 @@
 {
-  "$schema": "https://biomejs.dev/schemas/2.4.0/schema.json",
+  "$schema": "https://biomejs.dev/schemas/2.5.10/schema.json",
   "files": {
     "includes": [
       "**",
@@ -7,7 +7,11 @@
       "!**/.next",
       "!**/dist",
       "!**/.turbo",
-      "!**/components/ui"
+      "!**/components/ui",
+      "!benchmarks",
+      "!**/components/agents",
+      "!**/components/motion",
+      "!**/migrations/meta"
     ]
   },
   "formatter": {
@@ -19,7 +23,7 @@
   "linter": {
     "enabled": true,
     "rules": {
-      "recommended": true,
+      "preset": "recommended",
       "style": {
         "noNonNullAssertion": "off",
         "useImportType": "error"

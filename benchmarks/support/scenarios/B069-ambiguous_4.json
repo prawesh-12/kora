@@ -1,0 +1,21 @@
+{
+  "id": "B069",
+  "name": "ambiguous_4",
+  "category": "ambiguous_request",
+  "input": "Not happy.",
+  "seed": {},
+  "faults": [],
+  "deploymentMode": "full",
+  "expect": {
+    "state": "NEEDS_HUMAN",
+    "forbiddenTools": [
+      "create_replacement",
+      "create_refund",
+      "cancel_order"
+    ],
+    "responseMustNotContain": [
+      "REP-",
+      "REF-"
+    ]
+  }
+}

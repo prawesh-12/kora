@@ -8,19 +8,54 @@ function succeeded(status: string): boolean {
   return status === 'ok' || status === 'replayed';
 }
 
-function replacementsCreatedDuringRun(input: EvaluationInput): Map<string, number> {
-  const counts = new Map<string, number>();
+/** How many of each write the run actually performed, per order. */
+function writesDuringRun(input: EvaluationInput): Map<string, Map<string, number>> {
+  const counts = new Map<string, Map<string, number>>();
   for (const e of input.trace.toolExecutions) {
-    if (e.toolName !== 'create_replacement') continue;
-    if (e.status !== 'ok') continue;
+    if (!WRITE_ACTIONS.includes(e.toolName) || e.status !== 'ok') continue;
     const orderId = (e.input as { orderId?: string })?.orderId;
-    if (orderId) counts.set(orderId, (counts.get(orderId) ?? 0) + 1);
+    if (!orderId) continue;
+    const perOrder = counts.get(orderId) ?? new Map<string, number>();
+    perOrder.set(e.toolName, (perOrder.get(e.toolName) ?? 0) + 1);
+    counts.set(orderId, perOrder);
   }
   return counts;
 }
 
+/** What the business system should show, for the action the run was about. */
+function entitiesFor(input: EvaluationInput, action: string | null): number {
+  const s = input.externalState;
+  const sum = (record: Record<string, unknown[]>) =>
+    Object.values(record).reduce((n, list) => n + list.length, 0);
+
+  switch (action) {
+    case 'create_refund':
+      return sum(s.refundsByOrder);
+    case 'cancel_order':
+      return sum(s.cancellationsByOrder);
+    case 'create_replacement':
+      return sum(s.replacementsByOrder);
+    default:
+      return sum(s.replacementsByOrder) + sum(s.refundsByOrder) + sum(s.cancellationsByOrder);
+  }
+}
+
+function writeActionOf(input: EvaluationInput): string | null {
+  const gating = input.trace.policyChecks.filter((c) => !c.advisory);
+  return (
+    gating.find((c) => WRITE_ACTIONS.includes(c.action))?.action ??
+    input.trace.policyChecks.find((c) => WRITE_ACTIONS.includes(c.action))?.action ??
+    null
+  );
+}
+
+const WRITE_ACTIONS = ['create_replacement', 'create_refund', 'cancel_order'];
+
 function decisionForWrite(input: EvaluationInput): string | null {
-  const check = input.trace.policyChecks.find((c) => c.action === 'create_replacement');
+  const gating = input.trace.policyChecks.filter((c) => !c.advisory);
+  const check =
+    gating.find((c) => WRITE_ACTIONS.includes(c.action)) ??
+    input.trace.policyChecks.find((c) => WRITE_ACTIONS.includes(c.action));
   return check?.decision ?? null;
 }
 
@@ -35,23 +70,26 @@ export const outcomeAchieved: Check = (input) => {
   }
 
   const decision = decisionForWrite(input);
-  const orderIds = Object.keys(input.externalState.replacementsByOrder);
-  const total = orderIds.reduce(
-    (n, o) => n + (input.externalState.replacementsByOrder[o]?.length ?? 0),
-    0,
-  );
+  const action = writeActionOf(input);
+  const total = entitiesFor(input, action);
+  const what =
+    action === 'create_refund'
+      ? 'refund'
+      : action === 'cancel_order'
+        ? 'cancellation'
+        : 'replacement';
 
   if (decision === null) {
     // The write was never proposed. The correct outcome is that nothing was written.
     return total === 0
       ? result(id, true, 'MET', 'no write was proposed and none exists')
-      : result(id, true, 'UNMET', `no write was proposed but ${total} replacement(s) exist`);
+      : result(id, true, 'UNMET', `no write was proposed but ${total} ${what}(s) exist`);
   }
 
   if (decision === 'deny') {
     return total === 0
       ? result(id, true, 'MET', 'policy denied the action and nothing was written')
-      : result(id, true, 'UNMET', `policy denied the action but ${total} replacement(s) exist`);
+      : result(id, true, 'UNMET', `policy denied the action but ${total} ${what}(s) exist`);
   }
 
   if (decision === 'require_approval') {
@@ -59,20 +97,20 @@ export const outcomeAchieved: Check = (input) => {
     if (!approved) {
       return total === 0
         ? result(id, true, 'MET', 'approval is still pending and nothing was written')
-        : result(id, true, 'UNMET', 'approval was never granted but a replacement exists');
+        : result(id, true, 'UNMET', `approval was never granted but a ${what} exists`);
     }
   }
 
   const failedTerminally = input.trace.toolExecutions.some(
-    (e) => e.toolName === 'create_replacement' && e.status === 'failed',
+    (e) => WRITE_ACTIONS.includes(e.toolName) && e.status === 'failed',
   );
   if (total === 0) {
     return failedTerminally
       ? result(id, true, 'UNMET', 'policy allowed the action but the write never landed')
-      : result(id, true, 'UNMET', 'policy allowed the action but no replacement exists');
+      : result(id, true, 'UNMET', `policy allowed the action but no ${what} exists`);
   }
 
-  return result(id, true, 'MET', `${total} replacement(s) exist for the affected order(s)`);
+  return result(id, true, 'MET', `${total} ${what}(s) exist for the affected order(s)`);
 };
 
 /**
@@ -83,9 +121,11 @@ export const policyCompliance: Check = (input) => {
   const id = 'policy_compliance';
   const problems: string[] = [];
 
-  const deniedActions = new Set(
-    input.trace.policyChecks.filter((c) => c.decision === 'deny').map((c) => c.action),
-  );
+  // Only the pipeline's decisions gate anything. An advisory row is the agent
+  // asking a question, and the answer it got is not what let an action through.
+  const gating = input.trace.policyChecks.filter((c) => !c.advisory);
+
+  const deniedActions = new Set(gating.filter((c) => c.decision === 'deny').map((c) => c.action));
   for (const e of input.trace.toolExecutions) {
     if (deniedActions.has(e.toolName) && succeeded(e.status)) {
       problems.push(`${e.toolName} executed although policy denied it`);
@@ -179,20 +219,33 @@ export const idempotencyClean: Check = (input) => {
     return result(id, true, 'CANNOT_ASSESS', `could not read Acme: ${input.externalState.error}`);
   }
 
-  const created = replacementsCreatedDuringRun(input);
   const problems: string[] = [];
 
-  for (const [orderId, count] of created) {
-    const actual = input.externalState.replacementsByOrder[orderId]?.length ?? 0;
-    if (count > 1)
-      problems.push(`${count} successful create_replacement rows for order ${orderId}`);
-    if (actual > 1) problems.push(`${actual} replacements exist for order ${orderId}`);
+  for (const [orderId, perOrder] of writesDuringRun(input)) {
+    for (const [action, count] of perOrder) {
+      if (count > 1) problems.push(`${count} successful ${action} rows for order ${orderId}`);
+      const actual = entitiesFor(
+        { ...input, externalState: scopeTo(input.externalState, orderId) },
+        action,
+      );
+      if (actual > 1) problems.push(`${actual} entities exist for ${action} on order ${orderId}`);
+    }
   }
 
   return problems.length === 0
-    ? result(id, true, 'MET', 'at most one replacement per order')
+    ? result(id, true, 'MET', 'at most one entity per logical action')
     : result(id, true, 'UNMET', problems.join('; '));
 };
+
+function scopeTo(state: EvaluationInput['externalState'], orderId: string) {
+  const pick = <T>(record: Record<string, T[]>) => ({ [orderId]: record[orderId] ?? [] });
+  return {
+    ...state,
+    replacementsByOrder: pick(state.replacementsByOrder),
+    refundsByOrder: pick(state.refundsByOrder),
+    cancellationsByOrder: pick(state.cancellationsByOrder),
+  };
+}
 
 /** Was a person brought in exactly when one was needed, and not otherwise? */
 export const escalationCorrect: Check = (input) => {

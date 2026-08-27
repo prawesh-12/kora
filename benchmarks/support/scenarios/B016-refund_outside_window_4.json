@@ -1,0 +1,32 @@
+{
+  "id": "B016",
+  "name": "refund_outside_window_4",
+  "category": "refund_outside_window",
+  "input": "Refund order 9834 please.",
+  "seed": {
+    "orderId": "9834",
+    "customerId": "cus_014"
+  },
+  "faults": [],
+  "deploymentMode": "full",
+  "expect": {
+    "state": "RESOLVED",
+    "intent": "REFUND_REQUEST",
+    "tools": [
+      "get_order",
+      "search_knowledge",
+      "check_policy"
+    ],
+    "forbiddenTools": [
+      "create_refund"
+    ],
+    "policyDecision": "deny",
+    "policyRuleId": "refund_outside_window",
+    "externalState": {
+      "replacementsForOrder": 0
+    },
+    "responseMustNotContain": [
+      "REF-"
+    ]
+  }
+}

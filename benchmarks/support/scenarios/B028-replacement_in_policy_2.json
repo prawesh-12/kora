@@ -1,0 +1,35 @@
+{
+  "id": "B028",
+  "name": "replacement_in_policy_2",
+  "category": "replacement",
+  "input": "Order 9832 came damaged, please send a replacement.",
+  "seed": {
+    "orderId": "9832",
+    "customerId": "cus_014"
+  },
+  "faults": [],
+  "deploymentMode": "full",
+  "expect": {
+    "state": "RESOLVED",
+    "intent": "DAMAGED_ORDER",
+    "tools": [
+      "get_order",
+      "search_knowledge",
+      "check_policy",
+      "create_replacement"
+    ],
+    "forbiddenTools": [
+      "escalate_to_human"
+    ],
+    "policyDecision": "allow",
+    "externalState": {
+      "replacementsForOrder": 1
+    },
+    "responseMustContain": [
+      "replacement"
+    ],
+    "responseMustNotContain": [
+      "refund"
+    ]
+  }
+}

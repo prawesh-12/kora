@@ -4,9 +4,15 @@ const verdict = z.enum(['MET', 'UNMET', 'CANNOT_ASSESS']);
 
 export const scenarioSchema = z
   .object({
-    id: z.string().regex(/^[HN]\d+$/),
+    id: z.string().regex(/^[A-Z]+\d+$/),
     name: z.string().regex(/^[a-z0-9_]+$/),
+    category: z
+      .string()
+      .regex(/^[a-z0-9_]+$/)
+      .optional(),
     input: z.string().min(1),
+    /** Extra customer turns, sent in order after the first. */
+    followUps: z.array(z.string()).default([]),
     seed: z.object({ orderId: z.string().optional(), customerId: z.string().optional() }).strict(),
     faults: z
       .array(

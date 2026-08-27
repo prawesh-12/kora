@@ -1,0 +1,25 @@
+{
+  "id": "B105",
+  "name": "tool_failure_timeout_create_refund_7",
+  "category": "tool_failure",
+  "input": "I want a refund for order 9832, the coffee machine arrived broken.",
+  "seed": {
+    "orderId": "9832",
+    "customerId": "cus_014"
+  },
+  "faults": [
+    {
+      "onTool": "create_refund",
+      "fault": "timeout"
+    }
+  ],
+  "deploymentMode": "full",
+  "expect": {
+    "state": "NEEDS_HUMAN",
+    "forbiddenTools": [],
+    "responseMustNotContain": [
+      "REP-",
+      "REF-"
+    ]
+  }
+}

@@ -68,7 +68,7 @@ describe('the pipeline is generic across the new tools', () => {
 
     const rows = await withTenant(TENANT).toolExecutions.listForRun(run.runId);
     expect(rows[0]?.verified).toBe(true);
-    expect((rows[0]?.output as { amountMinor: number }).amountMinor).toBe(200000);
+    expect((rows[0]!.output as { amountMinor: number }).amountMinor).toBe(200000);
   });
 
   it('cancels an order that has not shipped, and verifies the order really changed', async () => {

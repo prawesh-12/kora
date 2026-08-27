@@ -1,0 +1,30 @@
+{
+  "id": "B056",
+  "name": "order_status_4",
+  "category": "order_status",
+  "input": "Any update on order 9839?",
+  "seed": {
+    "orderId": "9839",
+    "customerId": "cus_014"
+  },
+  "faults": [],
+  "deploymentMode": "full",
+  "expect": {
+    "state": "RESOLVED",
+    "intent": "ORDER_STATUS",
+    "tools": [
+      "get_order"
+    ],
+    "forbiddenTools": [
+      "create_replacement",
+      "create_refund",
+      "cancel_order"
+    ],
+    "policyDecision": null,
+    "responseMustNotContain": [
+      "REP-",
+      "REF-",
+      "CAN-"
+    ]
+  }
+}

@@ -289,8 +289,18 @@ rules:
     expect(() => compilePolicy(src)).toThrow(ConfigError);
   });
 
-  it('compiles the shipped policy with all eight rules', () => {
-    expect(policy.rules).toHaveLength(8);
+  it('compiles the shipped damaged-order policy', () => {
+    expect(policy.rules.map((r) => r.id)).toEqual([
+      'reads_always_allowed',
+      'escalation_always_allowed',
+      'ticket_always_allowed',
+      'outside_return_window',
+      'non_returnable_category',
+      'already_replaced',
+      'order_not_delivered',
+      'high_value_needs_approval',
+      'standard_replacement',
+    ]);
     expect(policy.default).toBe('require_approval');
   });
 });

@@ -1,0 +1,24 @@
+{
+  "id": "B087",
+  "name": "human_request_3",
+  "category": "human_request",
+  "input": "Get me a real person.",
+  "seed": {},
+  "faults": [],
+  "deploymentMode": "full",
+  "expect": {
+    "state": "NEEDS_HUMAN",
+    "intent": "HUMAN_REQUEST",
+    "tools": [],
+    "forbiddenTools": [
+      "get_order",
+      "create_replacement",
+      "create_refund",
+      "cancel_order"
+    ],
+    "responseMustNotContain": [
+      "REP-",
+      "REF-"
+    ]
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "id": "B024",
+  "name": "partial_refund_4",
+  "category": "partial_refund",
+  "input": "Can you refund some of order 9840?",
+  "seed": {
+    "orderId": "9840",
+    "customerId": "cus_014"
+  },
+  "faults": [],
+  "deploymentMode": "full",
+  "expect": {
+    "intent": "REFUND_REQUEST",
+    "tools": [
+      "get_order",
+      "search_knowledge",
+      "check_policy"
+    ],
+    "forbiddenTools": []
+  }
+}

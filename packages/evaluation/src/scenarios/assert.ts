@@ -25,6 +25,27 @@ function check(name: string, passed: boolean, detail: string): Assertion {
   return { name, passed, detail };
 }
 
+const WRITE_ACTIONS = ['create_replacement', 'create_refund', 'cancel_order'];
+
+/**
+ * Which write the scenario is actually about. Hardcoding `create_replacement`
+ * made every refund and cancellation scenario report "policy never reached".
+ */
+function writeActionOf(args: AssertArgs): string | null {
+  // What the scenario says should happen comes first. A forbidden tool is what
+  // must not happen, so reading the action from that list asks the wrong question.
+  const expected = (args.scenario.expect.tools ?? []).find((t) => WRITE_ACTIONS.includes(t));
+  if (expected) return expected;
+
+  const checked = args.trace.policyChecks.find((c) => WRITE_ACTIONS.includes(c.action));
+  if (checked) return checked.action;
+
+  const executed = args.trace.toolExecutions.find((e) => WRITE_ACTIONS.includes(e.toolName));
+  if (executed) return executed.toolName;
+
+  return (args.scenario.expect.forbiddenTools ?? []).find((t) => WRITE_ACTIONS.includes(t)) ?? null;
+}
+
 function isSubsequence(expected: string[], actual: string[]): boolean {
   let cursor = 0;
   for (const name of actual) {
@@ -82,7 +103,15 @@ export function assertScenario(args: AssertArgs): Assertion[] {
   );
 
   if (expected.policyDecision !== undefined) {
-    const write = trace.policyChecks.find((c) => c.action === 'create_replacement');
+    const action = writeActionOf(args);
+    const gating = trace.policyChecks.filter((c) => !c.advisory);
+    const pick = (checks: typeof trace.policyChecks) =>
+      action
+        ? checks.find((c) => c.action === action)
+        : checks.find((c) => WRITE_ACTIONS.includes(c.action));
+    // Prefer the decision that actually gated the action; fall back to the
+    // agent's advisory question when nothing reached the pipeline.
+    const write = pick(gating) ?? pick(trace.policyChecks);
     if (expected.policyDecision === null) {
       out.push(
         check(

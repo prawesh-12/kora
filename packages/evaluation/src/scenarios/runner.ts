@@ -47,6 +47,7 @@ export interface ScenarioOutcome {
   tools: string;
   policyDecision: string;
   verifiedResolution: boolean | null;
+  policyCompliant: boolean | null;
   durationMs: number;
   costUsdMicros: number;
   failures: Assertion[];
@@ -99,6 +100,7 @@ export async function runScenario(
     tools: '-',
     policyDecision: '-',
     verifiedResolution: null,
+    policyCompliant: null,
     durationMs: 0,
     costUsdMicros: 0,
     failures: [],
@@ -116,11 +118,11 @@ export async function runScenario(
       externalCustomerId: scenario.seed.customerId ?? 'cus_014',
     });
 
-    const turn = () =>
+    const turn = (message = scenario.input) =>
       runAgentTurn({
         tenantId,
         conversationId: conversation.id,
-        message: scenario.input,
+        message,
         deploymentMode: scenario.deploymentMode ?? 'full',
         faults,
       });
@@ -139,6 +141,12 @@ export async function runScenario(
       result = first.text ? first : second;
     } else {
       result = await withTimeout(turn(), HARD_CAP_MS, `scenario ${scenario.id}`);
+    }
+
+    // A customer changing their mind mid-conversation is a second turn on the
+    // same conversation, and the run that matters is the last one.
+    for (const followUp of scenario.followUps ?? []) {
+      result = await withTimeout(turn(followUp), HARD_CAP_MS, `scenario ${scenario.id} follow-up`);
     }
 
     if (scenario.approval && result.approvalId) {
@@ -191,7 +199,9 @@ export async function runScenario(
     ];
 
     const failures = assertions.filter((a) => !a.passed);
-    const write = trace.policyChecks.find((c) => c.action === 'create_replacement');
+    const write = trace.policyChecks.find((c) =>
+      ['create_replacement', 'create_refund', 'cancel_order'].includes(c.action),
+    );
 
     return {
       ...base,
@@ -200,6 +210,8 @@ export async function runScenario(
       tools: trace.toolExecutions.map((e) => e.toolName).join(',') || '-',
       policyDecision: write?.decision ?? '-',
       verifiedResolution: evaluation.verifiedResolution,
+      policyCompliant:
+        evaluation.checks.find((c) => c.id === 'policy_compliance')?.verdict !== 'UNMET',
       durationMs: Date.now() - startedAt,
       costUsdMicros: trace.totals.costUsdMicros,
       failures,

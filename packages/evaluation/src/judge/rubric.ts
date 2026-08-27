@@ -79,8 +79,8 @@ export function applicableCriteria(rubric: Rubric, trace: AssembledTrace): Crite
       e.toolName !== 'check_policy',
   );
 
-  return rubric.criteria.filter((c) => {
-    switch (c.applies_when) {
+  const applies = (when: Applicability): boolean => {
+    switch (when) {
       case 'always':
         return true;
       case 'policy_check_present':
@@ -92,5 +92,7 @@ export function applicableCriteria(rubric: Rubric, trace: AssembledTrace): Crite
       case 'write_attempted':
         return writeAttempted;
     }
-  });
+  };
+
+  return rubric.criteria.filter((c) => applies(c.applies_when));
 }

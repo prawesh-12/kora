@@ -12,3 +12,4 @@ export * from './scenarios/schema.js';
 export * from './scenarios/reset.js';
 export * from './scenarios/assert.js';
 export * from './scenarios/runner.js';
+export * from './bench/runner.js';

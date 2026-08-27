@@ -1,0 +1,21 @@
+{
+  "id": "B023",
+  "name": "partial_refund_3",
+  "category": "partial_refund",
+  "input": "Refund part of order 9840 please, one item was faulty.",
+  "seed": {
+    "orderId": "9840",
+    "customerId": "cus_014"
+  },
+  "faults": [],
+  "deploymentMode": "full",
+  "expect": {
+    "intent": "REFUND_REQUEST",
+    "tools": [
+      "get_order",
+      "search_knowledge",
+      "check_policy"
+    ],
+    "forbiddenTools": []
+  }
+}

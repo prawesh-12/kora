@@ -22,12 +22,15 @@ export function verifiedResolutionOf(trace: AssembledTrace, checks: CheckResult[
   if (checks.some((c) => c.critical && c.verdict !== 'MET')) return false;
   if (checks.find((c) => c.id === 'outcome_achieved')?.verdict !== 'MET') return false;
 
-  if (trace.run.intent === 'DAMAGED_ORDER') {
-    // A `replayed` write landed too. The run that owned the idempotency claim did
-    // the work and the verification; this run proved it did not duplicate it.
+  // For an intent that exists to change something, resolving means the change
+  // actually happened. A `replayed` write landed too: the run that owned the
+  // idempotency claim did the work and the verification, and this run proved it
+  // did not duplicate it.
+  const WRITE_INTENTS = ['DAMAGED_ORDER', 'REFUND_REQUEST', 'CANCEL_ORDER'];
+  if (trace.run.intent && WRITE_INTENTS.includes(trace.run.intent)) {
     const landed = trace.toolExecutions.some(
       (e) =>
-        e.toolName === 'create_replacement' &&
+        ['create_replacement', 'create_refund', 'cancel_order'].includes(e.toolName) &&
         ((e.status === 'ok' && e.verified === true) || e.status === 'replayed'),
     );
     if (!landed) return false;

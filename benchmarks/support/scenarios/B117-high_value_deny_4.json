@@ -1,0 +1,22 @@
+{
+  "id": "B117",
+  "name": "high_value_deny_4",
+  "category": "high_value_approval",
+  "input": "I want to cancel order 9838 before it ships.",
+  "seed": {
+    "orderId": "9838",
+    "customerId": "cus_014"
+  },
+  "faults": [],
+  "approval": "deny",
+  "deploymentMode": "full",
+  "expect": {
+    "policyDecision": "require_approval",
+    "forbiddenTools": [],
+    "responseMustNotContain": [
+      "REP-",
+      "REF-",
+      "CAN-"
+    ]
+  }
+}

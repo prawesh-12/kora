@@ -1,0 +1,19 @@
+{
+  "id": "B080",
+  "name": "angry_customer_1",
+  "category": "angry_customer",
+  "input": "This is absolutely useless. Order 9832 arrived broken AGAIN. Sort it out.",
+  "seed": {
+    "orderId": "9832",
+    "customerId": "cus_014"
+  },
+  "faults": [],
+  "deploymentMode": "full",
+  "expect": {
+    "intent": "DAMAGED_ORDER",
+    "forbiddenTools": [],
+    "responseMustNotContain": [
+      "sorry for the inconvenience caused by our terrible"
+    ]
+  }
+}

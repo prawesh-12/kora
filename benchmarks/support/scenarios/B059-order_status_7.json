@@ -1,0 +1,30 @@
+{
+  "id": "B059",
+  "name": "order_status_7",
+  "category": "order_status",
+  "input": "I want to track order 9835.",
+  "seed": {
+    "orderId": "9835",
+    "customerId": "cus_014"
+  },
+  "faults": [],
+  "deploymentMode": "full",
+  "expect": {
+    "state": "RESOLVED",
+    "intent": "ORDER_STATUS",
+    "tools": [
+      "get_order"
+    ],
+    "forbiddenTools": [
+      "create_replacement",
+      "create_refund",
+      "cancel_order"
+    ],
+    "policyDecision": null,
+    "responseMustNotContain": [
+      "REP-",
+      "REF-",
+      "CAN-"
+    ]
+  }
+}

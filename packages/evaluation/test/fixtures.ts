@@ -96,6 +96,8 @@ export function snapshot(replacements: number, orderId = '9832'): ExternalStateS
         estimatedDeliveryDays: 5,
       })),
     },
+    refundsByOrder: { [orderId]: [] },
+    cancellationsByOrder: { [orderId]: [] },
     fetchedAt: AT,
   };
 }

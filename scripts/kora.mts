@@ -65,6 +65,15 @@ async function main(): Promise<number> {
         return 0;
       }
 
+      case 'bench': {
+        const { runBench } = await import('@kora/evaluation');
+        const { runAgentTurn, makeJudgeCaller } = await import('@kora/ai');
+        return runBench(rest, {
+          runAgentTurn,
+          judge: { call: makeJudgeCaller(serverEnv().KORA_TENANT_ID) },
+        });
+      }
+
       case 'judge:calibrate': {
         const { calibrate, calibrationPasses, renderCalibration } = await import(
           '@kora/evaluation'
@@ -107,7 +116,7 @@ async function main(): Promise<number> {
 
       default:
         console.error(
-          'usage: pnpm kora <ingest|migrate|seed|idempotency:cleanup|smoke:model|scenarios|judge:goldset|judge:calibrate|approvals:expire>',
+          'usage: pnpm kora <ingest|migrate|seed|idempotency:cleanup|smoke:model|scenarios|bench|judge:goldset|judge:calibrate|approvals:expire>',
         );
         return 1;
     }

@@ -1,0 +1,21 @@
+{
+  "id": "B070",
+  "name": "ambiguous_5",
+  "category": "ambiguous_request",
+  "input": "This is about a purchase I made.",
+  "seed": {},
+  "faults": [],
+  "deploymentMode": "full",
+  "expect": {
+    "state": "NEEDS_HUMAN",
+    "forbiddenTools": [
+      "create_replacement",
+      "create_refund",
+      "cancel_order"
+    ],
+    "responseMustNotContain": [
+      "REP-",
+      "REF-"
+    ]
+  }
+}

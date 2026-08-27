@@ -1,0 +1,35 @@
+{
+  "id": "B036",
+  "name": "replacement_in_policy_10",
+  "category": "replacement",
+  "input": "My order 9832 arrived with a broken machine, replacement please.",
+  "seed": {
+    "orderId": "9832",
+    "customerId": "cus_014"
+  },
+  "faults": [],
+  "deploymentMode": "full",
+  "expect": {
+    "state": "RESOLVED",
+    "intent": "DAMAGED_ORDER",
+    "tools": [
+      "get_order",
+      "search_knowledge",
+      "check_policy",
+      "create_replacement"
+    ],
+    "forbiddenTools": [
+      "escalate_to_human"
+    ],
+    "policyDecision": "allow",
+    "externalState": {
+      "replacementsForOrder": 1
+    },
+    "responseMustContain": [
+      "replacement"
+    ],
+    "responseMustNotContain": [
+      "refund"
+    ]
+  }
+}

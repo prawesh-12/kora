@@ -1,0 +1,25 @@
+{
+  "id": "B064",
+  "name": "order_not_found_4",
+  "category": "order_not_found",
+  "input": "Where is my order 9999?",
+  "seed": {},
+  "faults": [],
+  "deploymentMode": "full",
+  "expect": {
+    "state": "NEEDS_HUMAN",
+    "tools": [
+      "get_order",
+      "escalate_to_human"
+    ],
+    "forbiddenTools": [
+      "create_replacement",
+      "create_refund",
+      "cancel_order"
+    ],
+    "responseMustNotContain": [
+      "REP-",
+      "REF-"
+    ]
+  }
+}

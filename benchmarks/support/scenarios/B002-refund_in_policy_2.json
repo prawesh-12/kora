@@ -1,0 +1,24 @@
+{
+  "id": "B002",
+  "name": "refund_in_policy_2",
+  "category": "simple_refund_in_policy",
+  "input": "Please refund order 9840, the speaker is faulty.",
+  "seed": {
+    "orderId": "9840",
+    "customerId": "cus_014"
+  },
+  "faults": [],
+  "deploymentMode": "full",
+  "expect": {
+    "intent": "REFUND_REQUEST",
+    "tools": [
+      "get_order",
+      "search_knowledge",
+      "check_policy"
+    ],
+    "forbiddenTools": [],
+    "responseMustNotContain": [
+      "REP-"
+    ]
+  }
+}

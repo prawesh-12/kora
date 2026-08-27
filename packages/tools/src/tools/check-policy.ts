@@ -49,6 +49,7 @@ export const checkPolicy = defineTool({
       reason: result.reason,
       facts: result.factsUsed,
       missingFacts: result.missingFacts,
+      advisory: true,
       createdAt: now(),
     });
 

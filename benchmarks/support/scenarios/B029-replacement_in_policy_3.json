@@ -1,0 +1,35 @@
+{
+  "id": "B029",
+  "name": "replacement_in_policy_3",
+  "category": "replacement",
+  "input": "The coffee machine in order 9832 is faulty, replace it please.",
+  "seed": {
+    "orderId": "9832",
+    "customerId": "cus_014"
+  },
+  "faults": [],
+  "deploymentMode": "full",
+  "expect": {
+    "state": "RESOLVED",
+    "intent": "DAMAGED_ORDER",
+    "tools": [
+      "get_order",
+      "search_knowledge",
+      "check_policy",
+      "create_replacement"
+    ],
+    "forbiddenTools": [
+      "escalate_to_human"
+    ],
+    "policyDecision": "allow",
+    "externalState": {
+      "replacementsForOrder": 1
+    },
+    "responseMustContain": [
+      "replacement"
+    ],
+    "responseMustNotContain": [
+      "refund"
+    ]
+  }
+}

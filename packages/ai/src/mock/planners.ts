@@ -121,7 +121,20 @@ export const agentPlanner: MockPlanner = (ctx): MockTurn | undefined => {
   }
 
   if (!called(ctx, 'check_policy') && has('check_policy')) {
-    return { toolCalls: [{ toolName: 'check_policy', input: { action, orderId: order.id } }] };
+    return {
+      toolCalls: [
+        {
+          toolName: 'check_policy',
+          input: {
+            action,
+            orderId: order.id,
+            // Without the amount the advisory answer falls back to the fail-safe
+            // default and disagrees with what the pipeline will decide.
+            ...(action === 'create_refund' ? { amountMinor: order.totalAmountMinor } : {}),
+          },
+        },
+      ],
+    };
   }
 
   const policy = findToolResult<{ decision?: string; reason?: string }>(ctx, 'check_policy');

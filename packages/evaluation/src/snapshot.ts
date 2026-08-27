@@ -1,6 +1,12 @@
 import { logger, now } from '@kora/core';
 import type { AssembledTrace } from '@kora/db';
-import { type OrderResponse, type ReplacementResponse, acmeReader } from '@kora/tools';
+import {
+  type CancellationResponse,
+  type OrderResponse,
+  type RefundResponse,
+  type ReplacementResponse,
+  acmeReader,
+} from '@kora/tools';
 import type { ExternalStateSnapshot } from './types.js';
 
 /**
@@ -24,22 +30,28 @@ export async function snapshotExternalState(args: {
 
   const orders: Record<string, OrderResponse> = {};
   const replacementsByOrder: Record<string, ReplacementResponse[]> = {};
+  const refundsByOrder: Record<string, RefundResponse[]> = {};
+  const cancellationsByOrder: Record<string, CancellationResponse[]> = {};
 
   try {
     for (const orderId of orderIds) {
       const order = await acmeReader.getOrderOrNull(orderId);
       if (order) orders[orderId] = order;
       replacementsByOrder[orderId] = await acmeReader.listReplacements(orderId);
+      refundsByOrder[orderId] = await acmeReader.listRefunds(orderId);
+      cancellationsByOrder[orderId] = await acmeReader.listCancellations(orderId);
     }
   } catch (e) {
     logger().warn({ err: e }, 'external state snapshot failed');
     return {
       orders,
       replacementsByOrder,
+      refundsByOrder,
+      cancellationsByOrder,
       fetchedAt: now(),
       error: (e as Error).message,
     };
   }
 
-  return { orders, replacementsByOrder, fetchedAt: now() };
+  return { orders, replacementsByOrder, refundsByOrder, cancellationsByOrder, fetchedAt: now() };
 }

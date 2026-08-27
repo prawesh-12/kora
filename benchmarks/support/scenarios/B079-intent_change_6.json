@@ -1,0 +1,18 @@
+{
+  "id": "B079",
+  "name": "intent_change_6",
+  "category": "intent_change",
+  "input": "When will order 9840 arrive?",
+  "followUps": [
+    "Actually just refund me."
+  ],
+  "seed": {
+    "orderId": "9840",
+    "customerId": "cus_014"
+  },
+  "faults": [],
+  "deploymentMode": "full",
+  "expect": {
+    "forbiddenTools": []
+  }
+}

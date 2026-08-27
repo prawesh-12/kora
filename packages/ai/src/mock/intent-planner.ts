@@ -29,6 +29,12 @@ const DAMAGE_PHRASES = [
   'defective',
   'missing item',
   'wrong item',
+  'replacement',
+  'replace it',
+  'destroyed',
+  'send me a new',
+  'send a new',
+  'new one',
 ];
 
 const REFUND_PHRASES = ['refund', 'money back', 'reimburse', 'pay me back', 'charge back'];
@@ -44,14 +50,19 @@ const CANCEL_PHRASES = [
 
 const HUMAN_WEIGHT = 3;
 
-const STATUS_PHRASES = [
+// Phrases here must not assume the customer says "it": "has order 9834 shipped"
+// and "has it shipped" are the same question.
+const STATUS_PHRASES: Array<string | RegExp> = [
   'where is',
   "where's",
   'track',
   'delivery date',
-  'when will it arrive',
-  'when does it arrive',
-  'has it shipped',
+  // A word boundary, not a substring: "arrive" is a question about the future,
+  // "arrived" is a delivery that already happened and usually precedes a damage
+  // report. A substring match cannot tell them apart.
+  /\barrive\b/,
+  /\barriving\b/,
+  'shipped',
   'status of',
   'any update',
 ];
@@ -65,8 +76,11 @@ const STATUS_PHRASES = [
  * because a genuinely ambiguous message must land below the threshold rather than
  * guessing.
  */
+type Pattern = string | RegExp;
+
 export function scoreIntents(text: string): Array<{ intent: Intent; hits: number }> {
-  const count = (phrases: string[]) => phrases.filter((p) => text.includes(p)).length;
+  const count = (patterns: Pattern[]) =>
+    patterns.filter((p) => (typeof p === 'string' ? text.includes(p) : p.test(text))).length;
   return [
     { intent: 'HUMAN_REQUEST' as Intent, hits: count(HUMAN_PHRASES) * HUMAN_WEIGHT },
     { intent: 'DAMAGED_ORDER' as Intent, hits: count(DAMAGE_PHRASES) },

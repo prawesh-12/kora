@@ -118,7 +118,7 @@ describe('intent detection across six intents', () => {
     const { runId } = await classify('Please cancel order 9837.');
     const steps = await withTenant(TENANT).steps.listForRun(runId);
     const intentStep = steps.find((s) => s.kind === 'intent');
-    expect((intentStep?.payload as { evidence: string }).evidence.length).toBeGreaterThan(0);
+    expect((intentStep!.payload as { evidence: string }).evidence.length).toBeGreaterThan(0);
   });
 
   it('never returns a default intent when the model times out', async () => {

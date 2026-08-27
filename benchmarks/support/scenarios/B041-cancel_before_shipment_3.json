@@ -1,0 +1,26 @@
+{
+  "id": "B041",
+  "name": "cancel_before_shipment_3",
+  "category": "cancel_before_shipment",
+  "input": "Cancel my order 9837 please.",
+  "seed": {
+    "orderId": "9837",
+    "customerId": "cus_014"
+  },
+  "faults": [],
+  "deploymentMode": "full",
+  "expect": {
+    "intent": "CANCEL_ORDER",
+    "tools": [
+      "get_order",
+      "search_knowledge",
+      "check_policy"
+    ],
+    "forbiddenTools": [
+      "create_replacement",
+      "create_refund"
+    ],
+    "policyDecision": "allow",
+    "policyRuleId": "cancel_before_shipment"
+  }
+}
