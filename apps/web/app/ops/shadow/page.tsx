@@ -3,7 +3,14 @@ import { Handshake } from 'lucide-react';
 import { StatBar, Tile } from '@/components/kora/stat';
 import { EmptyState } from '@/components/kora/states';
 import { tenantId } from '@/lib/ops/data';
-import { EMPTY, NO_DATA, formatMoneyMinor, formatRate, truncateId } from '@/lib/ops/format';
+import {
+  EMPTY,
+  NO_DATA,
+  formatMoneyMinor,
+  formatRate,
+  humanizeEnum,
+  truncateId,
+} from '@/lib/ops/format';
 
 export const dynamic = 'force-dynamic';
 
@@ -83,7 +90,7 @@ export default async function ShadowPage() {
               <tbody>
                 {byIntent.map((row) => (
                   <tr key={row.intent} className="border-b last:border-0">
-                    <td className="py-2 pr-4">{row.intent}</td>
+                    <td className="py-2 pr-4">{humanizeEnum(row.intent)}</td>
                     <td className="py-2 pr-4 tabular-nums">{row.n}</td>
                     <td className="py-2 tabular-nums">{formatRate(row.agreementRate)}</td>
                   </tr>

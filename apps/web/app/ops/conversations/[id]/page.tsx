@@ -9,7 +9,7 @@ import { TraceVerdict } from '@/components/kora/trace-verdict';
 import { ContextCards, type ContextCardItem } from '@/components/ops/context-cards';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { truncateId } from '@/lib/ops/format';
+import { humanizeEnum, truncateId } from '@/lib/ops/format';
 import { loadTraceForConversation } from '@/lib/ops/data';
 import type { TraceDto } from '@/lib/api/schemas';
 
@@ -77,13 +77,15 @@ export default async function TracePage({
   if (!trace) notFound();
 
   return (
-    <main className="flex flex-col gap-6 p-8">
+    <div className="flex flex-col gap-6 p-8">
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div className="space-y-1">
           <h1 className="font-semibold text-xl tracking-tight">Trace</h1>
           <p className="font-mono text-muted-foreground text-xs">{trace.run.traceId}</p>
           <div className="flex flex-wrap items-center gap-2 pt-1">
-            <Badge variant="secondary">{trace.run.intent ?? 'no intent'}</Badge>
+            <Badge variant="secondary">
+              {trace.run.intent ? humanizeEnum(trace.run.intent) : 'no intent'}
+            </Badge>
             <Badge variant={trace.run.outcome === 'failed' ? 'destructive' : 'outline'}>
               {trace.run.outcome ?? 'in progress'}
             </Badge>
@@ -132,6 +134,6 @@ export default async function TracePage({
           <RetrievalAndEvaluation trace={trace} />
         </TabsContent>
       </Tabs>
-    </main>
+    </div>
   );
 }

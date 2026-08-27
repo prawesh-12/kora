@@ -19,6 +19,7 @@ import {
   formatDuration,
   formatRate,
   formatRelative,
+  humanizeEnum,
 } from '@/lib/ops/format';
 
 export const dynamic = 'force-dynamic';
@@ -106,7 +107,7 @@ export default async function OverviewPage() {
                           {formatRelative(run.startedAt)}
                         </Link>
                       </TableCell>
-                      <TableCell className="text-sm">{run.intent ?? EMPTY}</TableCell>
+                      <TableCell className="text-sm">{humanizeEnum(run.intent)}</TableCell>
                       <TableCell className="text-sm">
                         {run.state?.toLowerCase().replace(/_/g, ' ') ?? EMPTY}
                       </TableCell>

@@ -27,14 +27,30 @@ interface Verdict {
  * for anyone who needs to grep for it.
  */
 function humanizeMissingFacts(facts: string[]): string {
-  if (facts.length === 0) return '';
   const names = facts.map((fact) =>
     fact
       .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
       .toLowerCase()
       .trim(),
   );
-  return `missing ${names.join(', ')}`;
+  return names.join(', ');
+}
+
+type Check = TraceDto['policyChecks'][number];
+
+/**
+ * `default` is the engine's name for no rule matched, so the bundle default
+ * applied. Printing "rule default" tells the operator there is a rule called
+ * default, which there is not.
+ */
+function provenanceOf(check: Check): string {
+  const rule = check.ruleId === 'default' ? 'no rule matched' : `rule ${check.ruleId}`;
+  return `${rule} · policy ${check.policyKey} ${check.policyVersion}`;
+}
+
+function reasonOf(check: Check): string {
+  if (check.missingFacts.length === 0) return check.reason;
+  return `No rule could decide this. The facts it needed were missing: ${humanizeMissingFacts(check.missingFacts)}.`;
 }
 
 /**
@@ -43,27 +59,34 @@ function humanizeMissingFacts(facts: string[]): string {
  * one of them.
  */
 export function traceVerdict(trace: TraceDto): Verdict {
-  const denied = trace.policyChecks.find((c) => c.decision === 'deny');
+  // A rule that held or refused one action is the headline only while it is
+  // still the reason the run is stopped. An approval that a person granted ends
+  // as a resolution, and a banner still saying "held for approval" over a
+  // finished run sends the operator looking for a decision nobody owes.
+  const resolved = trace.run.outcome === 'resolved_automatically';
+  const waiting = (trace.run.finalState ?? trace.conversation.state) === 'AWAITING_APPROVAL';
+
+  const denied = resolved ? undefined : trace.policyChecks.find((c) => c.decision === 'deny');
   if (denied) {
     return {
       tone: 'danger',
       label: 'Blocked',
-      headline:
-        denied.missingFacts.length > 0
-          ? `${denied.reason} (${humanizeMissingFacts(denied.missingFacts)})`
-          : denied.reason,
-      provenance: `rule ${denied.ruleId} · policy ${denied.policyKey} ${denied.policyVersion}`,
-      raw: denied.missingFacts.join(', ') || undefined,
+      headline: reasonOf(denied),
+      provenance: provenanceOf(denied),
+      raw: denied.reason,
     };
   }
 
-  const held = trace.policyChecks.find((c) => c.decision === 'require_approval');
+  const held = waiting
+    ? trace.policyChecks.find((c) => c.decision === 'require_approval')
+    : undefined;
   if (held) {
     return {
       tone: 'warn',
       label: 'Held for approval',
-      headline: held.reason,
-      provenance: `rule ${held.ruleId} · policy ${held.policyKey} ${held.policyVersion}`,
+      headline: reasonOf(held),
+      provenance: provenanceOf(held),
+      raw: held.reason,
     };
   }
 

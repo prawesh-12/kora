@@ -28,6 +28,39 @@ it means the agent acts on a real customer's order without asking.
 `/login?next=/ops` when there is no session. Hiding a link is not authorization, so
 every operator API route checks the session again.
 
+## Colour and landmarks
+
+Each status has two tokens. The 600 shade (`--success`, `--warning`,
+`--destructive`, `--info`) fills a bar or tints a background. The word sitting on
+that tint uses the `-strong` token beside it, which is the 800 shade in light mode
+and the 300 in dark. Green 600 text on a 10% green background is 2.9:1, so a pill
+built from one token alone fails contrast at 12px however good it looks. Grey is
+the same story: `--muted-strong` is the readable grey on `--muted`, and grey still
+only ever means missing data.
+
+The operator shell owns the page's `<main>`. `AnimatedSidebarInset` renders one,
+so the pages under `/ops` render a `<div>`; two nested mains is a duplicate
+landmark and screen readers get no useful skip target from it. The customer chat
+is its own main, with the merchant name as the page's `<h1>`.
+
+Every route reports zero axe violations across wcag2a, wcag2aa, wcag21a, wcag21aa
+and best-practice.
+
+## Internal values never reach a screen
+
+The policy engine records `insufficient facts: exceedsRemaining,` and a rule id of
+`default`, which is its name for no rule matched. Both are correct in the trace and
+useless on screen. The screens translate:
+
+- The verdict banner says what could not be decided and which facts were missing,
+  keeps the engine's own sentence in a `title`, and writes `no rule matched` rather
+  than `rule default`.
+- The failure breakdown runs `humanizeFailureDetail` over the detail column, so a
+  policy row reads `missing order facts` with the raw string on hover.
+- Intents are prose everywhere they are read as words (`damaged order`). They stay
+  uppercase mono only in the primary failure column, where the code is the
+  identifier being named.
+
 ## Numbers are tiles, not cards
 
 A card is for something with internal structure: a conversation, an approval, a
@@ -76,6 +109,12 @@ and policy version behind it. Amber when a person is needed, red for a denial or
 failure, green for a verified resolution. It sits above the columns because it is the
 answer to the question the operator arrived with, and an answer inside a column that
 scrolls is an answer nobody reads.
+
+The banner follows where the run ended, not the strictest rule it hit. A rule that
+held an action is the headline only while the run is still parked in
+`AWAITING_APPROVAL`; once a person approves and the run finishes, the headline is the
+resolution. A banner still reading "held for approval" over a resolved run sends the
+operator looking for a decision nobody owes.
 
 Below it, three columns on desktop, stacked tabs below `lg`.
 

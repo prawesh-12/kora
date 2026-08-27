@@ -16,7 +16,13 @@ import {
 import { DataGridColumnHeader } from '@/components/reui/data-grid/data-grid-column-header';
 import { DataGridTableVirtual } from '@/components/reui/data-grid/data-grid-table-virtual';
 import type { ConversationPageDto, ConversationSummaryDto } from '@/lib/api/schemas';
-import { EMPTY, formatAbsolute, formatDuration, formatRelative } from '@/lib/ops/format';
+import {
+  EMPTY,
+  formatAbsolute,
+  formatDuration,
+  formatRelative,
+  humanizeEnum,
+} from '@/lib/ops/format';
 
 /** Seven columns. Customer is the same value on every row and cost is stored in
  *  micro-dollars; both carry more in the row detail than in a column here. */
@@ -42,7 +48,7 @@ const COLUMNS: ColumnDef<DataGridFeatures, ConversationSummaryDto>[] = [
     accessorFn: (row) => row.intent ?? '',
     header: ({ column }) => <DataGridColumnHeader column={column} title="Intent" />,
     size: 170,
-    cell: ({ row }) => row.original.intent ?? EMPTY,
+    cell: ({ row }) => humanizeEnum(row.original.intent),
   },
   {
     id: 'state',

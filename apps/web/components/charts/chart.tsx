@@ -108,6 +108,8 @@ export interface BarDatum {
   severity: BarSeverity;
   /** Optional second line under the label. */
   detail?: string;
+  /** The raw value behind a humanized detail, for the title attribute. */
+  detailTitle?: string;
   /**
    * Where this row goes when clicked.
    *
@@ -179,7 +181,7 @@ export function BarChart({
             {datum.detail ? (
               <span
                 className="hidden w-56 shrink-0 truncate text-muted-foreground text-xs md:block"
-                title={datum.detail}
+                title={datum.detailTitle ?? datum.detail}
               >
                 {datum.detail}
               </span>

@@ -1,5 +1,6 @@
 import { FAILURE_SEVERITY, type FailureCode } from '@kora/core';
 import { BarChart } from '@/components/charts/chart';
+import { humanizeFailureDetail } from '@/lib/ops/format';
 import type { FailureBucketDto } from '@/lib/api/schemas';
 
 /**
@@ -20,7 +21,8 @@ export function FailureChart({ buckets, days }: { buckets: FailureBucketDto[]; d
     label: bucket.code,
     value: bucket.count,
     severity: FAILURE_SEVERITY[bucket.code as FailureCode] ?? 'normal',
-    detail: bucket.topDetail,
+    detail: humanizeFailureDetail(bucket.topDetail),
+    detailTitle: bucket.topDetail,
     href: `/ops/conversations?failureCode=${bucket.code}&days=${days}`,
   }));
 

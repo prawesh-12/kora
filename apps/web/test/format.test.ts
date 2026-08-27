@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { EMPTY, formatCostMicros, formatDuration, formatUsd, truncateId } from '@/lib/ops/format';
+import {
+  EMPTY,
+  formatCostMicros,
+  formatDuration,
+  formatUsd,
+  humanizeFailureDetail,
+  truncateId,
+} from '@/lib/ops/format';
 
 describe('durations', () => {
   it('never renders a fake zero', () => {
@@ -46,5 +53,21 @@ describe('ids', () => {
     expect(truncateId('run_01M11PSMKNK43XYFPWFDR8FFMK')).toBe('run_01M1…');
     expect(truncateId('short')).toBe('short');
     expect(truncateId(null)).toBe(EMPTY);
+  });
+});
+
+describe('the failure detail', () => {
+  it('turns the engine talking to itself into a sentence', () => {
+    expect(
+      humanizeFailureDetail('insufficient facts: exceedsRemaining, requestedAmountMinor'),
+    ).toBe('missing order facts');
+  });
+
+  it('humanizes an intent enum', () => {
+    expect(humanizeFailureDetail('OUT_OF_SCOPE')).toBe('out of scope');
+  });
+
+  it('leaves a detail that already reads as one alone', () => {
+    expect(humanizeFailureDetail('get_order / upstream_4xx')).toBe('get_order / upstream_4xx');
   });
 });

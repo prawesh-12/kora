@@ -83,3 +83,16 @@ export function humanizeEnum(value: string | null | undefined): string {
   if (!value) return EMPTY;
   return value.toLowerCase().replace(/_/g, ' ');
 }
+
+/**
+ * The failure breakdown reports whatever the trace had closest to a cause, and
+ * some of those values are the engine talking to itself: an intent enum, or the
+ * policy engine's `insufficient facts: exceedsRemaining,`. The operator reads
+ * the sentence; the raw value belongs in a title attribute beside it.
+ */
+export function humanizeFailureDetail(detail: string): string {
+  if (detail.startsWith('insufficient facts:')) return 'missing order facts';
+  if (detail.startsWith('no rule matched')) return 'no rule matched';
+  if (/^[A-Z][A-Z0-9_]*$/.test(detail)) return humanizeEnum(detail);
+  return detail;
+}
