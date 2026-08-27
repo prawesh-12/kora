@@ -1,0 +1,26 @@
+{
+  "extends": "//",
+  "files": {
+    "includes": [
+      "**",
+      "!next-env.d.ts",
+      "!.turbo",
+      "!node_modules",
+      "!.next",
+      "!components/ui",
+      "!components/agents",
+      "!components/motion",
+      "!lib/hooks",
+      "!lib/ease.ts",
+      "!lib/touch.ts",
+      "!lib/favicon.ts",
+      "!lib/text-shimmer.ts",
+      "!lib/utils.ts"
+    ]
+  },
+  "css": {
+    "parser": {
+      "tailwindDirectives": true
+    }
+  }
+}
