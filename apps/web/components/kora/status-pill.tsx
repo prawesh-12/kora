@@ -46,8 +46,28 @@ export function StatusPill({
   );
 }
 
-/** Verified resolution: pass, fail, or not judged yet. Never black for pass. */
-export function VerifiedPill({ verified }: { verified: boolean | null }) {
+/**
+ * Verified resolution: pass, fail, still waiting, or not judged yet. Never black
+ * for pass.
+ *
+ * A run parked in AWAITING_APPROVAL has not failed at anything. It is waiting on
+ * a person, and the evaluator scores it against a resolution that has not been
+ * allowed to happen yet, so the honest word is pending.
+ */
+export function VerifiedPill({
+  verified,
+  state,
+}: {
+  verified: boolean | null;
+  state?: string | null;
+}) {
+  if (state === 'AWAITING_APPROVAL') {
+    return (
+      <StatusPill status="muted" title="Waiting on a person to approve the action">
+        pending
+      </StatusPill>
+    );
+  }
   if (verified === null) {
     return (
       <StatusPill status="muted" title="This run has not been evaluated yet">

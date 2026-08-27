@@ -114,7 +114,7 @@ export default async function OverviewPage() {
                         {formatDuration(run.durationMs)}
                       </TableCell>
                       <TableCell>
-                        <VerifiedPill verified={run.verifiedResolution} />
+                        <VerifiedPill state={run.state} verified={run.verifiedResolution} />
                       </TableCell>
                     </TableRow>
                   ))}

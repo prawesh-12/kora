@@ -56,7 +56,9 @@ const COLUMNS: ColumnDef<DataGridFeatures, ConversationSummaryDto>[] = [
     accessorFn: (row) => row.verifiedResolution,
     header: ({ column }) => <DataGridColumnHeader column={column} title="Verified" />,
     size: 110,
-    cell: ({ row }) => <VerifiedPill verified={row.original.verifiedResolution} />,
+    cell: ({ row }) => (
+      <VerifiedPill state={row.original.state} verified={row.original.verifiedResolution} />
+    ),
   },
   {
     id: 'primaryFailureCode',
@@ -86,6 +88,15 @@ const COLUMNS: ColumnDef<DataGridFeatures, ConversationSummaryDto>[] = [
     cell: ({ row }) => (row.original.escalated ? (row.original.escalationStatus ?? 'open') : EMPTY),
   },
 ];
+
+/**
+ * The grid's own pagination is off. This list pages by keyset over an
+ * accumulating array, and TanStack's default page size of ten silently sliced
+ * the row model down to ten rows before the virtualizer ever saw them, so the
+ * grid rendered ten rows, never scrolled, and asked for the next page
+ * immediately because it believed it was already at the bottom.
+ */
+const ALL_ROWS = { pageIndex: 0, pageSize: Number.MAX_SAFE_INTEGER };
 
 export function ConversationTable({
   page,
@@ -129,6 +140,7 @@ export function ConversationTable({
     columns,
     data: items,
     getRowId: (row) => row.runId,
+    state: { pagination: ALL_ROWS },
   });
 
   if (items.length === 0) {
