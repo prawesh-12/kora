@@ -141,7 +141,8 @@ replacementsRoutes.post('/', async (c) => {
 
   c.set('reachedBusinessLogic', true);
   const result = await createReplacement(body, c.get('fault'));
-  await sql`update acme_idempotency set response = ${sql.json(result)} where key = ${key}`;
+  await sql`
+    update acme_idempotency set response = ${JSON.stringify(result)}::jsonb where key = ${key}`;
   return c.json(result.body, result.status as ContentfulStatusCode);
 });
 

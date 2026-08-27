@@ -1,4 +1,6 @@
+import { pathToFileURL } from 'node:url';
 import { now } from '@kora/core';
+import type { TransactionSql } from 'postgres';
 import { sql } from './db.js';
 import type { OrderStatus } from './schema.js';
 
@@ -74,7 +76,7 @@ export const seedOrders: SeedOrder[] = [
 
 const DAYS_FROM_PLACED_TO_DELIVERED = 2;
 
-type Tx = Parameters<Parameters<typeof sql.begin>[0]>[0];
+type Tx = TransactionSql;
 
 async function insertOrder(tx: Tx, order: SeedOrder, at: Date): Promise<void> {
   await tx`
@@ -161,7 +163,7 @@ export async function resetOrders(orderIds: string[]): Promise<void> {
   });
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
   await seed();
   await sql.end();
   console.log('acme seed applied');
