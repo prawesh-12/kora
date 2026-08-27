@@ -33,6 +33,12 @@ Each suite scopes itself to its own tenant id (`ten_pipeline_test`,
 `ten_agent_test`, and so on) and cleans up in `afterAll`. `fileParallelism` is
 off in every package that shares the database.
 
+The Acme dataset has no tenant column to scope by. Its orders, replacements and
+idempotency keys are one shared set, and several suites reset order `9832` or
+reseed the whole thing between tests. So `pnpm test` runs the packages one at a
+time (`turbo test --concurrency=1`). Run two of them at once and a reseed lands
+in the middle of another suite's writes.
+
 The operator suites in `apps/web/test` follow the same rule with one exception:
 anything that goes through a route handler has to use the real tenant, because the
 handler reads `serverEnv().KORA_TENANT_ID` and there is no way to pass a different

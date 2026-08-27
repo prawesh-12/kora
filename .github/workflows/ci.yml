@@ -119,7 +119,9 @@ jobs:
       - name: ingest the knowledge base
         run: pnpm kora ingest config/knowledge
 
-      # Stage 2
+      # Stage 2. `pnpm test` runs the packages one at a time on purpose: they all share
+      # this one Postgres and the one acme mock service, and several suites truncate or
+      # reset the same acme rows.
       - name: unit and integration tests
         run: pnpm test
 
