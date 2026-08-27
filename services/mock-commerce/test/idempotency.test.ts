@@ -60,8 +60,6 @@ describe('server side idempotency', () => {
       reason: 'damaged',
       idempotencyKey: 'sequential-key-1',
     };
-    const r1 = await server.call('/replacements', { method: 'POST', body });
-    expect({ s: r1.status, t: await r1.text() }).toBe(1);
     const first = await json(await server.call('/replacements', { method: 'POST', body }));
     const second = await json(await server.call('/replacements', { method: 'POST', body }));
     expect(second).toEqual(first);

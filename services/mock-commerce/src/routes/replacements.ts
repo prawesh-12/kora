@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { canonicalJson, now } from '@kora/core';
 import { Hono } from 'hono';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
+import type { JSONValue } from 'postgres';
 import { one, sql } from '../db.js';
 import { type AppEnv, delay, type Fault } from '../faults.js';
 import { type CreateReplacementBody, createReplacementBody } from '../schema.js';
@@ -142,7 +143,9 @@ replacementsRoutes.post('/', async (c) => {
   c.set('reachedBusinessLogic', true);
   const result = await createReplacement(body, c.get('fault'));
   await sql`
-    update acme_idempotency set response = ${JSON.stringify(result)}::jsonb where key = ${key}`;
+    update acme_idempotency
+    set response = ${sql.json(result as unknown as JSONValue)}
+    where key = ${key}`;
   return c.json(result.body, result.status as ContentfulStatusCode);
 });
 

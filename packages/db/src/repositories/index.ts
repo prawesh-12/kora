@@ -1,6 +1,6 @@
 import { type AgentState, newId, now } from '@kora/core';
 import { and, asc, desc, eq, gte, inArray, lte, sql as raw } from 'drizzle-orm';
-import { type Database, db } from '../client.js';
+import { type Database, type Tx, db } from '../client.js';
 import * as s from '../schema/index.js';
 
 type Insert<T extends { $inferInsert: unknown }> = Omit<T['$inferInsert'], 'id' | 'tenantId'> & {
@@ -11,7 +11,7 @@ function withId<T extends { id?: string }>(prefix: Parameters<typeof newId>[0], 
   return { ...row, id: row.id ?? newId(prefix) };
 }
 
-export function createRepositories(tenantId: string, conn: Database = db()) {
+export function createRepositories(tenantId: string, conn: Database | Tx = db()) {
   const t = eq(s.conversations.tenantId, tenantId);
 
   return {
@@ -414,6 +414,6 @@ export function createRepositories(tenantId: string, conn: Database = db()) {
 
 export type Repositories = ReturnType<typeof createRepositories>;
 
-export function withTenant(tenantId: string, conn?: Database): Repositories {
+export function withTenant(tenantId: string, conn?: Database | Tx): Repositories {
   return createRepositories(tenantId, conn);
 }

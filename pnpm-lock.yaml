@@ -128,7 +128,17 @@ importers:
 
   packages/evaluation: {}
 
-  packages/tools: {}
+  packages/tools:
+    dependencies:
+      '@kora/core':
+        specifier: workspace:*
+        version: link:../core
+      '@kora/db':
+        specifier: workspace:*
+        version: link:../db
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
 
   services/mock-commerce:
     dependencies:

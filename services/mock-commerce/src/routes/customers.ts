@@ -13,7 +13,9 @@ export const customersRoutes = new Hono<AppEnv>();
 
 customersRoutes.get('/:id', async (c) => {
   const id = c.req.param('id');
-  const rows = await sql<CustomerRow[]>`select id, name, email from acme_customers where id = ${id}`;
+  const rows = await sql<
+    CustomerRow[]
+  >`select id, name, email from acme_customers where id = ${id}`;
   const customer = rows[0];
   if (!customer) return c.json({ error: { code: 'CUSTOMER_NOT_FOUND' } }, 404);
 
