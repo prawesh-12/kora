@@ -1,5 +1,10 @@
+import { pathToFileURL } from 'node:url';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
+
+function isMain(url: string): boolean {
+  return process.argv[1] !== undefined && url === pathToFileURL(process.argv[1]).href;
+}
 
 const ALLOWED_DIR = join('packages', 'tools', 'src', 'clients');
 const ACME_IMPORT = /from\s+['"][^'"]*clients\/acme(\.js)?['"]/;
@@ -44,7 +49,7 @@ export function findAcmeViolations(
   return violations;
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (isMain(import.meta.url)) {
   const violations = findAcmeViolations(process.cwd());
   if (violations.length > 0) {
     console.error('Business API calls must go through the tool pipeline:');

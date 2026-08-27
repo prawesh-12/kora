@@ -16,7 +16,10 @@ describe('money', () => {
   });
 
   it('adds within one currency', () => {
-    expect(add(money(100, 'INR'), money(250, 'INR'))).toEqual({ amountMinor: 350, currency: 'INR' });
+    expect(add(money(100, 'INR'), money(250, 'INR'))).toEqual({
+      amountMinor: 350,
+      currency: 'INR',
+    });
   });
 
   it('refuses to mix currencies', () => {

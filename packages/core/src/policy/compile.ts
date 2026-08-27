@@ -3,7 +3,17 @@ import { ConfigError } from '../errors.js';
 import { policyFileSchema } from './schema.js';
 import type { CompiledPolicy, CompiledRule, Condition, Operator } from './types.js';
 
-const OPERATORS: readonly Operator[] = ['eq', 'neq', 'in', 'notIn', 'gt', 'gte', 'lt', 'lte', 'exists'];
+const OPERATORS: readonly Operator[] = [
+  'eq',
+  'neq',
+  'in',
+  'notIn',
+  'gt',
+  'gte',
+  'lt',
+  'lte',
+  'exists',
+];
 
 export function compilePolicy(yamlSource: string): CompiledPolicy {
   let raw: unknown;
@@ -18,7 +28,9 @@ export function compilePolicy(yamlSource: string): CompiledPolicy {
 
   const parsed = policyFileSchema.safeParse(raw);
   if (!parsed.success) {
-    const problems = parsed.error.issues.map((i) => `  ${i.path.join('.')}: ${i.message}`).join('\n');
+    const problems = parsed.error.issues
+      .map((i) => `  ${i.path.join('.')}: ${i.message}`)
+      .join('\n');
     throw new ConfigError(`invalid policy file:\n${problems}`, {
       code: 'POLICY_INVALID',
       context: { issues: parsed.error.issues },

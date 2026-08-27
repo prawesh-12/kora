@@ -68,19 +68,34 @@ describe('policy: deny rules', () => {
   });
 
   it('denies an order that already has a replacement', () => {
-    const r = decide({ ...delivered, alreadyReplaced: true, amountMinor: 429900, daysSinceDelivery: 2 });
+    const r = decide({
+      ...delivered,
+      alreadyReplaced: true,
+      amountMinor: 429900,
+      daysSinceDelivery: 2,
+    });
     expect(r.decision).toBe('deny');
     expect(r.ruleId).toBe('already_replaced');
   });
 
   it('denies an order that is not delivered', () => {
-    const r = decide({ ...delivered, orderStatus: 'shipped', amountMinor: 100, daysSinceDelivery: 1 });
+    const r = decide({
+      ...delivered,
+      orderStatus: 'shipped',
+      amountMinor: 100,
+      daysSinceDelivery: 1,
+    });
     expect(r.decision).toBe('deny');
     expect(r.ruleId).toBe('order_not_delivered');
   });
 
   it('denies a cancelled order', () => {
-    const r = decide({ ...delivered, orderStatus: 'cancelled', amountMinor: 100, daysSinceDelivery: 1 });
+    const r = decide({
+      ...delivered,
+      orderStatus: 'cancelled',
+      amountMinor: 100,
+      daysSinceDelivery: 1,
+    });
     expect(r.ruleId).toBe('order_not_delivered');
   });
 });
@@ -160,7 +175,11 @@ describe('policy: missing facts never behave like zero', () => {
   });
 
   it('null is treated as absent, not as a value', () => {
-    const r = decide({ ...delivered, amountMinor: null as unknown as number, daysSinceDelivery: 4 });
+    const r = decide({
+      ...delivered,
+      amountMinor: null as unknown as number,
+      daysSinceDelivery: 4,
+    });
     expect(r.ruleId).toBe('default');
     expect(r.missingFacts).toContain('amountMinor');
   });
@@ -212,8 +231,9 @@ describe('policy: determinism and purity', () => {
 
 describe('policy: compile rejects bad files', () => {
   it('rejects an unknown top-level key', () => {
-    expect(() => compilePolicy('key: k\nversion: "1"\ncurrency: INR\ndefault: deny\nrules: []\nnope: 1'))
-      .toThrow(ConfigError);
+    expect(() =>
+      compilePolicy('key: k\nversion: "1"\ncurrency: INR\ndefault: deny\nrules: []\nnope: 1'),
+    ).toThrow(ConfigError);
   });
 
   it('rejects an unknown operator', () => {
@@ -252,17 +272,20 @@ rules:
   });
 
   it('rejects a missing default', () => {
-    const src = 'key: k\nversion: "1"\ncurrency: INR\nrules:\n  - id: r1\n    when: { action: { eq: a } }\n    decision: allow\n    reason: b\n';
+    const src =
+      'key: k\nversion: "1"\ncurrency: INR\nrules:\n  - id: r1\n    when: { action: { eq: a } }\n    decision: allow\n    reason: b\n';
     expect(() => compilePolicy(src)).toThrow(ConfigError);
   });
 
   it('rejects a permissive default outright', () => {
-    const src = 'key: k\nversion: "1"\ncurrency: INR\ndefault: allow\nrules:\n  - id: r1\n    when: { action: { eq: a } }\n    decision: allow\n    reason: b\n';
+    const src =
+      'key: k\nversion: "1"\ncurrency: INR\ndefault: allow\nrules:\n  - id: r1\n    when: { action: { eq: a } }\n    decision: allow\n    reason: b\n';
     expect(() => compilePolicy(src)).toThrow(/default: allow/);
   });
 
   it('rejects a rule with an empty when block', () => {
-    const src = 'key: k\nversion: "1"\ncurrency: INR\ndefault: deny\nrules:\n  - id: r1\n    when: { action: {} }\n    decision: allow\n    reason: b\n';
+    const src =
+      'key: k\nversion: "1"\ncurrency: INR\ndefault: deny\nrules:\n  - id: r1\n    when: { action: {} }\n    decision: allow\n    reason: b\n';
     expect(() => compilePolicy(src)).toThrow(ConfigError);
   });
 

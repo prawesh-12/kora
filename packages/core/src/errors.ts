@@ -19,7 +19,13 @@ export class KoraError extends Error {
   }
 
   toJSON() {
-    return { name: this.name, code: this.code, message: this.message, retryable: this.retryable, context: this.context };
+    return {
+      name: this.name,
+      code: this.code,
+      message: this.message,
+      retryable: this.retryable,
+      context: this.context,
+    };
   }
 }
 

@@ -10,5 +10,12 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "build": "echo no build"
+  },
+  "dependencies": {
+    "@hono/node-server": "^2.1.1",
+    "@kora/core": "workspace:*",
+    "hono": "^4.13.5",
+    "postgres": "^3.4.9",
+    "zod": "^4.4.3"
   }
 }

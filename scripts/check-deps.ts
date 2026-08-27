@@ -1,5 +1,10 @@
+import { pathToFileURL } from 'node:url';
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
+
+function isMain(url: string): boolean {
+  return process.argv[1] !== undefined && url === pathToFileURL(process.argv[1]).href;
+}
 
 const ALLOWED: Record<string, string[]> = {
   '@kora/core': [],
@@ -55,7 +60,7 @@ function readManifests(root: string): Manifest[] {
   return out;
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (isMain(import.meta.url)) {
   const violations = checkDeps(readManifests(process.cwd()));
   if (violations.length > 0) {
     console.error('Dependency direction violations:');

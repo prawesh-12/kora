@@ -1,4 +1,5 @@
 import { pino } from 'pino';
+import type { Logger as PinoLogger } from 'pino';
 import { serverEnv } from './env.js';
 
 const REDACT = [
@@ -29,9 +30,9 @@ function create() {
   });
 }
 
-let root: pino.Logger | null = null;
+let root: PinoLogger | null = null;
 
-export type Logger = pino.Logger;
+export type Logger = PinoLogger;
 
 export function logger(): Logger {
   if (!root) root = create();
