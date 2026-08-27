@@ -2,6 +2,7 @@
 
 import { CodeBlock } from '@/components/agents/code-block';
 import { Badge } from '@/components/ui/badge';
+import { formatDuration } from '@/lib/ops/format';
 import { cn } from '@/lib/utils';
 import type { PolicyCheckDto, RunStepDto, ToolExecutionDto, TraceDto } from '@/lib/api/schemas';
 
@@ -23,11 +24,6 @@ const TOOL_TONE: Record<string, string> = {
   denied: 'border-l-amber-500',
   failed: 'border-l-destructive',
 };
-
-function duration(ms: number | null | undefined): string {
-  if (ms === null || ms === undefined) return '';
-  return ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(2)}s`;
-}
 
 function json(value: unknown): string {
   return JSON.stringify(value ?? null, null, 2);
@@ -96,7 +92,7 @@ function ToolRow({ execution }: { execution: ToolExecutionDto }) {
           </Badge>
         ) : null}
         <span className="ml-auto text-muted-foreground tabular-nums">
-          {duration(execution.durationMs)}
+          {formatDuration(execution.durationMs)}
         </span>
       </summary>
       <div className="space-y-3 border-t px-3 py-3">
@@ -178,7 +174,7 @@ function StepRow({ step }: { step: RunStepDto }) {
         <span className="font-medium">{step.kind}</span>
         {failed ? <Badge variant="destructive">failed</Badge> : null}
         <span className="ml-auto text-muted-foreground tabular-nums">
-          {duration(step.durationMs)}
+          {formatDuration(step.durationMs)}
         </span>
       </summary>
       <div className="border-t px-3 py-3">
@@ -221,7 +217,7 @@ export function TraceTimeline({ trace }: { trace: TraceDto }) {
       })}
 
       <p className="pt-3 text-muted-foreground text-xs tabular-nums">
-        {trace.run.stepCount} steps · {duration(trace.totals.durationMs)} ·{' '}
+        {trace.run.stepCount} steps · {formatDuration(trace.totals.durationMs)} ·{' '}
         {trace.totals.tokensIn + trace.totals.tokensOut} tokens · $
         {(trace.totals.costUsdMicros / 1_000_000).toFixed(4)}
       </p>
