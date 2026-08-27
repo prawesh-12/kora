@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
-import { type CompiledPolicy, ConfigError, compilePolicyBundle } from '@kora/core';
+import { type CompiledPolicy, ConfigError, compilePolicyBundle, serverEnv } from '@kora/core';
 import { z } from 'zod';
 import { parse as parseYaml } from 'yaml';
 
@@ -39,6 +39,8 @@ export function loadAgentConfig(path = join(REPO_ROOT, 'config/agent.yaml')): Ag
     );
   }
 
+  assertJudgeFamily();
+
   const compiledPolicy = compilePolicyBundle(
     parsed.data.policyBundle.map((file) => ({
       key: basename(file, '.yaml'),
@@ -55,4 +57,29 @@ export function loadAgentConfig(path = join(REPO_ROOT, 'config/agent.yaml')): Ag
 
 export function resetAgentConfig(): void {
   cached = null;
+}
+
+function familyOf(modelId: string): string {
+  const id = modelId.toLowerCase();
+  if (id.startsWith('gpt-') || id.startsWith('o1') || id.startsWith('o3')) return 'openai';
+  if (id.startsWith('claude-')) return 'anthropic';
+  if (id.startsWith('gemini-')) return 'google';
+  if (id.startsWith('mockjudge')) return 'kora-mock-judge';
+  if (id.startsWith('mock')) return 'kora-mock';
+  return id.split('-')[0] ?? id;
+}
+
+/**
+ * Checked at config load, not at first use. A judge from the same family as the
+ * agent systematically over-rewards its own outputs, and the failure mode is a
+ * dashboard reading 94% for three months while the agent is quietly wrong.
+ */
+export function assertJudgeFamily(): void {
+  const env = serverEnv();
+  if (familyOf(env.KORA_MODEL_JUDGE) === familyOf(env.KORA_MODEL_AGENT)) {
+    throw new ConfigError(
+      `KORA_MODEL_JUDGE (${env.KORA_MODEL_JUDGE}) is the same family as KORA_MODEL_AGENT (${env.KORA_MODEL_AGENT}). The judge must be a different family.`,
+      { code: 'JUDGE_SAME_FAMILY' },
+    );
+  }
 }

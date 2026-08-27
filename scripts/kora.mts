@@ -65,15 +65,49 @@ async function main(): Promise<number> {
         return 0;
       }
 
+      case 'judge:calibrate': {
+        const { calibrate, calibrationPasses, renderCalibration } = await import(
+          '@kora/evaluation'
+        );
+        const { makeJudgeCaller } = await import('@kora/ai');
+        const dir = rest[0] ?? join(process.cwd(), 'benchmarks/gold');
+        const results = await calibrate({
+          goldSetPath: dir,
+          call: makeJudgeCaller(serverEnv().KORA_TENANT_ID),
+        });
+        console.log(renderCalibration(results));
+        return calibrationPasses(results) ? 0 : 1;
+      }
+
+      case 'judge:goldset': {
+        const { buildGoldSet } = await import('@kora/evaluation');
+        const written = await buildGoldSet({
+          tenantId: serverEnv().KORA_TENANT_ID,
+          outDir: join(process.cwd(), 'benchmarks/gold'),
+        });
+        log.info({ written }, 'gold set written');
+        return 0;
+      }
+
+      case 'approvals:expire': {
+        const { expireOverdueApprovals } = await import('@kora/db');
+        const expired = await expireOverdueApprovals(serverEnv().KORA_TENANT_ID);
+        log.info({ expired: expired.length }, 'approval sweep complete');
+        return 0;
+      }
+
       case 'scenarios': {
         const { runScenarios } = await import('@kora/evaluation');
-        const { runAgentTurn } = await import('@kora/ai');
-        return runScenarios(rest, runAgentTurn);
+        const { runAgentTurn, makeJudgeCaller } = await import('@kora/ai');
+        const judge = rest.includes('--no-judge')
+          ? undefined
+          : { call: makeJudgeCaller(serverEnv().KORA_TENANT_ID) };
+        return runScenarios(rest, { runAgentTurn, ...(judge ? { judge } : {}) });
       }
 
       default:
         console.error(
-          'usage: pnpm kora <ingest|migrate|seed|idempotency:cleanup|smoke:model|scenarios>',
+          'usage: pnpm kora <ingest|migrate|seed|idempotency:cleanup|smoke:model|scenarios|judge:goldset|judge:calibrate|approvals:expire>',
         );
         return 1;
     }

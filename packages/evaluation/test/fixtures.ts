@@ -120,7 +120,24 @@ export function passingInput(overrides: Deep<EvaluationInput> = {}): EvaluationI
     approvals: [],
     escalation: null,
     llmCalls: [],
-    retrievals: [{ stepId: 'stp_r', query: 'q', filters: {}, chunks: [{ chunkId: 'c1' }] }],
+    retrievals: [
+      {
+        stepId: 'stp_r',
+        query: 'damaged item replacement',
+        filters: { topic: 'returns' },
+        chunks: [
+          {
+            chunkId: 'chk_1',
+            documentId: 'doc_1',
+            documentVersion: 1,
+            title: 'Acme Store damaged item policy',
+            headingPath: 'Damaged items > Eligibility',
+            content: 'Replacements are available for 7 days from delivery.',
+            distance: 0.12,
+          },
+        ],
+      },
+    ],
     totals: { durationMs: 1000, tokensIn: 100, tokensOut: 20, costUsdMicros: 100 },
   } as unknown as AssembledTrace;
 

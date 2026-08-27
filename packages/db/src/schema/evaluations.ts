@@ -1,4 +1,4 @@
-import { boolean, index, pgTable, text, timestamp, unique } from 'drizzle-orm/pg-core';
+import { bigint, boolean, index, pgTable, text, timestamp, unique } from 'drizzle-orm/pg-core';
 import { conversations } from './conversations.js';
 import { agentRuns } from './runs.js';
 
@@ -16,6 +16,9 @@ export const evaluations = pgTable(
     agentConfigVersion: text('agent_config_version').notNull(),
     verifiedResolution: boolean('verified_resolution').notNull(),
     failureCodes: text('failure_codes').array().notNull().default([]),
+    rubricVersion: text('rubric_version'),
+    judgeModel: text('judge_model'),
+    judgeCostUsdMicros: bigint('judge_cost_usd_micros', { mode: 'number' }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [

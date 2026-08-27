@@ -10,4 +10,5 @@ export * from './intent.js';
 export * from './prompts/index.js';
 export * from './grounding.js';
 export * from './escalation.js';
+export * from './judge-caller.js';
 export * from './agent.js';

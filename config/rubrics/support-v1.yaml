@@ -1,0 +1,37 @@
+version: support-v1
+description: What code cannot check about a support reply
+
+criteria:
+  - id: explanation_matches_policy
+    applies_when: policy_check_present
+    weight: 3
+    requirement: >
+      The final message states the actual policy reason recorded in policy_checks.
+      MET only if the stated reason matches the recorded rule's reason.
+
+  - id: no_unsupported_claims
+    applies_when: always
+    weight: 3
+    requirement: >
+      Every factual claim about orders, amounts, dates or ids is supported by a
+      tool result or a retrieved chunk present in the trace.
+
+  - id: intent_understood
+    applies_when: always
+    weight: 2
+    requirement: The detected intent matches what the customer actually asked for.
+
+  - id: escalation_reason_valid
+    applies_when: escalated
+    weight: 2
+    requirement: The recorded escalation reason is the real reason, given the trace.
+
+  - id: tone_appropriate
+    applies_when: always
+    weight: 1
+    requirement: Professional, clear, no blame, no over-promising.
+
+  - id: no_dead_end
+    applies_when: not_resolved
+    weight: 2
+    requirement: The customer is told what happens next and roughly when.

@@ -25,6 +25,12 @@ const HARD_CAP_MS = 90_000;
  * runtime path on purpose: the evaluator reads traces after the fact, and making
  * it depend on the orchestrator would put it back inside the loop it audits.
  */
+export interface ScenarioDeps {
+  runAgentTurn: RunAgentTurn;
+  /** Judging is 100% in scenario runs, and optional so the suite runs without it. */
+  judge?: { call: import('../judge/judge.js').JudgeCaller };
+}
+
 export type RunAgentTurn = (args: {
   tenantId: string;
   conversationId: string;
@@ -78,8 +84,9 @@ function withTimeout<T>(promise: Promise<T>, ms: number, what: string): Promise<
 export async function runScenario(
   scenario: ScenarioSpec & { repeatTurn?: boolean; approval?: 'approve' | 'deny' },
   tenantId: string,
-  runAgentTurn: RunAgentTurn,
+  deps: ScenarioDeps,
 ): Promise<ScenarioOutcome> {
+  const { runAgentTurn } = deps;
   const startedAt = Date.now();
   const repos = withTenant(tenantId);
   const touchedOrders = scenario.seed.orderId ? [scenario.seed.orderId] : undefined;
@@ -148,7 +155,12 @@ export async function runScenario(
     }
 
     const trace = await assembleTrace(tenantId, result.runId);
-    const evaluation = await evaluateRun({ tenantId, runId: result.runId, scenario });
+    const evaluation = await evaluateRun({
+      tenantId,
+      runId: result.runId,
+      scenario,
+      ...(deps.judge ? { judge: deps.judge } : {}),
+    });
 
     const orderId = scenario.seed.orderId;
     const replacements = orderId ? await replacementsForOrder(orderId) : [];
@@ -231,11 +243,8 @@ function renderTable(results: ScenarioOutcome[]): string {
   return [line(header), line(widths.map((w) => '-'.repeat(w))), ...rows.map(line)].join('\n');
 }
 
-export async function runScenarios(
-  argv: string[] = [],
-  runAgentTurn?: RunAgentTurn,
-): Promise<number> {
-  if (!runAgentTurn) {
+export async function runScenarios(argv: string[] = [], deps?: ScenarioDeps): Promise<number> {
+  if (!deps?.runAgentTurn) {
     console.error('runScenarios needs the agent injected; run it through `pnpm kora scenarios`.');
     return 1;
   }
@@ -281,7 +290,7 @@ export async function runScenarios(
     // Sequential on purpose: the scenarios share one Acme dataset, and a scoped
     // reset for one order still races a run that is reading the same order.
     for (const scenario of scenarios) {
-      results.push(await runScenario(scenario, tenantId, runAgentTurn));
+      results.push(await runScenario(scenario, tenantId, deps));
     }
 
     if (repeat > 1) console.log(`\n=== pass ${pass} of ${repeat} ===`);

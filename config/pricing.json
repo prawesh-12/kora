@@ -1,13 +1,41 @@
 {
   "_comment": "micro-USD per million tokens, keyed by model id. Prices are data, not code.",
   "models": {
-    "mock-agent": { "inputPerMillion": 3000000, "outputPerMillion": 15000000 },
-    "mock-classifier": { "inputPerMillion": 250000, "outputPerMillion": 1250000 },
-    "mock-embedding": { "inputPerMillion": 20000, "outputPerMillion": 0 },
-    "gpt-4o-mini": { "inputPerMillion": 150000, "outputPerMillion": 600000 },
-    "gpt-4o": { "inputPerMillion": 2500000, "outputPerMillion": 10000000 },
-    "text-embedding-3-small": { "inputPerMillion": 20000, "outputPerMillion": 0 },
-    "claude-sonnet-5": { "inputPerMillion": 3000000, "outputPerMillion": 15000000 },
-    "claude-haiku-4-5-20251001": { "inputPerMillion": 800000, "outputPerMillion": 4000000 }
+    "mock-agent": {
+      "inputPerMillion": 3000000,
+      "outputPerMillion": 15000000
+    },
+    "mock-classifier": {
+      "inputPerMillion": 250000,
+      "outputPerMillion": 1250000
+    },
+    "mock-embedding": {
+      "inputPerMillion": 20000,
+      "outputPerMillion": 0
+    },
+    "gpt-4o-mini": {
+      "inputPerMillion": 150000,
+      "outputPerMillion": 600000
+    },
+    "gpt-4o": {
+      "inputPerMillion": 2500000,
+      "outputPerMillion": 10000000
+    },
+    "text-embedding-3-small": {
+      "inputPerMillion": 20000,
+      "outputPerMillion": 0
+    },
+    "claude-sonnet-5": {
+      "inputPerMillion": 3000000,
+      "outputPerMillion": 15000000
+    },
+    "claude-haiku-4-5-20251001": {
+      "inputPerMillion": 800000,
+      "outputPerMillion": 4000000
+    },
+    "mockjudge-v1": {
+      "inputPerMillion": 1000000,
+      "outputPerMillion": 5000000
+    }
   }
 }

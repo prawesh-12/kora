@@ -3,6 +3,8 @@ import { assembleTrace, withTenant } from '@kora/db';
 import type { AssembledTrace } from '@kora/db';
 import { CHECKS } from './checks/index.js';
 import { type Failure, classifyFailures } from './classify.js';
+import { type JudgeCaller, combineChecks, judgeRun } from './judge/judge.js';
+import { type Rubric, loadRubric } from './judge/rubric.js';
 import { snapshotExternalState } from './snapshot.js';
 import type { CheckResult, EvaluationInput, EvaluationRecord, ScenarioSpec } from './types.js';
 
@@ -38,11 +40,18 @@ export function runChecks(input: EvaluationInput): CheckResult[] {
   return CHECKS.map((check) => check(input));
 }
 
-export async function evaluateRun(args: {
+export interface EvaluateRunArgs {
   tenantId: string;
   runId: string;
   scenario?: ScenarioSpec;
-}): Promise<EvaluationRecord> {
+  /**
+   * Injected because `evaluation` must not depend on `ai`. Absent means the
+   * deterministic checks run alone, which is always a complete evaluation.
+   */
+  judge?: { call: JudgeCaller; rubric?: Rubric };
+}
+
+export async function evaluateRun(args: EvaluateRunArgs): Promise<EvaluationRecord> {
   const repos = withTenant(args.tenantId);
 
   const existing = await repos.evaluations.forRun(args.runId);
@@ -74,9 +83,21 @@ export async function evaluateRun(args: {
     ...(args.scenario?.seed.orderId ? { extraOrderIds: [args.scenario.seed.orderId] } : {}),
   });
 
-  const checks = runChecks({ trace, externalState, scenario: args.scenario });
-  const verifiedResolution = verifiedResolutionOf(trace, checks);
-  const failures = classifyFailures({ trace, externalState, scenario: args.scenario, checks });
+  const deterministic = runChecks({ trace, externalState, scenario: args.scenario });
+
+  // The judge runs after, sees none of the above, and cannot change any of it.
+  const judged = args.judge
+    ? await judgeRun({ trace, rubric: args.judge.rubric ?? loadRubric(), call: args.judge.call })
+    : null;
+
+  const checks = judged ? combineChecks(deterministic, judged.checks) : deterministic;
+  const verifiedResolution = verifiedResolutionOf(trace, deterministic);
+  const failures = classifyFailures({
+    trace,
+    externalState,
+    scenario: args.scenario,
+    checks: deterministic,
+  });
 
   const row = await repos.evaluations.upsert(
     {
@@ -85,6 +106,9 @@ export async function evaluateRun(args: {
       agentConfigVersion: trace.run.agentConfigVersion,
       verifiedResolution,
       failureCodes: failures.map((f) => f.code),
+      rubricVersion: judged?.rubricVersion ?? null,
+      judgeModel: judged?.model ?? null,
+      judgeCostUsdMicros: judged?.costUsdMicros ?? null,
       createdAt: now(),
     },
     checks.map((c) => ({
