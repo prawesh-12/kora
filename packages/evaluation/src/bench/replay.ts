@@ -19,6 +19,15 @@ export interface PointInTimeState {
   cancellationsByOrder: Record<string, unknown[]>;
   /** Keyed by `toolName:canonicalInput`, so a repeated call returns what it returned. */
   toolOutputs: Record<string, unknown>;
+  /**
+   * What a person decided on this conversation, per tool.
+   *
+   * The human's decision was part of the world the original run acted in, so it
+   * is reconstructed like any other state. Without it every run that only
+   * succeeded because someone approved it reads as a regression, and replay ends
+   * up measuring the absence of a human rather than the agent.
+   */
+  approvalDecisions: Array<{ toolName: string; status: string; note: string | null }>;
 }
 
 export interface NotReplayable {
@@ -38,6 +47,9 @@ export function reconstructState(trace: AssembledTrace): PointInTimeState | NotR
     refundsByOrder: {},
     cancellationsByOrder: {},
     toolOutputs: {},
+    approvalDecisions: trace.approvals
+      .filter((a) => a.status === 'approved' || a.status === 'denied')
+      .map((a) => ({ toolName: a.toolName, status: a.status, note: a.decisionNote ?? null })),
   };
 
   const succeeded = trace.toolExecutions.filter(
@@ -312,6 +324,19 @@ export async function loadCandidates(
 
     if (trace.run.finishedAt === null) {
       notReplayable.push({ runId, reason: 'the original run never finished' });
+      continue;
+    }
+
+    // A run with no trigger message is a resume, not a turn: approving a
+    // high-value action continues the work in a new run without the customer
+    // saying anything. The turn that raised the approval already stands for that
+    // work, and replaying the continuation on its own would compare it against a
+    // customer message it never answered.
+    if (trace.run.triggerMessageId === null) {
+      notReplayable.push({
+        runId,
+        reason: 'this run resumed after a human decision rather than answering a customer message',
+      });
       continue;
     }
 

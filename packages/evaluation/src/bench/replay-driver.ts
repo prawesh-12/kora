@@ -82,15 +82,38 @@ async function replayOne(
   const runIds: string[] = [];
 
   for (const message of candidate.messages) {
-    const turn = await args.deps.runAgentTurn({
-      tenantId: args.tenantId,
-      conversationId: conversation.id,
-      message,
-      deploymentMode: 'simulation',
-      agentVersionId: versionId,
-      recordedOutputs: candidate.state.toolOutputs,
-    });
-    runIds.push(turn.runId);
+    const turn = () =>
+      args.deps.runAgentTurn({
+        tenantId: args.tenantId,
+        conversationId: conversation.id,
+        message,
+        deploymentMode: 'simulation',
+        agentVersionId: versionId,
+        recordedOutputs: candidate.state.toolOutputs,
+      });
+
+    const result = await turn();
+
+    // The human's decision was part of the world the original run acted in, so it
+    // is replayed like any other state. Recording it is enough: the next turn
+    // finds the decided approval exactly as the original did.
+    //
+    // The turn is deliberately not re-sent. Doing that adds a customer message
+    // the original conversation never had, and every later turn then lines up
+    // against the wrong message.
+    //
+    // Without this, a conversation that only went ahead because a person approved
+    // it reads as a regression, and the replay measures the missing human rather
+    // than the agent.
+    if (result.approvalId) {
+      await decideAsOriginallyDecided(
+        args.tenantId,
+        result.approvalId,
+        candidate.state.approvalDecisions,
+      );
+    }
+
+    runIds.push(result.runId);
   }
 
   // The turn this run answered, not the last one in the conversation.
@@ -175,6 +198,33 @@ export async function replay(args: ReplayArgs): Promise<ReplayReport> {
     'replay complete',
   );
   return buildReport(outcomes, notReplayable);
+}
+
+/**
+ * Applies the original conversation's decision to the approval this replay raised.
+ * A tool the original run never had a decision for is left pending: inventing an
+ * approval nobody gave would let replay claim outcomes a person never allowed.
+ */
+async function decideAsOriginallyDecided(
+  tenantId: string,
+  approvalId: string,
+  decisions: ReplayCandidate['state']['approvalDecisions'],
+): Promise<'approved' | 'denied' | 'pending'> {
+  const repos = withTenant(tenantId);
+  const approval = await repos.approvals.get(approvalId);
+  if (!approval) return 'pending';
+
+  const original = decisions.find((d) => d.toolName === approval.toolName);
+  if (!original) return 'pending';
+
+  await repos.approvals.decide(approvalId, {
+    status: original.status as 'approved' | 'denied',
+    // Nobody decided this one now; the decision is the original person's.
+    decidedBy: null,
+    ...(original.note ? { decisionNote: original.note } : {}),
+  });
+
+  return original.status as 'approved' | 'denied';
 }
 
 function summarize(

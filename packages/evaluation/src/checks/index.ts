@@ -11,8 +11,14 @@ function succeeded(status: string): boolean {
 /** How many of each write the run actually performed, per order. */
 function writesDuringRun(input: EvaluationInput): Map<string, Map<string, number>> {
   const counts = new Map<string, Map<string, number>>();
+  const pretend =
+    input.trace.run.deploymentMode === 'simulation' || input.trace.run.deploymentMode === 'shadow';
+
   for (const e of input.trace.toolExecutions) {
-    if (!WRITE_ACTIONS.includes(e.toolName) || e.status !== 'ok') continue;
+    // A simulated write is a write that would have happened. In a mode where
+    // nothing executes, that is the only thing there is to count.
+    const performed = e.status === 'ok' || (pretend && e.status === 'simulated');
+    if (!WRITE_ACTIONS.includes(e.toolName) || !performed) continue;
     const orderId = (e.input as { orderId?: string })?.orderId;
     if (!orderId) continue;
     const perOrder = counts.get(orderId) ?? new Map<string, number>();

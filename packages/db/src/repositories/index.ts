@@ -279,7 +279,7 @@ export function createRepositories(tenantId: string, conn: Database | Tx = db())
        */
       async decide(
         id: string,
-        patch: { status: 'approved' | 'denied'; decidedBy: string; decisionNote?: string },
+        patch: { status: 'approved' | 'denied'; decidedBy: string | null; decisionNote?: string },
       ) {
         await expireOverdue(tenantId, conn);
         const [row] = await conn

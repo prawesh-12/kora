@@ -293,7 +293,11 @@ export async function runBench(argv: string[], deps: ScenarioDeps): Promise<numb
   const last = runs.at(-1)!;
   let exitCode = 0;
 
-  const gates = gateFailures(last, previous);
+  // The baseline is a whole-suite number, so only a whole-suite run may be
+  // compared against it. A category on its own has a different mix by
+  // definition, and comparing the two reports a regression that is just the
+  // filter. History is already only written for a whole-suite run.
+  const gates = gateFailures(last, category ? null : previous);
   if (gates.length > 0) {
     console.error('\nGates failed:');
     for (const g of gates) console.error(`  ${g}`);

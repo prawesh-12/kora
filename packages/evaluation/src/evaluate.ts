@@ -34,10 +34,18 @@ export function verifiedResolutionOf(trace: AssembledTrace, checks: CheckResult[
   // did not duplicate it.
   const WRITE_INTENTS = ['DAMAGED_ORDER', 'REFUND_REQUEST', 'CANCEL_ORDER'];
   if (trace.run.intent && WRITE_INTENTS.includes(trace.run.intent)) {
+    // Nothing executes in simulation or shadow mode, so `simulated` is the
+    // strongest claim a write can make there: the action was allowed and reached
+    // the point of execution. Requiring a verified write would score every
+    // replayed run zero and make a replay comparison meaningless.
+    const pretend =
+      trace.run.deploymentMode === 'simulation' || trace.run.deploymentMode === 'shadow';
     const landed = trace.toolExecutions.some(
       (e) =>
         ['create_replacement', 'create_refund', 'cancel_order'].includes(e.toolName) &&
-        ((e.status === 'ok' && e.verified === true) || e.status === 'replayed'),
+        ((e.status === 'ok' && e.verified === true) ||
+          e.status === 'replayed' ||
+          (pretend && e.status === 'simulated')),
     );
     if (!landed) return false;
   }
