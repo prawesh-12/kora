@@ -13,7 +13,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import type { ConversationPageDto, ConversationSummaryDto } from '@/lib/api/schemas';
-import { formatDuration, formatUsdMicros } from '@/lib/ops/format';
+import { formatDuration, formatCostMicros } from '@/lib/ops/format';
 
 function VerifiedMark({ verified }: { verified: boolean | null }) {
   if (verified === null) return <Badge variant="outline">evaluating</Badge>;
@@ -110,7 +110,7 @@ export function ConversationTable({
                 </TableCell>
                 <TableCell className="tabular-nums">{formatDuration(item.durationMs)}</TableCell>
                 <TableCell className="tabular-nums">
-                  {formatUsdMicros(item.costUsdMicros)}
+                  {formatCostMicros(item.costUsdMicros)}
                 </TableCell>
               </TableRow>
             ))}

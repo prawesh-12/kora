@@ -238,6 +238,8 @@ export async function runAgentTurn(args: {
   deploymentMode?: DeploymentMode;
   /** Scenario use only: arms an Acme fault for the named tool. */
   faults?: Record<string, string>;
+  /** Who is speaking. `human_agent` is an operator resuming after an approval. */
+  role?: 'customer' | 'human_agent';
   /** Replay only: pins the agent version whose behaviour is being measured. */
   agentVersionId?: string;
   /** Replay only: the original run's tool outputs, keyed `toolName:json(input)`. */
@@ -250,9 +252,12 @@ export async function runAgentTurn(args: {
   const repos = withTenant(args.tenantId);
   const deploymentMode = args.deploymentMode ?? env.KORA_DEPLOYMENT_MODE;
 
-  const customerMessage = await repos.messages.create({
+  // Resuming after an approval is a person acting, not the customer speaking
+  // again. Writing it as a customer message put the customer's own words in the
+  // transcript twice, and put words in their mouth they never said.
+  const triggerMessage = await repos.messages.create({
     conversationId: args.conversationId,
-    role: 'customer',
+    role: args.role ?? 'customer',
     content: args.message,
     parts: [{ type: 'text', text: args.message }],
     createdAt: now(),
@@ -264,7 +269,7 @@ export async function runAgentTurn(args: {
     conversationId: args.conversationId,
     agentConfigVersion: config.configVersion,
     agentVersionId: config.agentVersionId,
-    triggerMessageId: customerMessage.id,
+    triggerMessageId: triggerMessage.id,
   });
 
   const logger = childLogger({
@@ -465,12 +470,15 @@ export async function runAgentTurn(args: {
   await move('PLANNING');
 
   let text = '';
+  // The whole agent loop: every model call and every tool call inside it. This
+  // is the span that dominates a slow run, so it is the one worth recording.
+  const loopStartedAt = Date.now();
   try {
     const result = await agent.generate({ prompt: args.message });
     text = result.text.trim();
-    await run.record('model', { intent, exposedTools });
+    await run.record('model', { intent, exposedTools }, 'ok', Date.now() - loopStartedAt);
   } catch (e) {
-    await run.record('model', { intent, exposedTools }, 'failed');
+    await run.record('model', { intent, exposedTools }, 'failed', Date.now() - loopStartedAt);
     logger.error({ err: e }, 'the agent loop threw');
     return handOver(
       'TOOL_FAILED',

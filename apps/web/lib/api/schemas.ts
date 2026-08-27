@@ -485,6 +485,9 @@ export interface TraceDto {
     traceId: string;
     conversationId: string;
     agentConfigVersion: string;
+    /** Set when the config came from a published version rather than the file. */
+    agentVersionId: string | null;
+    deploymentMode: string;
     startedAt: string;
     finishedAt: string | null;
     durationMs: number | null;
@@ -524,6 +527,8 @@ export function toTraceDto(trace: AssembledTrace, evaluation: EvaluationDto | nu
       traceId: trace.run.traceId,
       conversationId: trace.run.conversationId,
       agentConfigVersion: trace.run.agentConfigVersion,
+      agentVersionId: trace.run.agentVersionId,
+      deploymentMode: trace.run.deploymentMode,
       startedAt: trace.run.startedAt.toISOString(),
       finishedAt: iso(trace.run.finishedAt),
       durationMs: trace.run.durationMs,

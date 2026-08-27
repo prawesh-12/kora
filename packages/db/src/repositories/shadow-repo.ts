@@ -1,8 +1,10 @@
 import { newId, now } from '@kora/core';
-import { and, desc, eq, gte, lt } from 'drizzle-orm';
+import { and, desc, eq, gte, lt, notInArray, sql } from 'drizzle-orm';
 import { db } from '../client.js';
 import { agentRuns } from '../schema/runs.js';
 import { shadowComparisons } from '../schema/shadow.js';
+
+const sqlCount = sql<string>`count(*)`;
 
 export type Agreement = 'match' | 'action_differs' | 'amount_differs' | 'no_human_record';
 
@@ -106,12 +108,49 @@ export async function compareShadowDay(
     .sort((a, b) => a.intent.localeCompare(b.intent));
 }
 
-/** Disagreements ranked by what they would have cost. The expensive ones are the ones worth reading. */
+/**
+ * Disagreements ranked by what they would have cost. The expensive ones are the
+ * ones worth reading.
+ *
+ * A run nobody handled is not a disagreement, so `no_human_record` is excluded
+ * here rather than at render. Including it fills the table with rows where both
+ * sides are empty and every amount is zero, under a heading promising the most
+ * expensive disagreements first. Count them with `skippedCount` instead: that
+ * number qualifies the agreement rate, it is not an example of one.
+ */
 export async function disagreementsByValue(tenantId: string, limit = 50) {
   return db()
     .select()
     .from(shadowComparisons)
-    .where(eq(shadowComparisons.tenantId, tenantId))
+    .where(
+      and(
+        eq(shadowComparisons.tenantId, tenantId),
+        notInArray(shadowComparisons.agreement, ['match', 'no_human_record']),
+      ),
+    )
     .orderBy(desc(shadowComparisons.valueAtRiskMinor))
     .limit(limit);
+}
+
+/** How many runs had no human resolution to compare against. */
+export async function skippedCount(tenantId: string): Promise<number> {
+  const [row] = await db()
+    .select({ n: sqlCount })
+    .from(shadowComparisons)
+    .where(
+      and(
+        eq(shadowComparisons.tenantId, tenantId),
+        eq(shadowComparisons.agreement, 'no_human_record'),
+      ),
+    );
+  return Number(row?.n ?? 0);
+}
+
+/** How many runs matched what the person did. */
+export async function matchedCount(tenantId: string): Promise<number> {
+  const [row] = await db()
+    .select({ n: sqlCount })
+    .from(shadowComparisons)
+    .where(and(eq(shadowComparisons.tenantId, tenantId), eq(shadowComparisons.agreement, 'match')));
+  return Number(row?.n ?? 0);
 }

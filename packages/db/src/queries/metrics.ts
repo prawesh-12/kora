@@ -165,7 +165,11 @@ export function failureBreakdownSql(f: MetricsFilter): SQL {
               )
             when p.code = 'POLICY_FAILURE'
               then (
-                select pc.rule_id
+                -- The rule id "default" is the engine's sentinel for no rule
+                -- matched, so the bundle default applied. Reporting it tells an
+                -- engineer nothing. The reason behind it names the missing
+                -- facts, which is the thing they would go and fix.
+                select case when pc.rule_id = 'default' then pc.reason else pc.rule_id end
                 from policy_checks pc
                 where pc.run_id = p.run_id and pc.decision <> 'allow'
                 order by pc.created_at desc
@@ -174,7 +178,7 @@ export function failureBreakdownSql(f: MetricsFilter): SQL {
             else null
           end,
           p.intent,
-          'unknown'
+          'no dominant cause'
         ) as detail
       from primary_failure p
     )

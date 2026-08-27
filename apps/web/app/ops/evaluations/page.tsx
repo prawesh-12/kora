@@ -3,7 +3,7 @@ import { FailureChart } from '@/components/ops/failure-chart';
 import { InsightCards, type InsightCardItem } from '@/components/ops/insight-cards';
 import { VrrTrend } from '@/components/ops/vrr-trend';
 import { loadFailureBreakdown, loadMetrics } from '@/lib/ops/data';
-import { NO_DATA, formatDuration, formatRate, formatUsdMicros } from '@/lib/ops/format';
+import { NO_DATA, formatDuration, formatRate, formatCostMicros } from '@/lib/ops/format';
 
 export const dynamic = 'force-dynamic';
 
@@ -71,7 +71,7 @@ export default async function EvaluationsPage({
     {
       id: 'cost',
       label: 'Cost per resolution',
-      value: formatUsdMicros(metrics.costPerResolutionUsdMicros),
+      value: formatCostMicros(metrics.costPerResolutionUsdMicros),
       hint: `${metrics.verifiedResolutions} verified resolutions`,
     },
     {

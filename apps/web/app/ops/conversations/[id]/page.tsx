@@ -8,6 +8,7 @@ import { TraceTimeline } from '@/components/kora/trace-timeline';
 import { ContextCards, type ContextCardItem } from '@/components/ops/context-cards';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { truncateId } from '@/lib/ops/format';
 import { loadTraceForConversation } from '@/lib/ops/data';
 import type { TraceDto } from '@/lib/api/schemas';
 
@@ -86,8 +87,12 @@ export default async function TracePage({
               {trace.run.outcome ?? 'in progress'}
             </Badge>
             <Badge variant="outline">{trace.run.finalState ?? trace.conversation.state}</Badge>
-            <span className="text-muted-foreground text-xs">
-              config {trace.run.agentConfigVersion}
+            <span
+              className="font-mono text-muted-foreground text-xs"
+              title={trace.run.agentConfigVersion}
+            >
+              {trace.run.agentVersionId ? 'agent version' : 'config'}{' '}
+              {truncateId(trace.run.agentConfigVersion, 12)}
             </span>
           </div>
         </div>

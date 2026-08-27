@@ -29,7 +29,7 @@ export async function publishPolicy(
       .from(policies)
       .where(and(eq(policies.tenantId, tenantId), eq(policies.key, key)));
 
-    const policyId = existing?.id ?? newId('pck');
+    const policyId = existing?.id ?? newId('pol');
     if (!existing) {
       await tx.insert(policies).values({ id: policyId, tenantId, key, createdAt: now() });
     }
@@ -46,7 +46,7 @@ export async function publishPolicy(
       .set({ status: 'superseded', effectiveTo: now() })
       .where(and(eq(policyVersions.policyId, policyId), eq(policyVersions.status, 'active')));
 
-    const versionId = newId('pck');
+    const versionId = newId('plv');
     const version = (latest?.version ?? 0) + 1;
     const compiled = compilePolicyBundle([{ key, yaml: yamlSource }]);
 

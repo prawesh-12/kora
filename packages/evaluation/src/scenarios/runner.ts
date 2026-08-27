@@ -45,6 +45,7 @@ export type RunAgentTurn = (args: {
   faults?: Record<string, string>;
   agentVersionId?: string;
   recordedOutputs?: Record<string, unknown>;
+  role?: 'customer' | 'human_agent';
 }) => Promise<{ runId: string; text: string; approvalId: string | null }>;
 
 export interface ScenarioOutcome {
@@ -140,6 +141,16 @@ export async function runScenario(
         faults,
       });
 
+    const resume = (message: string) =>
+      runAgentTurn({
+        tenantId,
+        conversationId: conversation.id,
+        message,
+        role: 'human_agent',
+        deploymentMode: modeOverride ?? scenario.deploymentMode ?? 'full',
+        faults,
+      });
+
     let result: Awaited<ReturnType<RunAgentTurn>>;
 
     if (scenario.repeatTurn) {
@@ -171,7 +182,21 @@ export async function runScenario(
         });
       }
       if (scenario.approval === 'approve') {
-        result = await withTimeout(turn(), HARD_CAP_MS, `scenario ${scenario.id} resume`);
+        // Resumes the way the product does: an operator acting, not the customer
+        // repeating themselves. Re-sending the original message wrote it to the
+        // transcript twice.
+        // Same shape as the approval decision route: a person saying go ahead,
+        // naming the order so the resumed turn has something to act on.
+        const orderId = scenario.seed.orderId;
+        result = await withTimeout(
+          resume(
+            orderId
+              ? `Please go ahead with the action a colleague has just approved for order ${orderId}.`
+              : 'Please go ahead with the action a colleague has just approved.',
+          ),
+          HARD_CAP_MS,
+          `scenario ${scenario.id} resume`,
+        );
       }
     }
 

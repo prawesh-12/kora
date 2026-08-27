@@ -21,7 +21,11 @@ export type Prefix =
   | 'evr'
   | 'llm'
   | 'idm'
-  | 'apv';
+  | 'apv'
+  | 'agt'
+  | 'agv'
+  | 'pol'
+  | 'plv';
 
 export type Id<P extends Prefix> = `${P}_${string}`;
 

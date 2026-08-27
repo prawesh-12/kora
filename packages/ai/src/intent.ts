@@ -46,6 +46,7 @@ export async function detectIntent(args: {
   // Intent is about what the customer wants now, not the whole history.
   const recent = args.messages.slice(-RECENT_MESSAGES);
 
+  const startedAt = Date.now();
   const result = await callModel({
     purpose: 'classifier',
     tenantId: args.tenantId,
@@ -67,6 +68,7 @@ export async function detectIntent(args: {
     return err(result.error);
   }
 
+  const classifiedInMs = Date.now() - startedAt;
   const parsed = intentSchema.safeParse(result.value.output);
   if (!parsed.success) {
     await args.run.record('intent', { error: 'MALFORMED_INTENT' }, 'failed');
@@ -81,6 +83,11 @@ export async function detectIntent(args: {
   const belowThreshold = parsed.data.confidence < args.threshold;
   const intentResult: IntentResult = { ...parsed.data, belowThreshold };
 
-  await args.run.record('intent', { ...intentResult, threshold: args.threshold });
+  await args.run.record(
+    'intent',
+    { ...intentResult, threshold: args.threshold },
+    'ok',
+    classifiedInMs,
+  );
   return ok(intentResult);
 }

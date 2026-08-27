@@ -46,7 +46,12 @@ export async function startRun(input: {
     tenantId: input.tenantId,
     conversationId: input.conversationId,
 
-    async record(kind: RunStepKind, payload: Record<string, unknown>, status = 'ok') {
+    async record(
+      kind: RunStepKind,
+      payload: Record<string, unknown>,
+      status = 'ok',
+      durationMs?: number,
+    ) {
       const row = await repos.steps.create({
         runId: run.id,
         ordinal: nextOrdinal(),
@@ -54,7 +59,9 @@ export async function startRun(input: {
         payload,
         status,
         startedAt: now(),
-        durationMs: 0,
+        // Null, not zero. A marker step has no span, and claiming it took no
+        // time is what put `0ms` on every row of the trace.
+        durationMs: durationMs ?? null,
       });
       return row.id;
     },
@@ -101,7 +108,8 @@ export async function startRun(input: {
         payload: { state: next },
         status: 'ok',
         startedAt: now(),
-        durationMs: 0,
+        // A state transition is an instant, not a span.
+        durationMs: null,
       });
       await repos.conversations.setState(input.conversationId, next);
     },

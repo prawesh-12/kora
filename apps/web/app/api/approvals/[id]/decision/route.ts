@@ -65,10 +65,14 @@ export async function POST(
 
     // A human has signed off, so this turn runs with the approval gate lifted. The
     // pipeline recognises the approved row for the conversation. See docs/decisions.md.
+    //
+    // Recorded as `human_agent`, because it is an operator acting. Recording it as
+    // the customer put words in their mouth and showed their own message twice.
     const turn = await runAgentTurn({
       tenantId,
       conversationId: decided.conversationId,
       message: resumeMessage,
+      role: 'human_agent',
     });
 
     if (isTerminalState(turn.finalState)) {

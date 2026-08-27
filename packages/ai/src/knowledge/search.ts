@@ -54,6 +54,10 @@ export async function retrieve(args: RetrieveArgs): Promise<RetrievalResult> {
   let chunks: RetrievedChunk[] = [];
   let error: string | undefined;
 
+  // Embedding plus the vector search. This is the number an operator wants when
+  // retrieval looks slow, so it is the span the step records.
+  const startedAt = Date.now();
+
   try {
     const [embedding] = await embedBatch([args.query], { tenantId: args.tenantId });
     if (!embedding) throw new Error('the query could not be embedded');
@@ -101,7 +105,9 @@ export async function retrieve(args: RetrieveArgs): Promise<RetrievalResult> {
     ...(error ? { error } : {}),
   };
 
-  const stepId = args.run ? await args.run.record('retrieval', payload) : '';
+  const stepId = args.run
+    ? await args.run.record('retrieval', payload, error ? 'failed' : 'ok', Date.now() - startedAt)
+    : '';
   return { chunks, stepId };
 }
 

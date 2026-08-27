@@ -50,7 +50,19 @@ export interface RunHandle {
     payload: Record<string, unknown>,
     fn: (stepId: string) => Promise<T>,
   ): Promise<T>;
-  record(kind: RunStepKind, payload: Record<string, unknown>, status?: string): Promise<string>;
+  /**
+   * Records a step that has already happened.
+   *
+   * `durationMs` is optional because most steps are markers with no span to
+   * measure. Leaving it out stores null, not zero: a zero duration is a claim
+   * that the step took no time, and the trace showed `0ms` on every row for it.
+   */
+  record(
+    kind: RunStepKind,
+    payload: Record<string, unknown>,
+    status?: string,
+    durationMs?: number,
+  ): Promise<string>;
   setState(state: AgentState): Promise<void>;
   currentState(): AgentState;
   finish(outcome: RunOutcome, finalState: AgentState): Promise<void>;

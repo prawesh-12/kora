@@ -1,16 +1,8 @@
 'use client';
 
-import {
-  ClipboardCheck,
-  EyeOff,
-  GitBranch,
-  GaugeCircle,
-  LayoutDashboard,
-  ListFilter,
-  MessagesSquare,
-} from 'lucide-react';
 import { usePathname, useRouter } from 'next/navigation';
-import type { ReactNode } from 'react';
+import { NAV, activeNavHref } from '@/components/ops/nav';
+import { type ReactNode, useMemo } from 'react';
 import {
   AnimatedSidebar,
   AnimatedSidebarContent,
@@ -25,16 +17,6 @@ import {
   AnimatedSidebarTrigger,
 } from '@/components/motion/animated-sidebar';
 
-const NAV = [
-  { href: '/ops', label: 'Overview', icon: LayoutDashboard },
-  { href: '/ops/evaluations', label: 'Evaluations', icon: GaugeCircle },
-  { href: '/ops/conversations', label: 'Conversations', icon: ListFilter },
-  { href: '/ops/approvals', label: 'Approvals', icon: ClipboardCheck },
-  { href: '/ops/shadow', label: 'Shadow mode', icon: EyeOff },
-  { href: '/ops/versions', label: 'Versions', icon: GitBranch },
-  { href: '/chat', label: 'Customer chat', icon: MessagesSquare },
-];
-
 export function OpsShell({
   operatorEmail,
   children,
@@ -44,6 +26,11 @@ export function OpsShell({
 }) {
   const pathname = usePathname();
   const router = useRouter();
+
+  // Longest matching prefix, not any prefix. `/ops` is a prefix of every operator
+  // route, so `startsWith` lights up two items at once; exact matching lights up
+  // none on a detail route like /ops/conversations/conv_123.
+  const activeHref = useMemo(() => activeNavHref(pathname), [pathname]);
 
   return (
     <AnimatedSidebarProvider>
@@ -58,7 +45,7 @@ export function OpsShell({
                 <AnimatedSidebarMenuItem key={href}>
                   <AnimatedSidebarMenuButton
                     icon={<Icon className="size-4" aria-hidden />}
-                    isActive={pathname === href}
+                    isActive={href === activeHref}
                     onSelect={() => router.push(href)}
                   >
                     {label}
@@ -69,7 +56,22 @@ export function OpsShell({
           </AnimatedSidebarGroup>
         </AnimatedSidebarContent>
         <AnimatedSidebarFooter>
-          <span className="px-2 text-muted-foreground text-xs">{operatorEmail}</span>
+          {/* Flex with a gap and a shrink-0 avatar, so the circle reserves its own
+              space instead of sitting on top of the email. */}
+          <div className="flex min-w-0 items-center gap-2 px-2">
+            <span
+              aria-hidden
+              className="flex size-6 shrink-0 items-center justify-center rounded-full bg-muted font-medium text-[10px] text-muted-foreground uppercase"
+            >
+              {operatorEmail.slice(0, 2)}
+            </span>
+            <span
+              className="min-w-0 flex-1 truncate text-muted-foreground text-xs"
+              title={operatorEmail}
+            >
+              {operatorEmail}
+            </span>
+          </div>
         </AnimatedSidebarFooter>
       </AnimatedSidebar>
       <AnimatedSidebarInset>

@@ -299,6 +299,14 @@ describe('approval decisions', () => {
     );
     expect(writes).toHaveLength(1);
     expect(writes[0]?.verified).toBe(true);
+
+    // The customer said one thing. Resuming after an approval used to write
+    // another customer message, so the transcript showed their words twice and
+    // then put words in their mouth they never said.
+    const messages = await repos.messages.listForConversation(conversationId);
+    const fromCustomer = messages.filter((m) => m.role === 'customer');
+    expect(fromCustomer).toHaveLength(1);
+    expect(messages.some((m) => m.role === 'human_agent')).toBe(true);
   });
 
   it('returns 409 when the same approval is decided twice', async () => {

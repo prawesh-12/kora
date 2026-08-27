@@ -10,7 +10,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { loadMetrics, loadRecentRuns } from '@/lib/ops/data';
-import { formatDuration, formatRate, formatUsdMicros } from '@/lib/ops/format';
+import { formatDuration, formatRate, formatCostMicros } from '@/lib/ops/format';
 
 export const dynamic = 'force-dynamic';
 
@@ -46,7 +46,7 @@ export default async function OverviewPage() {
     {
       id: 'cost',
       label: 'Cost per resolution',
-      value: formatUsdMicros(metrics.costPerResolutionUsdMicros),
+      value: formatCostMicros(metrics.costPerResolutionUsdMicros),
       hint: `${metrics.verifiedResolutions} verified resolutions`,
     },
   ];

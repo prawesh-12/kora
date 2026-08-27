@@ -125,3 +125,38 @@ describe('trace writer', () => {
     });
   });
 });
+
+describe('step durations', () => {
+  it('records nothing rather than zero for a step with no span', async () => {
+    const { run } = await newRun();
+    await run.record('response', { text: 'done' });
+    await run.setState('RESOLVED');
+
+    const rows = await sql()<{ kind: string; duration_ms: number | null }[]>`
+      SELECT kind, duration_ms FROM run_steps WHERE run_id = ${run.runId} ORDER BY ordinal`;
+
+    // Zero is a claim that the step took no time, and it put `0ms` on every row
+    // of the trace. A marker has no span, so it stores null.
+    expect(rows.every((r) => r.duration_ms === null)).toBe(true);
+  });
+
+  it('records the real span when the caller measured one', async () => {
+    const { run } = await newRun();
+    await run.record('model', { intent: 'DAMAGED_ORDER' }, 'ok', 1234);
+
+    const [row] = await sql()<{ duration_ms: number }[]>`
+      SELECT duration_ms FROM run_steps WHERE run_id = ${run.runId} AND kind = 'model'`;
+    expect(row?.duration_ms).toBe(1234);
+  });
+
+  it('measures a step that wraps work', async () => {
+    const { run } = await newRun();
+    await run.step('retrieval', { query: 'returns policy' }, async () => {
+      await new Promise((r) => setTimeout(r, 25));
+    });
+
+    const [row] = await sql()<{ duration_ms: number }[]>`
+      SELECT duration_ms FROM run_steps WHERE run_id = ${run.runId} AND kind = 'retrieval'`;
+    expect(row?.duration_ms).toBeGreaterThanOrEqual(20);
+  });
+});

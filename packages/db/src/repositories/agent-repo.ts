@@ -25,7 +25,7 @@ export async function ensureAgent(tenantId: string, slug: string, name: string):
     .where(and(eq(agents.tenantId, tenantId), eq(agents.slug, slug)));
   if (existing) return existing.id;
 
-  const id = newId('ten');
+  const id = newId('agt');
   await db().insert(agents).values({ id, tenantId, slug, name, createdAt: now() });
   return id;
 }
@@ -57,7 +57,7 @@ export async function createDraft(
     const [created] = await tx
       .insert(agentVersions)
       .values({
-        id: newId('ten'),
+        id: newId('agv'),
         tenantId,
         agentId,
         version: (latest?.version ?? 0) + 1,
