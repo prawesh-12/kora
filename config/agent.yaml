@@ -1,0 +1,19 @@
+version: "0.1.0"
+maxSteps: 8
+runDeadlineMs: 45000
+confidenceThreshold: 0.7
+allowedTools:
+  - { name: get_order,          version: 1 }
+  - { name: get_customer,       version: 1 }
+  - { name: search_knowledge,   version: 1 }
+  - { name: check_policy,       version: 1 }
+  - { name: create_replacement, version: 1 }
+  - { name: escalate_to_human,  version: 1 }
+permissions:
+  - orders:read
+  - customers:read
+  - knowledge:read
+  - policy:read
+  - orders:write
+  - escalation:write
+policy: config/policies/acme-damaged-order.yaml

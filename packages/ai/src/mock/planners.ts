@@ -28,9 +28,17 @@ const DAMAGE_PHRASES = [
   'defective',
 ];
 
+/**
+ * The classifier prompt wraps the transcript in a tagged block and ends with an
+ * instruction line, so the last line of the user message is not the customer's.
+ */
 function lastCustomerTurn(ctx: MockPlannerContext): string {
-  const lines = ctx.customerText.split('\n').filter(Boolean);
-  return (lines.at(-1) ?? ctx.customerText).toLowerCase();
+  const customerLines = ctx.customerText
+    .split('\n')
+    .map((l) => l.trim())
+    .filter((l) => l.startsWith('Customer:'))
+    .map((l) => l.slice('Customer:'.length).trim());
+  return (customerLines.at(-1) ?? ctx.customerText).toLowerCase();
 }
 
 /**
@@ -125,20 +133,25 @@ export const agentPlanner: MockPlanner = (ctx): MockTurn | undefined => {
   const text = ctx.customerText.toLowerCase();
   const orderId = text.match(ORDER_REF)?.[1];
 
-  const escalate = (reason: string): MockTurn => ({
-    toolCalls: [{ toolName: 'escalate_to_human', input: { reason, summary: reason } }],
+  // The escalation tool is terminal, so the loop stops right after it. Say the
+  // customer-facing part in the same turn or it never gets said.
+  const escalate = (reason: string, text: string): MockTurn => ({
+    text,
+    toolCalls: [{ toolName: 'escalate_to_human', input: { reason, summary: text } }],
   });
 
   if (HUMAN_PHRASES.some((p) => text.includes(p))) {
-    return called(ctx, 'escalate_to_human')
-      ? { text: 'I have passed this to a colleague. Someone will be with you shortly.' }
-      : escalate('CUSTOMER_REQUESTED');
+    return escalate(
+      'CUSTOMER_REQUESTED',
+      'Of course. I have passed you to a colleague and someone will be with you shortly.',
+    );
   }
 
   if (!orderId) {
-    return called(ctx, 'escalate_to_human')
-      ? { text: 'A colleague will follow up with you shortly.' }
-      : escalate('UNSUPPORTED_SCENARIO');
+    return escalate(
+      'UNSUPPORTED_SCENARIO',
+      'I could not find an order number in your message, so I have asked a colleague to pick this up.',
+    );
   }
 
   if (!called(ctx, 'get_order') && has('get_order')) {
@@ -147,11 +160,10 @@ export const agentPlanner: MockPlanner = (ctx): MockTurn | undefined => {
 
   const order = findToolResult<OrderView | { ok: false }>(ctx, 'get_order');
   if (!order || isFailure(order)) {
-    return called(ctx, 'escalate_to_human')
-      ? {
-          text: `I could not find order ${orderId} on your account, so I have asked a colleague to look into it. I have not made any changes.`,
-        }
-      : escalate('TOOL_FAILED');
+    return escalate(
+      'TOOL_FAILED',
+      `I could not look up order ${orderId} just now, so I have asked a colleague to check it. I have not made any changes.`,
+    );
   }
   const found = order as OrderView;
 
@@ -169,11 +181,10 @@ export const agentPlanner: MockPlanner = (ctx): MockTurn | undefined => {
   const knowledge = findToolResult<{ chunks?: unknown[] }>(ctx, 'search_knowledge');
   const knowledgeEmpty = !knowledge || (knowledge.chunks?.length ?? 0) === 0;
   if (knowledgeEmpty) {
-    return called(ctx, 'escalate_to_human')
-      ? {
-          text: 'I could not confirm the current replacement policy, so I have not made any changes. A colleague will confirm what we can do and get back to you.',
-        }
-      : escalate('UNSUPPORTED_SCENARIO');
+    return escalate(
+      'UNSUPPORTED_SCENARIO',
+      'I could not confirm the current replacement policy, so I have not made any changes. A colleague will confirm what we can do and get back to you.',
+    );
   }
 
   if (!called(ctx, 'check_policy') && has('check_policy')) {
@@ -214,11 +225,10 @@ export const agentPlanner: MockPlanner = (ctx): MockTurn | undefined => {
   );
 
   if (replacement && replacement.ok === false) {
-    return called(ctx, 'escalate_to_human')
-      ? {
-          text: `I was not able to complete the replacement for order ${found.id} just now. I have not confirmed any change, and a colleague will pick this up and confirm shortly.`,
-        }
-      : escalate('TOOL_FAILED');
+    return escalate(
+      'TOOL_FAILED',
+      `I was not able to complete the replacement for order ${found.id} just now. I have not confirmed any change, and a colleague will pick this up and confirm shortly.`,
+    );
   }
 
   if (replacement?.id) {
@@ -231,7 +241,10 @@ export const agentPlanner: MockPlanner = (ctx): MockTurn | undefined => {
     return { text: 'A colleague will confirm the next step with you shortly.' };
   }
 
-  return escalate('UNSUPPORTED_SCENARIO');
+  return escalate(
+    'UNSUPPORTED_SCENARIO',
+    'I am not able to complete this myself, so a colleague will pick it up and come back to you.',
+  );
 };
 
 export const DEFAULT_PLANNERS: MockPlanner[] = [intentPlanner, agentPlanner];

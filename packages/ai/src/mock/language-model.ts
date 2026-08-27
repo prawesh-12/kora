@@ -54,6 +54,24 @@ function textOf(part: unknown): string {
   return '';
 }
 
+/**
+ * `toModelOutput` wraps a tool result as `{ type: 'text', value: '<json>' }` before
+ * it reaches the model, so unwrap it back to the object the planners reason about.
+ */
+function unwrapToolOutput(output: unknown): unknown {
+  if (!output || typeof output !== 'object') return output;
+  const o = output as { type?: string; value?: unknown };
+  if ((o.type === 'text' || o.type === 'json') && o.value !== undefined) {
+    if (typeof o.value !== 'string') return o.value;
+    try {
+      return JSON.parse(o.value);
+    } catch {
+      return o.value;
+    }
+  }
+  return output;
+}
+
 export function buildPlannerContext(options: LanguageModelV3CallOptions): MockPlannerContext {
   const lines: string[] = [];
   const customer: string[] = [];
@@ -69,8 +87,9 @@ export function buildPlannerContext(options: LanguageModelV3CallOptions): MockPl
       const p = part as { type?: string; toolName?: string; output?: unknown; input?: unknown };
       if (p.type === 'tool-call' && p.toolName) calledTools.push(p.toolName);
       if (p.type === 'tool-result' && p.toolName) {
-        toolResults.push({ toolName: p.toolName, output: p.output });
-        lines.push(`[tool-result ${p.toolName}] ${JSON.stringify(p.output)}`);
+        const output = unwrapToolOutput(p.output);
+        toolResults.push({ toolName: p.toolName, output });
+        lines.push(`[tool-result ${p.toolName}] ${JSON.stringify(output)}`);
         continue;
       }
       const text = textOf(part);
