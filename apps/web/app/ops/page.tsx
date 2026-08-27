@@ -1,6 +1,9 @@
+import { Inbox } from 'lucide-react';
 import Link from 'next/link';
-import { InsightCards, type InsightCardItem } from '@/components/ops/insight-cards';
-import { Badge } from '@/components/ui/badge';
+import { Stat, StatGrid } from '@/components/kora/stat';
+import { EmptyState } from '@/components/kora/states';
+import { VerifiedPill } from '@/components/kora/status-pill';
+import { Button } from '@/components/ui/button';
 import {
   Table,
   TableBody,
@@ -10,110 +13,120 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { loadMetrics, loadRecentRuns } from '@/lib/ops/data';
-import { formatDuration, formatRate, formatCostMicros } from '@/lib/ops/format';
+import {
+  EMPTY,
+  formatAbsolute,
+  formatDuration,
+  formatRate,
+  formatRelative,
+} from '@/lib/ops/format';
 
 export const dynamic = 'force-dynamic';
 
-export default async function OverviewPage() {
-  const [metrics, runs] = await Promise.all([loadMetrics(), loadRecentRuns()]);
+const RECENT_RUNS = 10;
 
-  const cards: InsightCardItem[] = [
-    { id: 'total', label: 'Total runs', value: String(metrics.runs.total), hint: 'last 30 days' },
-    {
-      id: 'verified',
-      label: 'Verified resolution rate',
-      value: formatRate(metrics.verifiedResolutionRate),
-      hint: `n = ${metrics.runs.evaluated}, ${metrics.runs.pending} pending`,
-      tone: 'positive',
-    },
-    {
-      id: 'automation',
-      label: 'Automation rate',
-      value: formatRate(metrics.automationRate),
-      hint: `${metrics.runs.eligible} eligible runs`,
-    },
-    {
-      id: 'escalation',
-      label: 'Escalation rate',
-      value: formatRate(metrics.escalationRate),
-      tone: 'warning',
-    },
-    {
-      id: 'latency',
-      label: 'Latency p50 / p95',
-      value: `${formatDuration(metrics.latencyMs.p50)} / ${formatDuration(metrics.latencyMs.p95)}`,
-    },
-    {
-      id: 'cost',
-      label: 'Cost per resolution',
-      value: formatCostMicros(metrics.costPerResolutionUsdMicros),
-      hint: `${metrics.verifiedResolutions} verified resolutions`,
-    },
-  ];
+/**
+ * Deliberately smaller than Evaluations.
+ *
+ * The two pages used to show the same five metrics, so there was no reason to
+ * visit both. Overview answers "is it working right now"; Evaluations answers
+ * "why", and owns latency, cost, grounding, tool success and coverage.
+ */
+export default async function OverviewPage() {
+  const [metrics, runs] = await Promise.all([loadMetrics(), loadRecentRuns(RECENT_RUNS)]);
 
   return (
-    <main className="flex flex-col gap-8 p-6">
+    <main className="flex flex-col gap-8 p-8">
       <header className="space-y-1">
-        <h1 className="font-semibold text-2xl tracking-tight">Overview</h1>
+        <h1 className="font-semibold text-xl tracking-tight">Overview</h1>
         <p className="text-muted-foreground text-sm">
-          Live numbers from the last 30 days of runs. The denominator sits next to the rate on
-          purpose: a percentage over a handful of runs is not a number to act on.
+          The last 30 days. The denominator sits next to the rate on purpose: a percentage over a
+          handful of runs is not a number to act on.
         </p>
       </header>
 
-      <InsightCards items={cards} />
+      <StatGrid>
+        <Stat
+          hero
+          hint={`${metrics.runs.evaluated} evaluated, ${metrics.runs.pending} still pending`}
+          label="Verified resolution rate"
+          tone={metrics.verifiedResolutionRate === null ? 'default' : 'ok'}
+          value={formatRate(metrics.verifiedResolutionRate)}
+        />
+        <Stat
+          hint={`${metrics.runs.eligible} eligible`}
+          label="Total runs"
+          value={metrics.runs.total.toLocaleString()}
+        />
+        <Stat
+          hint="handed to a person"
+          label="Escalation rate"
+          tone="warn"
+          value={formatRate(metrics.escalationRate)}
+        />
+      </StatGrid>
 
       <section className="space-y-3">
-        <div className="flex items-baseline justify-between gap-3">
-          <h2 className="font-medium text-lg">Recent runs</h2>
-          <Link href="/ops/conversations" className="text-sm underline underline-offset-4">
-            All conversations
-          </Link>
-        </div>
+        <h2 className="font-medium text-lg">Recent runs</h2>
+
         {runs.length === 0 ? (
-          <p className="text-muted-foreground text-sm">No runs yet.</p>
+          <EmptyState
+            action={{ label: 'Open the customer chat', href: '/chat' }}
+            description="Runs appear here as soon as a customer sends a message. Start a conversation to see one."
+            icon={Inbox}
+            title="No runs yet"
+          />
         ) : (
-          <div className="overflow-x-auto rounded-lg border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Started</TableHead>
-                  <TableHead>Intent</TableHead>
-                  <TableHead>Outcome</TableHead>
-                  <TableHead>Final state</TableHead>
-                  <TableHead>Duration</TableHead>
-                  <TableHead>Verified</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {runs.map((run) => (
-                  <TableRow key={run.runId} data-testid="run-row">
-                    <TableCell>
-                      <Link
-                        href={`/ops/conversations/${run.conversationId}?runId=${run.runId}`}
-                        className="underline underline-offset-4"
-                      >
-                        {new Date(run.startedAt).toLocaleString()}
-                      </Link>
-                    </TableCell>
-                    <TableCell>{run.intent ?? '—'}</TableCell>
-                    <TableCell>{run.outcome ?? 'in progress'}</TableCell>
-                    <TableCell>{run.state ?? '—'}</TableCell>
-                    <TableCell className="tabular-nums">{formatDuration(run.durationMs)}</TableCell>
-                    <TableCell>
-                      {run.verifiedResolution === null ? (
-                        <Badge variant="outline">evaluating</Badge>
-                      ) : (
-                        <Badge variant={run.verifiedResolution ? 'default' : 'destructive'}>
-                          {run.verifiedResolution ? 'yes' : 'no'}
-                        </Badge>
-                      )}
-                    </TableCell>
+          <>
+            <div className="overflow-x-auto rounded-lg border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Started</TableHead>
+                    <TableHead>Intent</TableHead>
+                    <TableHead>Final state</TableHead>
+                    <TableHead>Duration</TableHead>
+                    <TableHead>Verified</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+                </TableHeader>
+                <TableBody>
+                  {runs.map((run) => (
+                    <TableRow
+                      className="h-10 transition-colors hover:bg-muted/50"
+                      data-testid="run-row"
+                      key={run.runId}
+                    >
+                      <TableCell className="text-sm">
+                        <Link
+                          className="underline underline-offset-4"
+                          href={`/ops/conversations/${run.conversationId}?runId=${run.runId}`}
+                          title={formatAbsolute(run.startedAt)}
+                        >
+                          {formatRelative(run.startedAt)}
+                        </Link>
+                      </TableCell>
+                      <TableCell className="text-sm">{run.intent ?? EMPTY}</TableCell>
+                      <TableCell className="text-sm">
+                        {run.state?.toLowerCase().replace(/_/g, ' ') ?? EMPTY}
+                      </TableCell>
+                      <TableCell className="text-sm tabular-nums">
+                        {formatDuration(run.durationMs)}
+                      </TableCell>
+                      <TableCell>
+                        <VerifiedPill verified={run.verifiedResolution} />
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+
+            <div className="flex justify-center pt-1">
+              <Button asChild size="sm" variant="outline">
+                <Link href="/ops/conversations">View all conversations</Link>
+              </Button>
+            </div>
+          </>
         )}
       </section>
     </main>
