@@ -1,6 +1,6 @@
 import type { EscalationReason, Intent, PolicyDecision } from '@kora/core';
 import { now } from '@kora/core';
-import { type RunHandle, withTenant } from '@kora/db';
+import { type RunHandle, emit, withTenant } from '@kora/db';
 import type { GatheredContext } from '@kora/tools';
 import type { RetrievedChunk } from './knowledge/search.js';
 
@@ -107,6 +107,15 @@ export async function escalate(args: {
     note: args.note ?? null,
     status: 'open',
     createdAt: now(),
+  });
+
+  await emit('agent.escalated', {
+    tenantId: args.run.tenantId,
+    traceId: args.run.traceId,
+    runId: args.run.runId,
+    conversationId: args.run.conversationId,
+    reason: args.reason,
+    occurredAt: now(),
   });
 
   return { escalationId: row.id, handoff, alreadyOpen: false };

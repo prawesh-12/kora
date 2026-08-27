@@ -10,7 +10,7 @@ import {
   now,
   serverEnv,
 } from '@kora/core';
-import { type RunHandle, startRun, withTenant } from '@kora/db';
+import { type RunHandle, emit, startRun, withTenant } from '@kora/db';
 import {
   type GatheredContext,
   type ToolContext,
@@ -300,6 +300,18 @@ export async function runAgentTurn(args: {
       ...(reason ? { errorCode: reason } : {}),
     });
     await run.finish(outcome, fsm.state);
+
+    // Emitted last, once the run row is complete. The worker reads the finished
+    // run, so an event that arrives before `finish` would evaluate a partial trace.
+    await emit('run.finished', {
+      tenantId: args.tenantId,
+      traceId: run.traceId,
+      runId: run.runId,
+      conversationId: args.conversationId,
+      outcome,
+      finalState: fsm.state,
+      occurredAt: now(),
+    });
     return {
       runId: run.runId,
       traceId: run.traceId,
@@ -360,6 +372,15 @@ export async function runAgentTurn(args: {
     evidence: detected.value.evidence,
   };
   await repos.runs.patch(run.runId, { intent, intentConfidence: detected.value.confidence });
+  await emit('intent.detected', {
+    tenantId: args.tenantId,
+    traceId: run.traceId,
+    runId: run.runId,
+    conversationId: args.conversationId,
+    intent,
+    confidence: detected.value.confidence,
+    occurredAt: now(),
+  });
   await repos.conversations.patch(args.conversationId, { intent });
   state.gathered.intent = intent;
 

@@ -57,6 +57,13 @@
       "when": 1787828399787,
       "tag": "0007_evaluations_verified_idx",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1787828919219,
+      "tag": "0008_events",
+      "breakpoints": true
     }
   ]
 }

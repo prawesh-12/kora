@@ -4,6 +4,7 @@ export * from './schema/index.js';
 export * from './repositories/index.js';
 export * from './queries/index.js';
 export * from './tracing/index.js';
+export * from './events.js';
 export { runMigrations } from './migrate.js';
 export { seed } from './seed.js';
 export { and, asc, desc, eq, gte, inArray, lte, or, sql as sqlExpr } from 'drizzle-orm';

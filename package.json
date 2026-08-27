@@ -17,7 +17,8 @@
     "infra:up": "bash infra/scripts/up.sh",
     "infra:down": "bash infra/scripts/down.sh",
     "infra:reset": "bash infra/scripts/reset.sh",
-    "kora": "tsx scripts/kora.mts"
+    "kora": "tsx scripts/kora.mts",
+    "worker": "pnpm --filter @kora/worker start"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.0",

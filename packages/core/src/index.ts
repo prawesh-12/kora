@@ -5,6 +5,7 @@ export * from './result.js';
 export * from './money.js';
 export * from './canonical.js';
 export * from './domain.js';
+export * from './events.js';
 export * from './env.js';
 export * from './logger.js';
 export * from './policy/index.js';

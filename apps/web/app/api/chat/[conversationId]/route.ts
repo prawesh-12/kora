@@ -2,6 +2,7 @@ import { runAgentTurn } from '@kora/ai';
 import { isTerminalState, serverEnv } from '@kora/core';
 import { readApproval, withTenant } from '@kora/db';
 import { after } from 'next/server';
+import { wireQueues, workerIsWired } from '@/lib/queue';
 import { handle, notFound, rateLimited } from '@/lib/api/errors';
 import { approvalWebhookUrl, notifyApprovalPending } from '@/lib/notify/webhook';
 import { SendMessageRequest, parseBody, toTurnDto } from '@/lib/api/schemas';
@@ -28,10 +29,17 @@ export async function POST(
     const slot = await takeMessageSlot(conversationId);
     if (!slot.allowed) throw rateLimited(slot.retryAfterSeconds);
 
+    await wireQueues();
+
     const { message } = await parseBody(req, SendMessageRequest);
     const result = await runAgentTurn({ tenantId, conversationId, message });
 
-    if (isTerminalState(result.finalState)) {
+    // `runAgentTurn` already emitted `run.finished`, which is what schedules the
+    // evaluation on the worker. Nothing is evaluated on the request path any more.
+    //
+    // If the worker is not running, the event row is still written and the
+    // catch-up job picks it up. Evaluation is delayed, never lost.
+    if (isTerminalState(result.finalState) && !workerIsWired()) {
       after(async () => {
         const { evaluateRun } = await import('@kora/evaluation');
         await evaluateRun({ tenantId, runId: result.runId }).catch(() => {});
