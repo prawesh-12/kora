@@ -1,7 +1,9 @@
 import { compareShadowDay, disagreementsByValue } from '@kora/db';
-import { InsightCards, type InsightCardItem } from '@/components/ops/insight-cards';
+import { Handshake } from 'lucide-react';
+import { StatBar, Tile } from '@/components/kora/stat';
+import { EmptyState } from '@/components/kora/states';
 import { tenantId } from '@/lib/ops/data';
-import { NO_DATA, formatMoneyMinor, formatRate } from '@/lib/ops/format';
+import { EMPTY, NO_DATA, formatMoneyMinor, formatRate, truncateId } from '@/lib/ops/format';
 
 export const dynamic = 'force-dynamic';
 
@@ -23,31 +25,16 @@ export default async function ShadowPage() {
   const matched = byIntent.reduce((n, r) => n + Math.round(r.agreementRate * r.n), 0);
   const skipped = disagreements.filter((d) => d.agreement === 'no_human_record').length;
 
-  const cards: InsightCardItem[] = [
-    {
-      id: 'agreement',
-      label: 'Agreement with the human',
-      value: compared === 0 ? NO_DATA : formatRate(matched / compared),
-      hint: `${compared} comparable run(s) today`,
-    },
-    {
-      id: 'skipped',
-      label: 'Skipped, no human record',
-      value: String(skipped),
-      hint: 'not counted as agreement',
-    },
-    {
-      id: 'at-risk',
-      label: 'Largest single disagreement',
-      value: formatMoneyMinor(disagreements[0]?.valueAtRiskMinor ?? null, 'INR'),
-      hint: 'ranked by what it would have cost',
-    },
-  ];
+  // A run with no human record is not a disagreement, it is a run nobody else
+  // handled. Ranking it by value would fill the table with zeroes.
+  const real = disagreements.filter(
+    (d) => d.agreement !== 'match' && d.agreement !== 'no_human_record',
+  );
 
   return (
-    <div className="space-y-8">
+    <main className="flex flex-col gap-8 p-8">
       <header className="space-y-1">
-        <h1 className="font-semibold text-2xl">Shadow mode</h1>
+        <h1 className="font-semibold text-xl tracking-tight">Shadow mode</h1>
         <p className="text-muted-foreground text-sm">
           What the agent proposed against what a person actually did. Nothing here was executed: in
           shadow mode every write is simulated, which is what makes the human record ground truth
@@ -55,7 +42,26 @@ export default async function ShadowPage() {
         </p>
       </header>
 
-      <InsightCards items={cards} />
+      <StatBar columns={3}>
+        <Tile
+          label="Agreement with the human"
+          sub={`${skipped} skipped, no human record`}
+          value={compared === 0 ? NO_DATA : formatRate(matched / compared)}
+        />
+        <Tile
+          label="Largest single disagreement"
+          sub="ranked by what it would have cost"
+          tone={real.length === 0 ? 'default' : 'warn'}
+          value={
+            real.length === 0 ? EMPTY : formatMoneyMinor(real[0]?.valueAtRiskMinor ?? null, 'INR')
+          }
+        />
+        <Tile
+          label="Comparable runs"
+          sub="a person resolved the same order"
+          value={compared.toLocaleString()}
+        />
+      </StatBar>
 
       <section className="space-y-3">
         <h2 className="font-medium text-lg">Agreement by intent, today</h2>
@@ -90,42 +96,53 @@ export default async function ShadowPage() {
 
       <section className="space-y-3">
         <h2 className="font-medium text-lg">Disagreements, most expensive first</h2>
-        <p className="text-muted-foreground text-sm">
-          The expensive ones are the ones worth reading.
-        </p>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="border-b text-left text-muted-foreground">
-              <tr>
-                <th className="py-2 pr-4 font-medium">At risk</th>
-                <th className="py-2 pr-4 font-medium">Agent proposed</th>
-                <th className="py-2 pr-4 font-medium">Person did</th>
-                <th className="py-2 pr-4 font-medium">Verdict</th>
-                <th className="py-2 font-medium">Run</th>
-              </tr>
-            </thead>
-            <tbody>
-              {disagreements
-                .filter((d) => d.agreement !== 'match')
-                .map((d) => (
-                  <tr key={d.id} className="border-b last:border-0">
+        {real.length === 0 ? (
+          <EmptyState
+            description={
+              compared === 0
+                ? 'A run appears here once a person has resolved the same order and the agent proposed something different.'
+                : `No disagreements today. All ${compared} comparable runs matched what the person did.`
+            }
+            icon={Handshake}
+            title="Nothing to review"
+          />
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="border-b text-left text-muted-foreground">
+                <tr>
+                  <th className="py-2 pr-4 font-medium">At risk</th>
+                  <th className="py-2 pr-4 font-medium">Agent proposed</th>
+                  <th className="py-2 pr-4 font-medium">Person did</th>
+                  <th className="py-2 pr-4 font-medium">Verdict</th>
+                  <th className="py-2 font-medium">Run</th>
+                </tr>
+              </thead>
+              <tbody>
+                {real.map((d) => (
+                  <tr className="h-10 border-b last:border-0 hover:bg-muted/50" key={d.id}>
                     <td className="py-2 pr-4 tabular-nums">
                       {formatMoneyMinor(d.valueAtRiskMinor, 'INR')}
                     </td>
-                    <td className="py-2 pr-4">{d.proposedAction ?? 'nothing'}</td>
-                    <td className="py-2 pr-4">{d.actualAction ?? 'nothing recorded'}</td>
+                    <td className="py-2 pr-4">{d.proposedAction ?? EMPTY}</td>
+                    <td className="py-2 pr-4">{d.actualAction ?? EMPTY}</td>
                     <td className="py-2 pr-4">{AGREEMENT_LABEL[d.agreement] ?? d.agreement}</td>
                     <td className="py-2 font-mono text-xs">
-                      <a className="underline" href={`/ops/conversations/${d.conversationId}`}>
-                        {d.runId.slice(0, 12)}
+                      <a
+                        className="underline underline-offset-4"
+                        href={`/ops/conversations/${d.conversationId}`}
+                        title={d.runId}
+                      >
+                        {truncateId(d.runId)}
                       </a>
                     </td>
                   </tr>
                 ))}
-            </tbody>
-          </table>
-        </div>
+              </tbody>
+            </table>
+          </div>
+        )}
       </section>
-    </div>
+    </main>
   );
 }

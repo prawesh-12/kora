@@ -1,9 +1,9 @@
 import { INTENTS, type Intent } from '@kora/core';
-import { Stat, StatGrid } from '@/components/kora/stat';
+import { HeroStat, StatBar, Tile } from '@/components/kora/stat';
 import { FailureChart } from '@/components/ops/failure-chart';
 import { VrrTrend } from '@/components/ops/vrr-trend';
 import { loadFailureBreakdown, loadMetrics } from '@/lib/ops/data';
-import { NO_DATA, formatCostMicros, formatDuration, formatRate } from '@/lib/ops/format';
+import { formatCostMicros, formatDuration, formatRate } from '@/lib/ops/format';
 
 export const dynamic = 'force-dynamic';
 
@@ -36,6 +36,7 @@ export default async function EvaluationsPage({
 
   const [metrics, failures] = await Promise.all([loadMetrics(query), loadFailureBreakdown(query)]);
 
+  const trend = metrics.trend.filter((p) => p.rate !== null);
   const from = metrics.window.from.slice(0, 10);
   const to = metrics.window.to.slice(0, 10);
 
@@ -50,65 +51,79 @@ export default async function EvaluationsPage({
         </p>
       </header>
 
-      <StatGrid>
-        <Stat
-          hero
-          hint={`${metrics.runs.evaluated} evaluated, ${metrics.runs.pending} still pending`}
-          label="Verified resolution rate"
-          tone={metrics.verifiedResolutionRate === null ? 'default' : 'ok'}
-          value={formatRate(metrics.verifiedResolutionRate)}
-        />
-        <Stat
-          hint="nothing a rule denied ever executed"
+      <HeroStat
+        aside={
+          trend.length < 2 ? (
+            <span className="text-muted-foreground text-xs">
+              {trend.length === 0
+                ? 'no evaluated runs yet, so there is no trend'
+                : 'one day of data so far, a trend needs two'}
+            </span>
+          ) : null
+        }
+        context={`${metrics.runs.evaluated.toLocaleString()} evaluated \u00b7 ${metrics.runs.pending.toLocaleString()} pending`}
+        label="Verified resolution rate"
+        tone={metrics.verifiedResolutionRate === null ? 'default' : 'ok'}
+        value={formatRate(metrics.verifiedResolutionRate)}
+      />
+
+      <StatBar columns={4}>
+        <Tile
           label="Policy compliance"
+          sub="nothing a rule denied ever executed"
           tone={metrics.policyComplianceRate === 1 ? 'ok' : 'danger'}
           value={formatRate(metrics.policyComplianceRate)}
         />
-        <Stat
-          hint={`${metrics.runs.eligible} eligible runs`}
-          label="Automation rate"
+        <Tile
+          label="Automation"
+          sub={`${metrics.runs.eligible.toLocaleString()} eligible runs`}
           value={formatRate(metrics.automationRate)}
         />
-        <Stat
-          hint="handed to a person"
-          label="Escalation rate"
+        <Tile
+          label="Escalation"
+          sub="handed to a person"
           tone="warn"
           value={formatRate(metrics.escalationRate)}
         />
-        <Stat label="Tool success rate" value={formatRate(metrics.toolSuccessRate)} />
-        <Stat
-          hint="every id and amount came from a tool result"
-          label="Grounding rate"
+        <Tile
+          label="Tool success"
+          sub="calls that returned a result"
+          value={formatRate(metrics.toolSuccessRate)}
+        />
+        <Tile
+          label="Grounding"
+          sub="every id and amount came from a tool result"
           value={formatRate(metrics.groundingRate)}
         />
-        <Stat
-          hint="p50 and p95"
+        <Tile
           label="Latency"
+          sub="p50 and p95"
           value={`${formatDuration(metrics.latencyMs.p50)} / ${formatDuration(metrics.latencyMs.p95)}`}
         />
-        <Stat
-          hint={`${metrics.verifiedResolutions} verified resolutions`}
+        <Tile
           label="Cost per resolution"
+          sub={`${metrics.verifiedResolutions.toLocaleString()} verified resolutions`}
           value={formatCostMicros(metrics.costPerResolutionUsdMicros)}
         />
-        <Stat
-          hint={`${metrics.coverage.humanRequest} asked for a human, ${metrics.coverage.outOfScope} out of scope`}
+        <Tile
           label="Coverage"
+          sub={`${metrics.coverage.humanRequest} asked for a human, ${metrics.coverage.outOfScope} out of scope`}
           value={formatRate(metrics.coverage.rate)}
         />
-      </StatGrid>
+      </StatBar>
 
-      <section className="space-y-3">
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h2 className="font-medium text-lg">Verified resolution over time</h2>
-          <span className="text-muted-foreground text-xs">
-            {metrics.verifiedResolutionRate === null
-              ? NO_DATA
-              : `${metrics.verifiedResolutions} of ${metrics.runs.evaluated} evaluated runs`}
-          </span>
-        </div>
-        <VrrTrend points={metrics.trend} />
-      </section>
+      {trend.length >= 2 ? (
+        <section className="space-y-3">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <h2 className="font-medium text-lg">Verified resolution over time</h2>
+            <span className="text-muted-foreground text-xs">
+              {metrics.verifiedResolutions.toLocaleString()} of{' '}
+              {metrics.runs.evaluated.toLocaleString()} evaluated runs
+            </span>
+          </div>
+          <VrrTrend points={trend} />
+        </section>
+      ) : null}
 
       <section className="space-y-3">
         <div className="space-y-1">

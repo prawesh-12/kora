@@ -3,6 +3,7 @@
 import { usePathname, useRouter } from 'next/navigation';
 import { NAV, activeNavHref } from '@/components/ops/nav';
 import { type ReactNode, useMemo } from 'react';
+import { cn } from '@/lib/utils';
 import {
   AnimatedSidebar,
   AnimatedSidebarContent,
@@ -17,13 +18,40 @@ import {
   AnimatedSidebarTrigger,
 } from '@/components/motion/animated-sidebar';
 
+/**
+ * Every mode below `full` holds something back: simulation writes nothing,
+ * shadow only proposes, human_approval and limited gate the risky calls. `full`
+ * is the one where the agent acts on a real customer's order without asking, so
+ * it is the one that has to be unmistakable.
+ */
+const MODE: Record<string, { label: string; className: string }> = {
+  simulation: { label: 'Simulation', className: 'border-info/40 bg-info/10 text-info' },
+  shadow: { label: 'Shadow', className: 'border-info/40 bg-info/10 text-info' },
+  human_approval: {
+    label: 'Human approval',
+    className: 'border-warning/40 bg-warning/10 text-warning',
+  },
+  limited: { label: 'Limited', className: 'border-warning/40 bg-warning/10 text-warning' },
+  full: {
+    label: 'Autonomous',
+    className: 'border-destructive/50 bg-destructive/10 font-semibold text-destructive',
+  },
+};
+
 export function OpsShell({
   operatorEmail,
+  deploymentMode,
   children,
 }: {
   operatorEmail: string;
+  deploymentMode: string;
   children: ReactNode;
 }) {
+  const mode = MODE[deploymentMode] ?? {
+    label: deploymentMode,
+    className: 'border-border text-muted-foreground',
+  };
+
   const pathname = usePathname();
   const router = useRouter();
 
@@ -75,10 +103,21 @@ export function OpsShell({
         </AnimatedSidebarFooter>
       </AnimatedSidebar>
       <AnimatedSidebarInset>
-        <div className="flex items-center gap-2 border-b px-4 py-2 md:hidden">
-          <AnimatedSidebarTrigger />
-          <span className="font-medium text-sm">Kora operations</span>
-        </div>
+        <header className="flex items-center gap-2 border-b px-4 py-2">
+          <div className="md:hidden">
+            <AnimatedSidebarTrigger />
+          </div>
+          <span className="font-medium text-sm md:hidden">Kora operations</span>
+          <span
+            className={cn(
+              'ml-auto rounded-md border px-2 py-0.5 text-xs uppercase tracking-[0.06em]',
+              mode.className,
+            )}
+            title={`Deployment mode: ${deploymentMode}`}
+          >
+            {mode.label}
+          </span>
+        </header>
         {children}
       </AnimatedSidebarInset>
     </AnimatedSidebarProvider>

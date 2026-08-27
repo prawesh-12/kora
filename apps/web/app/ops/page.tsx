@@ -1,6 +1,6 @@
 import { Inbox } from 'lucide-react';
 import Link from 'next/link';
-import { Stat, StatGrid } from '@/components/kora/stat';
+import { HeroStat, StatBar, Tile } from '@/components/kora/stat';
 import { EmptyState } from '@/components/kora/states';
 import { VerifiedPill } from '@/components/kora/status-pill';
 import { Button } from '@/components/ui/button';
@@ -45,26 +45,27 @@ export default async function OverviewPage() {
         </p>
       </header>
 
-      <StatGrid>
-        <Stat
-          hero
-          hint={`${metrics.runs.evaluated} evaluated, ${metrics.runs.pending} still pending`}
-          label="Verified resolution rate"
-          tone={metrics.verifiedResolutionRate === null ? 'default' : 'ok'}
-          value={formatRate(metrics.verifiedResolutionRate)}
+      <HeroStat
+        context={`${metrics.runs.evaluated.toLocaleString()} evaluated \u00b7 ${metrics.runs.pending.toLocaleString()} pending`}
+        label="Verified resolution rate"
+        tone={metrics.verifiedResolutionRate === null ? 'default' : 'ok'}
+        value={formatRate(metrics.verifiedResolutionRate)}
+      />
+
+      <StatBar columns={3}>
+        <Tile label="Total runs" sub="in the window" value={metrics.runs.total.toLocaleString()} />
+        <Tile
+          label="Eligible runs"
+          sub="the agent was allowed to resolve these"
+          value={metrics.runs.eligible.toLocaleString()}
         />
-        <Stat
-          hint={`${metrics.runs.eligible} eligible`}
-          label="Total runs"
-          value={metrics.runs.total.toLocaleString()}
-        />
-        <Stat
-          hint="handed to a person"
+        <Tile
           label="Escalation rate"
+          sub="handed to a person"
           tone="warn"
           value={formatRate(metrics.escalationRate)}
         />
-      </StatGrid>
+      </StatBar>
 
       <section className="space-y-3">
         <h2 className="font-medium text-lg">Recent runs</h2>
