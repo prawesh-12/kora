@@ -142,3 +142,31 @@ export const FAILURE_CODES: readonly FailureCode[] = [
   'ESCALATION_FAILURE',
   'LATENCY_FAILURE',
 ];
+
+export type FailureSeverity = 'critical' | 'normal' | 'low';
+
+/**
+ * How bad a failure is, independent of how often it happens.
+ *
+ * A breakdown that colours by count makes the two most dangerous codes in the
+ * system the faintest rows on the page, because they are also the rarest. Count
+ * belongs on the bar length. Severity belongs on the colour.
+ *
+ * Critical means the system did something it was not allowed to do, or told a
+ * customer something untrue. Everything else is the system failing to help,
+ * which is bad but recoverable.
+ */
+export const FAILURE_SEVERITY: Record<FailureCode, FailureSeverity> = {
+  POLICY_FAILURE: 'critical',
+  HALLUCINATION: 'critical',
+  OUTCOME_FAILURE: 'critical',
+  TOOL_EXECUTION_FAILURE: 'normal',
+  ARGUMENT_FAILURE: 'normal',
+  TOOL_SELECTION_FAILURE: 'normal',
+  ESCALATION_FAILURE: 'normal',
+  STATE_FAILURE: 'normal',
+  RETRIEVAL_FAILURE: 'normal',
+  KNOWLEDGE_FAILURE: 'normal',
+  INTENT_FAILURE: 'low',
+  LATENCY_FAILURE: 'low',
+};

@@ -108,13 +108,21 @@ export interface BarDatum {
   severity: BarSeverity;
   /** Optional second line under the label. */
   detail?: string;
+  /**
+   * Where this row goes when clicked.
+   *
+   * A string rather than a `hrefFor` callback, because a server component
+   * cannot pass a function across the client boundary and these bars are
+   * rendered from one.
+   */
+  href?: string;
 }
 
 export interface BarChartProps {
   data: BarDatum[];
   valueFormat?: (n: number) => string;
+  /** Client components only. Use `href` on the datum from a server component. */
   onSelect?: (label: string) => void;
-  hrefFor?: (label: string) => string;
   emptyMessage: string;
   className?: string;
 }
@@ -138,7 +146,6 @@ export function BarChart({
   data,
   valueFormat = (n) => n.toLocaleString(),
   onSelect,
-  hrefFor,
   emptyMessage,
   className,
 }: BarChartProps) {
@@ -185,8 +192,13 @@ export function BarChart({
 
         return (
           <li key={datum.label} className="border-b last:border-0">
-            {hrefFor ? (
-              <a className={interactive} href={hrefFor(datum.label)}>
+            {datum.href ? (
+              <a
+                className={interactive}
+                data-code={datum.label}
+                data-testid="failure-bar"
+                href={datum.href}
+              >
                 {row}
               </a>
             ) : onSelect ? (

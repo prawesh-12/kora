@@ -1,9 +1,9 @@
 import { INTENTS, type Intent } from '@kora/core';
+import { Stat, StatGrid } from '@/components/kora/stat';
 import { FailureChart } from '@/components/ops/failure-chart';
-import { InsightCards, type InsightCardItem } from '@/components/ops/insight-cards';
 import { VrrTrend } from '@/components/ops/vrr-trend';
 import { loadFailureBreakdown, loadMetrics } from '@/lib/ops/data';
-import { NO_DATA, formatDuration, formatRate, formatCostMicros } from '@/lib/ops/format';
+import { NO_DATA, formatCostMicros, formatDuration, formatRate } from '@/lib/ops/format';
 
 export const dynamic = 'force-dynamic';
 
@@ -36,59 +36,13 @@ export default async function EvaluationsPage({
 
   const [metrics, failures] = await Promise.all([loadMetrics(query), loadFailureBreakdown(query)]);
 
-  const cards: InsightCardItem[] = [
-    {
-      id: 'vrr',
-      label: 'Verified resolution rate',
-      value: formatRate(metrics.verifiedResolutionRate),
-      hint: `n = ${metrics.runs.evaluated}, ${metrics.runs.pending} pending`,
-      tone: metrics.verifiedResolutionRate === null ? 'default' : 'positive',
-    },
-    {
-      id: 'automation',
-      label: 'Automation rate',
-      value: formatRate(metrics.automationRate),
-      hint: `${metrics.runs.eligible} eligible runs`,
-    },
-    {
-      id: 'escalation',
-      label: 'Escalation rate',
-      value: formatRate(metrics.escalationRate),
-      tone: 'warning',
-    },
-    {
-      id: 'policy',
-      label: 'Policy compliance',
-      value: formatRate(metrics.policyComplianceRate),
-    },
-    { id: 'tools', label: 'Tool success rate', value: formatRate(metrics.toolSuccessRate) },
-    { id: 'grounding', label: 'Grounding rate', value: formatRate(metrics.groundingRate) },
-    {
-      id: 'latency',
-      label: 'Latency p50 / p95',
-      value: `${formatDuration(metrics.latencyMs.p50)} / ${formatDuration(metrics.latencyMs.p95)}`,
-    },
-    {
-      id: 'cost',
-      label: 'Cost per resolution',
-      value: formatCostMicros(metrics.costPerResolutionUsdMicros),
-      hint: `${metrics.verifiedResolutions} verified resolutions`,
-    },
-    {
-      id: 'coverage',
-      label: 'Coverage',
-      value: formatRate(metrics.coverage.rate),
-      hint: `${metrics.coverage.humanRequest} asked for a human, ${metrics.coverage.outOfScope} out of scope`,
-    },
-  ];
-
   const from = metrics.window.from.slice(0, 10);
   const to = metrics.window.to.slice(0, 10);
 
   return (
-    <main className="flex flex-col gap-8 p-6">
+    <main className="flex flex-col gap-8 p-8">
       <header className="space-y-1">
-        <h1 className="font-semibold text-2xl tracking-tight">Evaluations</h1>
+        <h1 className="font-semibold text-xl tracking-tight">Evaluations</h1>
         <p className="text-muted-foreground text-sm">
           Last {days} days, {from} to {to}. Runs that asked for a human or fell outside the agent's
           scope are reported as coverage, not counted against the resolution rate. Runs still
@@ -96,7 +50,53 @@ export default async function EvaluationsPage({
         </p>
       </header>
 
-      <InsightCards items={cards} />
+      <StatGrid>
+        <Stat
+          hero
+          hint={`${metrics.runs.evaluated} evaluated, ${metrics.runs.pending} still pending`}
+          label="Verified resolution rate"
+          tone={metrics.verifiedResolutionRate === null ? 'default' : 'ok'}
+          value={formatRate(metrics.verifiedResolutionRate)}
+        />
+        <Stat
+          hint="nothing a rule denied ever executed"
+          label="Policy compliance"
+          tone={metrics.policyComplianceRate === 1 ? 'ok' : 'danger'}
+          value={formatRate(metrics.policyComplianceRate)}
+        />
+        <Stat
+          hint={`${metrics.runs.eligible} eligible runs`}
+          label="Automation rate"
+          value={formatRate(metrics.automationRate)}
+        />
+        <Stat
+          hint="handed to a person"
+          label="Escalation rate"
+          tone="warn"
+          value={formatRate(metrics.escalationRate)}
+        />
+        <Stat label="Tool success rate" value={formatRate(metrics.toolSuccessRate)} />
+        <Stat
+          hint="every id and amount came from a tool result"
+          label="Grounding rate"
+          value={formatRate(metrics.groundingRate)}
+        />
+        <Stat
+          hint="p50 and p95"
+          label="Latency"
+          value={`${formatDuration(metrics.latencyMs.p50)} / ${formatDuration(metrics.latencyMs.p95)}`}
+        />
+        <Stat
+          hint={`${metrics.verifiedResolutions} verified resolutions`}
+          label="Cost per resolution"
+          value={formatCostMicros(metrics.costPerResolutionUsdMicros)}
+        />
+        <Stat
+          hint={`${metrics.coverage.humanRequest} asked for a human, ${metrics.coverage.outOfScope} out of scope`}
+          label="Coverage"
+          value={formatRate(metrics.coverage.rate)}
+        />
+      </StatGrid>
 
       <section className="space-y-3">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -114,7 +114,9 @@ export default async function EvaluationsPage({
         <div className="space-y-1">
           <h2 className="font-medium text-lg">Failures by root cause</h2>
           <p className="text-muted-foreground text-sm">
-            One bar per primary failure code. Open a bar to see every conversation behind it.
+            One bar per primary failure code. Length is how often it happened; colour is how serious
+            it is, so the rarest code can still be the loudest row. Open a bar to see every
+            conversation behind it.
           </p>
         </div>
         <FailureChart buckets={failures} from={from} to={to} />
