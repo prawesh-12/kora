@@ -1,0 +1,21 @@
+{
+  "id": "N8",
+  "name": "customer_asks_for_human",
+  "input": "I don't want to talk to a bot. Put me through to a person.",
+  "seed": {},
+  "faults": [],
+  "deploymentMode": "full",
+  "expect": {
+    "state": "NEEDS_HUMAN",
+    "intent": "HUMAN_REQUEST",
+    "tools": [],
+    "forbiddenTools": ["get_order", "create_replacement", "search_knowledge"],
+    "policyDecision": null,
+    "externalState": { "replacementsForOrder": 0 },
+    "evaluation": {
+      "verifiedResolution": false,
+      "checks": { "escalation_correct": "MET", "response_grounded": "MET" }
+    },
+    "responseMustNotContain": ["REP-"]
+  }
+}

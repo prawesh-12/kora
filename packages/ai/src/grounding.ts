@@ -18,9 +18,16 @@ function normaliseAmount(raw: string): string {
  * A regex sweep will not catch a subtly wrong sentence, but it catches the
  * expensive failure cheaply: a confident, specific, invented identifier.
  */
-export function checkGrounding(message: string, toolOutputs: unknown[]): GroundingResult {
+export function checkGrounding(
+  message: string,
+  toolOutputs: unknown[],
+  customerText = '',
+): GroundingResult {
   const haystack = toolOutputs.map((o) => JSON.stringify(o ?? null)).join('\n');
-  const normalisedHaystack = haystack.replace(/[,\s]/g, '');
+  // An order number the customer typed is theirs to be told back. A replacement
+  // id is not: repeating one the customer supplied would claim an action happened.
+  const echoable = `${haystack}\n${customerText}`;
+  const normalisedHaystack = echoable.replace(/[,\s]/g, '');
   const unsupported: string[] = [];
 
   for (const id of message.match(REPLACEMENT_ID) ?? []) {
@@ -31,7 +38,7 @@ export function checkGrounding(message: string, toolOutputs: unknown[]): Groundi
   // matches the digits inside REP-9999 and would report the same id twice.
   const withoutReplacementIds = message.replace(REPLACEMENT_ID, ' ');
   for (const id of withoutReplacementIds.match(ORDER_ID) ?? []) {
-    if (!haystack.includes(id)) unsupported.push(id);
+    if (!echoable.includes(id)) unsupported.push(id);
   }
 
   for (const match of message.matchAll(MONEY)) {

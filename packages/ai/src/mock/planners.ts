@@ -219,10 +219,19 @@ export const agentPlanner: MockPlanner = (ctx): MockTurn | undefined => {
     };
   }
 
-  const replacement = findToolResult<{ id?: string; ok?: boolean; reason?: string }>(
-    ctx,
-    'create_replacement',
-  );
+  const replacement = findToolResult<{
+    id?: string;
+    ok?: boolean;
+    reason?: string;
+    awaitingApproval?: boolean;
+  }>(ctx, 'create_replacement');
+
+  // Waiting on a person is not a failure, and must not escalate.
+  if (replacement?.awaitingApproval) {
+    return {
+      text: `This one needs a quick check by a colleague before I can send it. I will come back to you as soon as it is approved.`,
+    };
+  }
 
   if (replacement && replacement.ok === false) {
     return escalate(

@@ -40,9 +40,9 @@ describe('state machine', () => {
     for (let run = 0; run < 200; run++) {
       let state: AgentState = 'NEW';
       for (let step = 0; step < 12; step++) {
-        const next = TRANSITIONS[state];
+        const next: AgentState[] = TRANSITIONS[state];
         if (next.length === 0) break;
-        const chosen = next[Math.floor(Math.random() * next.length)]!;
+        const chosen: AgentState = next[Math.floor(Math.random() * next.length)]!;
         assertTransition(state, chosen);
         state = chosen;
         expect(ALL).toContain(state);

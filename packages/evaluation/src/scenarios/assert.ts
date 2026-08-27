@@ -1,0 +1,298 @@
+import type { AssembledTrace } from '@kora/db';
+import type { EvaluationRecord, ScenarioSpec } from '../types.js';
+
+export interface Assertion {
+  name: string;
+  passed: boolean;
+  detail: string;
+}
+
+interface AssertArgs {
+  scenario: ScenarioSpec & {
+    policyRuleId?: string;
+    expectedToolErrorCode?: string;
+    expect: ScenarioSpec['expect'] & { policyRuleId?: string };
+  };
+  trace: AssembledTrace;
+  evaluation: EvaluationRecord;
+  finalMessage: string;
+  replacementCount: number;
+  replacementDetail: string;
+  orderStatus: string | null;
+}
+
+function check(name: string, passed: boolean, detail: string): Assertion {
+  return { name, passed, detail };
+}
+
+function isSubsequence(expected: string[], actual: string[]): boolean {
+  let cursor = 0;
+  for (const name of actual) {
+    if (cursor < expected.length && expected[cursor] === name) cursor++;
+  }
+  return cursor === expected.length;
+}
+
+export function assertScenario(args: AssertArgs): Assertion[] {
+  const { scenario, trace, evaluation } = args;
+  const expected = scenario.expect;
+  const out: Assertion[] = [];
+
+  if (expected.state) {
+    out.push(
+      check(
+        'final state',
+        trace.run.finalState === expected.state,
+        `expected ${expected.state}, got ${trace.run.finalState}`,
+      ),
+    );
+  }
+
+  if (expected.intent) {
+    out.push(
+      check(
+        'intent',
+        trace.run.intent === expected.intent,
+        `expected ${expected.intent}, got ${trace.run.intent}`,
+      ),
+    );
+  }
+
+  const executed = trace.toolExecutions.map((e) => e.toolName);
+  if ((expected.tools ?? []).length > 0) {
+    out.push(
+      check(
+        'expected tool subsequence',
+        isSubsequence(expected.tools ?? [], executed),
+        `expected ${(expected.tools ?? []).join(' -> ')} within ${executed.join(' -> ') || '(none)'}`,
+      ),
+    );
+  }
+
+  const succeeded = trace.toolExecutions
+    .filter((e) => e.status === 'ok' || e.status === 'replayed')
+    .map((e) => e.toolName);
+  const breached = (expected.forbiddenTools ?? []).filter((f) => succeeded.includes(f));
+  out.push(
+    check(
+      'no forbidden tool executed',
+      breached.length === 0,
+      breached.join(', ') || 'none executed',
+    ),
+  );
+
+  if (expected.policyDecision !== undefined) {
+    const write = trace.policyChecks.find((c) => c.action === 'create_replacement');
+    if (expected.policyDecision === null) {
+      out.push(
+        check(
+          'policy never reached for the write',
+          write === undefined,
+          write ? `found a ${write.decision} check` : 'no create_replacement policy check',
+        ),
+      );
+    } else {
+      out.push(
+        check(
+          'policy decision',
+          write?.decision === expected.policyDecision,
+          `expected ${expected.policyDecision}, got ${write?.decision ?? 'none'}`,
+        ),
+      );
+      if (expected.policyRuleId) {
+        out.push(
+          check(
+            'policy rule id',
+            write?.ruleId === expected.policyRuleId,
+            `expected ${expected.policyRuleId}, got ${write?.ruleId ?? 'none'}`,
+          ),
+        );
+      }
+    }
+  }
+
+  if (expected.externalState?.replacementsForOrder !== undefined) {
+    out.push(
+      check(
+        'replacements in the business system',
+        args.replacementCount === expected.externalState.replacementsForOrder,
+        `expected ${expected.externalState.replacementsForOrder}, found ${args.replacementCount} ${args.replacementDetail}`,
+      ),
+    );
+  }
+
+  if (expected.externalState?.orderStatus) {
+    out.push(
+      check(
+        'order status in the business system',
+        args.orderStatus === expected.externalState.orderStatus,
+        `expected ${expected.externalState.orderStatus}, found ${args.orderStatus}`,
+      ),
+    );
+  }
+
+  if (scenario.expectedToolErrorCode) {
+    const codes = trace.toolExecutions.map((e) => e.errorCode).filter(Boolean);
+    out.push(
+      check(
+        'tool error code',
+        codes.includes(scenario.expectedToolErrorCode as never),
+        `expected ${scenario.expectedToolErrorCode}, saw ${codes.join(', ') || 'none'}`,
+      ),
+    );
+  }
+
+  if (expected.evaluation) {
+    out.push(
+      check(
+        'verified resolution',
+        evaluation.verifiedResolution === expected.evaluation.verifiedResolution,
+        `expected ${expected.evaluation.verifiedResolution}, got ${evaluation.verifiedResolution}`,
+      ),
+    );
+    for (const [id, want] of Object.entries(expected.evaluation.checks)) {
+      const got = evaluation.checks.find((c) => c.id === id);
+      out.push(
+        check(
+          `check ${id}`,
+          got?.verdict === want,
+          `expected ${want}, got ${got?.verdict ?? 'missing'} (${got?.evidence ?? ''})`,
+        ),
+      );
+    }
+  }
+
+  const message = args.finalMessage.toLowerCase();
+  for (const needle of expected.responseMustContain ?? []) {
+    out.push(
+      check(
+        `response contains "${needle}"`,
+        message.includes(needle.toLowerCase()),
+        args.finalMessage,
+      ),
+    );
+  }
+  for (const needle of expected.responseMustNotContain ?? []) {
+    out.push(
+      check(
+        `response does not contain "${needle}"`,
+        !message.includes(needle.toLowerCase()),
+        args.finalMessage,
+      ),
+    );
+  }
+
+  return out;
+}
+
+/**
+ * H1 is the twelve-point acceptance path. Each point is a separate named
+ * assertion so a failure says which of the twelve broke.
+ */
+export function assertH1(args: {
+  trace: AssembledTrace;
+  evaluation: EvaluationRecord;
+  finalMessage: string;
+  replacementCount: number;
+}): Assertion[] {
+  const { trace } = args;
+  const out: Assertion[] = [];
+
+  out.push(
+    check(
+      'H1.1 intent is DAMAGED_ORDER',
+      trace.run.intent === 'DAMAGED_ORDER',
+      String(trace.run.intent),
+    ),
+  );
+
+  const getOrder = trace.toolExecutions.find(
+    (e) => e.toolName === 'get_order' && (e.input as { orderId?: string })?.orderId === '9832',
+  );
+  out.push(
+    check(
+      'H1.2 get_order(9832) succeeded',
+      getOrder?.status === 'ok',
+      getOrder?.status ?? 'missing',
+    ),
+  );
+
+  const retrieval = trace.retrievals[0];
+  out.push(
+    check(
+      'H1.3 retrieval returned chunks from the active policy document',
+      (retrieval?.chunks.length ?? 0) > 0,
+      `${retrieval?.chunks.length ?? 0} chunks`,
+    ),
+  );
+
+  const allow = trace.policyChecks.find(
+    (c) => c.action === 'create_replacement' && c.decision === 'allow',
+  );
+  out.push(
+    check(
+      'H1.4 policy allowed the write with a named rule',
+      Boolean(allow && allow.ruleId.length > 0),
+      allow?.ruleId ?? 'no allow check',
+    ),
+  );
+
+  const creates = trace.toolExecutions.filter(
+    (e) => e.toolName === 'create_replacement' && e.status === 'ok',
+  );
+  out.push(
+    check(
+      'H1.5 exactly one successful create_replacement',
+      creates.length === 1,
+      String(creates.length),
+    ),
+  );
+  out.push(
+    check(
+      'H1.6 verify_observed is present',
+      creates[0]?.verifyObserved != null,
+      'read-back recorded',
+    ),
+  );
+  out.push(
+    check('H1.7 verified is true', creates[0]?.verified === true, String(creates[0]?.verified)),
+  );
+
+  const replacementId = (creates[0]?.output as { id?: string })?.id;
+  out.push(
+    check(
+      'H1.8 the reply contains the replacement id Acme returned',
+      Boolean(replacementId && args.finalMessage.includes(replacementId)),
+      replacementId ?? 'no id',
+    ),
+  );
+
+  const complete =
+    trace.run.finishedAt !== null &&
+    trace.run.finalState !== null &&
+    trace.run.outcome !== null &&
+    trace.conversation.messages.length >= 2;
+  out.push(
+    check('H1.9 the trace rebuilds with no null required fields', complete, 'assembleTrace'),
+  );
+
+  out.push(
+    check('H1.10 an evaluation row exists', Boolean(args.evaluation.id), args.evaluation.id),
+  );
+  out.push(
+    check(
+      'H1.11 the run reached a visible completed state',
+      trace.run.finalState === 'RESOLVED',
+      String(trace.run.finalState),
+    ),
+  );
+  out.push(
+    check(
+      'H1.12 exactly one replacement exists in the business system',
+      args.replacementCount === 1,
+      String(args.replacementCount),
+    ),
+  );
+
+  return out;
+}

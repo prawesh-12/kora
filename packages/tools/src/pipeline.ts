@@ -181,35 +181,65 @@ export async function executeTool(args: ExecuteToolArgs): Promise<ToolOutcome<un
     (deploymentMode === 'human_approval' && tool.sideEffect === 'write_high');
 
   if (needsApproval) {
-    const existing = (await repos.approvals.listForRun(run.runId)).find(
-      (a) => a.toolName === tool.name && a.status === 'pending',
+    // A decision is made against the conversation, not the run: approving resumes
+    // the work in a new run, and that run must not ask again.
+    const forConversation = await repos.approvals.listForConversation(args.ctx.conversationId);
+    const granted = forConversation.find(
+      (a) => a.toolName === tool.name && a.status === 'approved',
     );
-    const approval =
-      existing ??
-      (await repos.approvals.create({
+    const denied = forConversation.find((a) => a.toolName === tool.name && a.status === 'denied');
+
+    if (denied) {
+      await repos.toolExecutions.create({
         runId: run.runId,
-        conversationId: args.ctx.conversationId,
         toolName: tool.name,
-        proposedInput: input,
-        reason: decision.reason,
+        toolVersion: tool.version,
+        input,
+        status: 'denied',
+        errorCode: 'PERMISSION_DENIED',
+        errorMessage: denied.decisionNote ?? 'a person declined this action',
+        startedAt,
+        finishedAt: now(),
+        durationMs: 0,
+      });
+      return {
+        status: 'denied',
         policyCheckId: check.id,
-        status: 'pending',
-        requestedAt: now(),
-        expiresAt: new Date(now().getTime() + serverEnv().KORA_APPROVAL_TTL_MINUTES * 60_000),
-      }));
-    await run.record('approval', {
-      tool: tool.name,
-      approvalId: approval.id,
-      reason: decision.reason,
-    });
-    return { status: 'awaiting_approval', approvalId: approval.id, reason: decision.reason };
+        reason: denied.decisionNote ?? 'a person declined this action',
+        code: 'PERMISSION_DENIED',
+      };
+    }
+
+    if (!granted) {
+      const pending = forConversation.find(
+        (a) => a.toolName === tool.name && a.status === 'pending',
+      );
+      const approval =
+        pending ??
+        (await repos.approvals.create({
+          runId: run.runId,
+          conversationId: args.ctx.conversationId,
+          toolName: tool.name,
+          proposedInput: input,
+          reason: decision.reason,
+          policyCheckId: check.id,
+          status: 'pending',
+          requestedAt: now(),
+          expiresAt: new Date(now().getTime() + serverEnv().KORA_APPROVAL_TTL_MINUTES * 60_000),
+        }));
+      await run.record('approval', {
+        tool: tool.name,
+        approvalId: approval.id,
+        reason: decision.reason,
+      });
+      return { status: 'awaiting_approval', approvalId: approval.id, reason: decision.reason };
+    }
   }
 
   // 6. Idempotency claim.
   const key = deriveKey({
     tenantId: args.ctx.tenantId,
     conversationId: args.ctx.conversationId,
-    runId: run.runId,
     toolName: tool.name,
     toolVersion: tool.version,
     input,

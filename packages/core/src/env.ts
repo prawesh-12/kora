@@ -30,7 +30,7 @@ const serverSchema = z.object({
   KORA_RUN_DEADLINE_MS: z.coerce.number().int().positive().default(45000),
   KORA_CONFIDENCE_THRESHOLD: z.coerce.number().min(0).max(1).default(0.7),
   KORA_APPROVAL_TTL_MINUTES: z.coerce.number().int().positive().default(60),
-  KORA_DEPLOYMENT_MODE: z.enum(['simulation', 'human_approval', 'full']).default('human_approval'),
+  KORA_DEPLOYMENT_MODE: z.enum(['simulation', 'human_approval', 'full']).default('full'),
 
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
 });

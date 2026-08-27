@@ -128,6 +128,27 @@ async function request<T extends z.ZodTypeAny>(
   return parsed.data;
 }
 
+/**
+ * Raw access for the few Acme endpoints that are not business tools: health and
+ * the scenario admin routes. Everything still goes out from this one module.
+ */
+export function acmeFetch(
+  path: string,
+  init: RequestInit = {},
+  timeoutMs = 5000,
+): Promise<Response> {
+  const env = serverEnv();
+  return fetch(`${env.ACME_BASE_URL}${path}`, {
+    ...init,
+    headers: {
+      Authorization: `Bearer ${env.ACME_API_KEY}`,
+      'Content-Type': 'application/json',
+      ...((init.headers as Record<string, string>) ?? {}),
+    },
+    signal: AbortSignal.timeout(timeoutMs),
+  });
+}
+
 export interface AcmeClient {
   getOrder(id: string, opts: RequestOpts): Promise<OrderResponse>;
   getCustomer(id: string, opts: RequestOpts): Promise<CustomerResponse>;

@@ -5,6 +5,7 @@ export * from './idempotency.js';
 export * from './pipeline.js';
 export * from './verify.js';
 export * from './tools/index.js';
+export * from './reader.js';
 export type {
   AcmeClient,
   CreateReplacementRequest,

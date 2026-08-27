@@ -107,7 +107,7 @@ describe('H1 damaged order within policy', () => {
     expect(allowed?.decision).toBe('allow');
     expect(allowed?.ruleId).toBe('standard_replacement');
 
-    expect(result.text).toContain((created[0]?.output as { id: string }).id);
+    expect(result.text).toContain((created[0]!.output as { id: string }).id);
   });
 });
 
@@ -196,7 +196,7 @@ describe('negative scenarios', () => {
     expect(decision?.decision).toBe('deny');
     expect(decision?.ruleId).toBe('outside_return_window');
     // The engine derived the window from the order record, not from the message.
-    expect((decision?.facts as { daysSinceDelivery: number }).daysSinceDelivery).toBeGreaterThan(7);
+    expect((decision!.facts as { daysSinceDelivery: number }).daysSinceDelivery).toBeGreaterThan(7);
   });
 
   it('N10 refuses to answer from memory when the knowledge base is empty', async () => {

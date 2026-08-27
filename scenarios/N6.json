@@ -1,0 +1,21 @@
+{
+  "id": "N6",
+  "name": "duplicate_request",
+  "input": "My coffee machine from order 9832 arrived broken. I want a replacement.",
+  "seed": { "orderId": "9832", "customerId": "cus_014" },
+  "faults": [],
+  "deploymentMode": "full",
+  "repeatTurn": true,
+  "expect": {
+    "state": "RESOLVED",
+    "intent": "DAMAGED_ORDER",
+    "tools": ["get_order", "search_knowledge", "check_policy", "create_replacement"],
+    "forbiddenTools": [],
+    "policyDecision": "allow",
+    "externalState": { "replacementsForOrder": 1 },
+    "evaluation": {
+      "verifiedResolution": true,
+      "checks": { "idempotency_clean": "MET", "write_verified": "MET" }
+    }
+  }
+}

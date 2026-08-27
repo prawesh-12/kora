@@ -15,6 +15,10 @@ export async function assembleTrace(tenantId: string, runId: string): Promise<As
   }
 
   // Nine small indexed queries, not one multi-way join. Faster, and far easier to change.
+  //
+  // Approvals are fetched for the whole conversation, not just this run. Approving
+  // a high-value action resumes the work in a new run, and a trace that hid the
+  // approval which unblocked it would read as an action nobody authorised.
   const [
     conversation,
     messages,
@@ -30,7 +34,7 @@ export async function assembleTrace(tenantId: string, runId: string): Promise<As
     repos.steps.listForRun(runId),
     repos.toolExecutions.listForRun(runId),
     repos.policyChecks.listForRun(runId),
-    repos.approvals.listForRun(runId),
+    repos.approvals.listForConversation(run.conversationId),
     repos.escalations.forRun(runId),
     repos.llmCalls.listForRun(runId),
   ]);

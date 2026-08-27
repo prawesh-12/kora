@@ -62,6 +62,7 @@ export async function seed(): Promise<{ tenantId: string; operatorId: string }> 
       id: newId('usr'),
       accountId: operatorId,
       providerId: 'credential',
+      issuer: 'local:credential',
       userId: operatorId,
       password: await scryptHash(env.KORA_SEED_OPERATOR_PASSWORD),
       createdAt: now(),

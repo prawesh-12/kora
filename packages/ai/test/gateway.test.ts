@@ -1,4 +1,4 @@
-import { closeDb, sql, withTenant } from '@kora/db';
+import { closeDb, sql } from '@kora/db';
 import { generateText } from 'ai';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { callModel, normaliseUsage } from '../src/gateway.js';

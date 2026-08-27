@@ -67,7 +67,8 @@ async function main(): Promise<number> {
 
       case 'scenarios': {
         const { runScenarios } = await import('@kora/evaluation');
-        return runScenarios(rest);
+        const { runAgentTurn } = await import('@kora/ai');
+        return runScenarios(rest, runAgentTurn);
       }
 
       default:
@@ -81,4 +82,7 @@ async function main(): Promise<number> {
   }
 }
 
-process.exitCode = await main();
+const code = await main();
+// Keep-alive sockets from fetch and the postgres pool hold the event loop open,
+// and a CLI that will not exit is worse than one that exits abruptly.
+process.exit(code);

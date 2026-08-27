@@ -207,6 +207,15 @@ export function createRepositories(tenantId: string, conn: Database | Tx = db())
           .where(and(eq(s.approvals.runId, runId), eq(s.approvals.tenantId, tenantId)))
           .orderBy(asc(s.approvals.requestedAt));
       },
+      async listForConversation(conversationId: string) {
+        return conn
+          .select()
+          .from(s.approvals)
+          .where(
+            and(eq(s.approvals.conversationId, conversationId), eq(s.approvals.tenantId, tenantId)),
+          )
+          .orderBy(asc(s.approvals.requestedAt));
+      },
       async listPending() {
         return conn
           .select()

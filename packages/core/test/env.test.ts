@@ -8,7 +8,7 @@ describe('parseServerEnv', () => {
   it('accepts a minimal environment and fills defaults', () => {
     const env = parseServerEnv(base);
     expect(env.KORA_MAX_STEPS).toBe(8);
-    expect(env.KORA_DEPLOYMENT_MODE).toBe('human_approval');
+    expect(env.KORA_DEPLOYMENT_MODE).toBe('full');
   });
 
   it('lists every missing variable at once, not just the first', () => {

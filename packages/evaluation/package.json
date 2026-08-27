@@ -12,5 +12,11 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "build": "echo no build"
+  },
+  "dependencies": {
+    "@kora/core": "workspace:*",
+    "@kora/db": "workspace:*",
+    "@kora/tools": "workspace:*",
+    "zod": "^4.4.3"
   }
 }

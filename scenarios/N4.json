@@ -1,0 +1,31 @@
+{
+  "id": "N4",
+  "name": "replacement_api_timeout",
+  "input": "My coffee machine from order 9832 arrived broken. I want a replacement.",
+  "seed": { "orderId": "9832", "customerId": "cus_014" },
+  "faults": [{ "onTool": "create_replacement", "fault": "timeout", "times": 3 }],
+  "deploymentMode": "full",
+  "expect": {
+    "state": "NEEDS_HUMAN",
+    "intent": "DAMAGED_ORDER",
+    "tools": [
+      "get_order",
+      "search_knowledge",
+      "check_policy",
+      "create_replacement",
+      "escalate_to_human"
+    ],
+    "forbiddenTools": [],
+    "policyDecision": "allow",
+    "externalState": { "replacementsForOrder": 0 },
+    "evaluation": {
+      "verifiedResolution": false,
+      "checks": {
+        "escalation_correct": "MET",
+        "idempotency_clean": "MET",
+        "response_grounded": "MET"
+      }
+    },
+    "responseMustNotContain": ["REP-"]
+  }
+}

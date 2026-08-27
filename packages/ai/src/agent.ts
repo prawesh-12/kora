@@ -123,6 +123,7 @@ function buildTools(args: {
   deploymentMode: DeploymentMode;
   run: RunHandle;
   state: TurnState;
+  faults: Record<string, string>;
 }) {
   const tools: ToolSet = {};
 
@@ -139,6 +140,7 @@ function buildTools(args: {
           rawInput: input,
           ctx: {
             ...args.ctx,
+            ...(args.faults[def.name] ? { fault: args.faults[def.name] } : {}),
             searchKnowledge: makeSearcher(args.ctx.tenantId, args.state, args.run),
           },
           policy: args.config.compiledPolicy,
@@ -213,6 +215,8 @@ export async function runAgentTurn(args: {
   conversationId: string;
   message: string;
   deploymentMode?: DeploymentMode;
+  /** Scenario use only: arms an Acme fault for the named tool. */
+  faults?: Record<string, string>;
 }): Promise<TurnResult> {
   const env = serverEnv();
   const config = loadAgentConfig();
@@ -377,7 +381,7 @@ export async function runAgentTurn(args: {
     logger,
   };
 
-  const tools = buildTools({ config, ctx, deploymentMode, run, state });
+  const tools = buildTools({ config, ctx, deploymentMode, run, state, faults: args.faults ?? {} });
 
   const agent = new ToolLoopAgent({
     model: getModel('agent'),
@@ -446,7 +450,7 @@ export async function runAgentTurn(args: {
     );
   }
 
-  const grounding = checkGrounding(text, state.toolOutputs);
+  const grounding = checkGrounding(text, state.toolOutputs, args.message);
   if (!grounding.grounded) {
     logger.warn({ unsupported: grounding.unsupported, draft: text }, 'grounding check failed');
     await run.record(
