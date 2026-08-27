@@ -134,7 +134,7 @@ export default async function EvaluationsPage({
             conversation behind it.
           </p>
         </div>
-        <FailureChart buckets={failures} from={from} to={to} />
+        <FailureChart buckets={failures} days={days} />
       </section>
     </main>
   );

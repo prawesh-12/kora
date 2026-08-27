@@ -15,21 +15,13 @@ import type { FailureBucketDto } from '@/lib/api/schemas';
  * not an SVG chart: a rect is not a link, and a count of 2 has to stay clickable
  * next to a count of 622.
  */
-export function FailureChart({
-  buckets,
-  from,
-  to,
-}: {
-  buckets: FailureBucketDto[];
-  from: string;
-  to: string;
-}) {
+export function FailureChart({ buckets, days }: { buckets: FailureBucketDto[]; days: number }) {
   const data = buckets.map((bucket) => ({
     label: bucket.code,
     value: bucket.count,
     severity: FAILURE_SEVERITY[bucket.code as FailureCode] ?? 'normal',
     detail: bucket.topDetail,
-    href: `/ops/conversations?failureCode=${bucket.code}&from=${from}&to=${to}`,
+    href: `/ops/conversations?failureCode=${bucket.code}&days=${days}`,
   }));
 
   return (

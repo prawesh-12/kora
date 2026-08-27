@@ -1,24 +1,91 @@
 'use client';
 
+import { Inbox } from 'lucide-react';
 import Link from 'next/link';
-import { useState } from 'react';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
+import { useCallback, useMemo, useState } from 'react';
+import type { ColumnDef } from '@tanstack/react-table';
+import { useTable } from '@tanstack/react-table';
+import { StatePill, VerifiedPill } from '@/components/kora/status-pill';
+import { EmptyState } from '@/components/kora/states';
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
+  DataGrid,
+  DataGridContainer,
+  type DataGridFeatures,
+  dataGridFeatures,
+} from '@/components/reui/data-grid/data-grid';
+import { DataGridColumnHeader } from '@/components/reui/data-grid/data-grid-column-header';
+import { DataGridTableVirtual } from '@/components/reui/data-grid/data-grid-table-virtual';
 import type { ConversationPageDto, ConversationSummaryDto } from '@/lib/api/schemas';
-import { formatDuration, formatCostMicros } from '@/lib/ops/format';
+import { EMPTY, formatAbsolute, formatDuration, formatRelative } from '@/lib/ops/format';
 
-function VerifiedMark({ verified }: { verified: boolean | null }) {
-  if (verified === null) return <Badge variant="outline">evaluating</Badge>;
-  return <Badge variant={verified ? 'default' : 'destructive'}>{verified ? 'pass' : 'fail'}</Badge>;
-}
+/** Seven columns. Customer is the same value on every row and cost is stored in
+ *  micro-dollars; both carry more in the row detail than in a column here. */
+const COLUMNS: ColumnDef<DataGridFeatures, ConversationSummaryDto>[] = [
+  {
+    id: 'startedAt',
+    accessorFn: (row) => row.startedAt,
+    header: ({ column }) => <DataGridColumnHeader column={column} title="Started" />,
+    size: 130,
+    cell: ({ row }) => (
+      <Link
+        className="underline underline-offset-4"
+        data-testid="trace-link"
+        href={`/ops/conversations/${row.original.conversationId}?runId=${row.original.runId}`}
+        title={formatAbsolute(row.original.startedAt)}
+      >
+        {formatRelative(row.original.startedAt)}
+      </Link>
+    ),
+  },
+  {
+    id: 'intent',
+    accessorFn: (row) => row.intent ?? '',
+    header: ({ column }) => <DataGridColumnHeader column={column} title="Intent" />,
+    size: 170,
+    cell: ({ row }) => row.original.intent ?? EMPTY,
+  },
+  {
+    id: 'state',
+    accessorFn: (row) => row.state ?? '',
+    header: ({ column }) => <DataGridColumnHeader column={column} title="State" />,
+    size: 150,
+    cell: ({ row }) => <StatePill state={row.original.state} />,
+  },
+  {
+    id: 'verified',
+    accessorFn: (row) => row.verifiedResolution,
+    header: ({ column }) => <DataGridColumnHeader column={column} title="Verified" />,
+    size: 110,
+    cell: ({ row }) => <VerifiedPill verified={row.original.verifiedResolution} />,
+  },
+  {
+    id: 'primaryFailureCode',
+    accessorFn: (row) => row.primaryFailureCode ?? '',
+    header: ({ column }) => <DataGridColumnHeader column={column} title="Primary failure" />,
+    size: 190,
+    cell: ({ row }) =>
+      row.original.primaryFailureCode ? (
+        <span className="font-mono text-xs">{row.original.primaryFailureCode}</span>
+      ) : (
+        EMPTY
+      ),
+  },
+  {
+    id: 'durationMs',
+    accessorFn: (row) => row.durationMs ?? 0,
+    header: ({ column }) => <DataGridColumnHeader column={column} title="Duration" />,
+    size: 110,
+    meta: { cellClassName: 'tabular-nums' },
+    cell: ({ row }) => formatDuration(row.original.durationMs),
+  },
+  {
+    id: 'escalated',
+    accessorFn: (row) => row.escalated,
+    header: ({ column }) => <DataGridColumnHeader column={column} title="Escalated" />,
+    size: 120,
+    cell: ({ row }) => (row.original.escalated ? (row.original.escalationStatus ?? 'open') : EMPTY),
+  },
+];
 
 export function ConversationTable({
   page,
@@ -32,11 +99,10 @@ export function ConversationTable({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function loadMore() {
+  const fetchMore = useCallback(async () => {
     if (!cursor || busy) return;
     setBusy(true);
     setError(null);
-
     try {
       const separator = apiQuery.length > 0 ? '&' : '';
       const res = await fetch(
@@ -55,81 +121,55 @@ export function ConversationTable({
     } finally {
       setBusy(false);
     }
-  }
+  }, [apiQuery, busy, cursor]);
+
+  const columns = useMemo(() => COLUMNS, []);
+  const table = useTable({
+    features: dataGridFeatures,
+    columns,
+    data: items,
+    getRowId: (row) => row.runId,
+  });
 
   if (items.length === 0) {
-    return <p className="text-muted-foreground text-sm">No conversations match these filters.</p>;
+    return (
+      <EmptyState
+        action={{ label: 'Clear the filters', href: '/ops/conversations' }}
+        description="No run matches these filters. Widen the window or drop a chip to see more."
+        icon={Inbox}
+        title="Nothing matches"
+      />
+    );
   }
 
   return (
     <div className="space-y-3">
-      <div className="overflow-x-auto rounded-lg border">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Started</TableHead>
-              <TableHead>Customer</TableHead>
-              <TableHead>Intent</TableHead>
-              <TableHead>State</TableHead>
-              <TableHead>Outcome</TableHead>
-              <TableHead>Verified</TableHead>
-              <TableHead>Primary failure</TableHead>
-              <TableHead>Escalated</TableHead>
-              <TableHead>Duration</TableHead>
-              <TableHead>Cost</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {items.map((item) => (
-              <TableRow key={item.runId} data-testid="conversation-row">
-                <TableCell>
-                  <Link
-                    href={`/ops/conversations/${item.conversationId}?runId=${item.runId}`}
-                    data-testid="trace-link"
-                    className="underline underline-offset-4"
-                  >
-                    {new Date(item.startedAt).toLocaleString()}
-                  </Link>
-                </TableCell>
-                <TableCell className="font-mono text-xs">{item.customer ?? '—'}</TableCell>
-                <TableCell>{item.intent ?? '—'}</TableCell>
-                <TableCell>{item.state ?? '—'}</TableCell>
-                <TableCell>{item.outcome ?? 'in progress'}</TableCell>
-                <TableCell>
-                  <VerifiedMark verified={item.verifiedResolution} />
-                </TableCell>
-                <TableCell className="font-mono text-xs">
-                  {item.primaryFailureCode ?? '—'}
-                </TableCell>
-                <TableCell>
-                  {item.escalated ? (
-                    <Badge variant="secondary">{item.escalationStatus ?? 'open'}</Badge>
-                  ) : (
-                    '—'
-                  )}
-                </TableCell>
-                <TableCell className="tabular-nums">{formatDuration(item.durationMs)}</TableCell>
-                <TableCell className="tabular-nums">
-                  {formatCostMicros(item.costUsdMicros)}
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
+      <DataGrid
+        recordCount={items.length}
+        table={table}
+        tableLayout={{ headerSticky: true, rowBorder: true, width: 'fixed' }}
+      >
+        <DataGridContainer>
+          <DataGridTableVirtual
+            estimateSize={40}
+            hasMore={cursor !== null}
+            height={560}
+            isFetchingMore={busy}
+            onFetchMore={fetchMore}
+          />
+        </DataGridContainer>
+      </DataGrid>
 
-      {error ? <p className="text-destructive text-sm">{error}</p> : null}
+      {error ? (
+        <p className="text-destructive text-sm" role="alert">
+          {error}
+        </p>
+      ) : null}
 
-      <div className="flex items-center gap-3">
-        {cursor ? (
-          <Button onClick={loadMore} disabled={busy} variant="outline" size="sm">
-            {busy ? 'Loading…' : 'Load more'}
-          </Button>
-        ) : (
-          <span className="text-muted-foreground text-sm">End of the list.</span>
-        )}
-        <span className="text-muted-foreground text-xs">{items.length} shown</span>
-      </div>
+      <p className="text-muted-foreground text-xs">
+        {items.length.toLocaleString()} run{items.length === 1 ? '' : 's'} loaded
+        {cursor === null ? ', end of the list' : ', scroll for more'}
+      </p>
     </div>
   );
 }

@@ -73,3 +73,13 @@ export function truncateId(id: string | null | undefined, length = 8): string {
   if (!id) return EMPTY;
   return id.length <= length ? id : `${id.slice(0, length)}…`;
 }
+
+/**
+ * `OUT_OF_SCOPE` is an identifier, not a sentence. It stays uppercase mono only
+ * in the failure-code column, where it is the thing being named; everywhere
+ * else it reads as prose.
+ */
+export function humanizeEnum(value: string | null | undefined): string {
+  if (!value) return EMPTY;
+  return value.toLowerCase().replace(/_/g, ' ');
+}
