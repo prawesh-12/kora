@@ -65,6 +65,33 @@ async function main(): Promise<number> {
         return 0;
       }
 
+      case 'agent:publish': {
+        const { publishFromFiles } = await import('@kora/ai');
+        log.info(await publishFromFiles(), 'published from config files');
+        return 0;
+      }
+
+      case 'agent:versions': {
+        const { listVersions } = await import('@kora/db');
+        for (const v of await listVersions(serverEnv().KORA_TENANT_ID)) {
+          console.log(`v${v.version}  ${v.status.padEnd(9)}  ${v.model}  ${v.id}`);
+        }
+        return 0;
+      }
+
+      case 'agent:rollback': {
+        const { activate, previousActive } = await import('@kora/db');
+        const tenantId = serverEnv().KORA_TENANT_ID;
+        const previous = await previousActive(tenantId);
+        if (!previous) {
+          console.error('there is no archived version to roll back to');
+          return 1;
+        }
+        const restored = await activate(tenantId, previous.id, 'cli');
+        log.info({ versionId: restored.id, version: restored.version }, 'rolled back');
+        return 0;
+      }
+
       case 'bench': {
         const { runBench } = await import('@kora/evaluation');
         const { runAgentTurn, makeJudgeCaller } = await import('@kora/ai');
@@ -116,7 +143,7 @@ async function main(): Promise<number> {
 
       default:
         console.error(
-          'usage: pnpm kora <ingest|migrate|seed|idempotency:cleanup|smoke:model|scenarios|bench|judge:goldset|judge:calibrate|approvals:expire>',
+          'usage: pnpm kora <ingest|migrate|seed|idempotency:cleanup|smoke:model|scenarios|bench|agent:publish|agent:versions|agent:rollback|judge:goldset|judge:calibrate|approvals:expire>',
         );
         return 1;
     }

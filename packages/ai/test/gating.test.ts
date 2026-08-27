@@ -1,9 +1,16 @@
 import type { Intent } from '@kora/core';
 import { describe, expect, it } from 'vitest';
 import { gateToolsByState } from '../src/agent.js';
-import { type AgentConfig, loadAgentConfig } from '../src/config.js';
+import { type ResolvedAgentConfig, loadAgentConfig } from '../src/config.js';
+import { SYSTEM_POLICY } from '../src/prompts/system.js';
 
-const config: AgentConfig = loadAgentConfig();
+const file = loadAgentConfig();
+const config: ResolvedAgentConfig = {
+  ...file,
+  agentVersionId: null,
+  systemPolicy: SYSTEM_POLICY,
+  source: 'file',
+};
 
 const ORDER = {
   id: '9832',

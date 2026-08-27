@@ -1,5 +1,6 @@
 export * from './config.js';
 export * from './models.js';
+export * from './fallback.js';
 export * from './gateway.js';
 export * from './pricing.js';
 export * from './embed.js';
@@ -11,4 +12,5 @@ export * from './prompts/index.js';
 export * from './grounding.js';
 export * from './escalation.js';
 export * from './judge-caller.js';
+export * from './publish.js';
 export * from './agent.js';

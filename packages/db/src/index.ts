@@ -4,6 +4,8 @@ export * from './schema/index.js';
 export * from './repositories/index.js';
 export * from './queries/index.js';
 export * from './tracing/index.js';
+export * from './repositories/agent-repo.js';
+export * from './repositories/policy-repo.js';
 export * from './events.js';
 export { runMigrations } from './migrate.js';
 export { seed } from './seed.js';

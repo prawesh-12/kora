@@ -13,6 +13,8 @@ export const agentRuns = pgTable(
       .references(() => conversations.id, { onDelete: 'cascade' }),
     traceId: text('trace_id').notNull(),
     agentConfigVersion: text('agent_config_version').notNull(),
+    /** Set once at run start. In-flight runs finish on the version they began with. */
+    agentVersionId: text('agent_version_id'),
     triggerMessageId: text('trigger_message_id'),
     startedAt: timestamp('started_at', { withTimezone: true }).notNull().defaultNow(),
     finishedAt: timestamp('finished_at', { withTimezone: true }),

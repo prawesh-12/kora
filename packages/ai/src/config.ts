@@ -4,6 +4,7 @@ import { basename, join } from 'node:path';
 import { type CompiledPolicy, ConfigError, compilePolicyBundle, serverEnv } from '@kora/core';
 import { z } from 'zod';
 import { parse as parseYaml } from 'yaml';
+import { SYSTEM_POLICY } from './prompts/system.js';
 
 const schema = z
   .object({
@@ -81,5 +82,64 @@ export function assertJudgeFamily(): void {
       `KORA_MODEL_JUDGE (${env.KORA_MODEL_JUDGE}) is the same family as KORA_MODEL_AGENT (${env.KORA_MODEL_AGENT}). The judge must be a different family.`,
       { code: 'JUDGE_SAME_FAMILY' },
     );
+  }
+}
+
+export interface ResolvedAgentConfig {
+  configVersion: string;
+  agentVersionId: string | null;
+  maxSteps: number;
+  runDeadlineMs: number;
+  confidenceThreshold: number;
+  allowedTools: Array<{ name: string; version: number }>;
+  permissions: string[];
+  compiledPolicy: CompiledPolicy;
+  systemPolicy: string;
+  source: 'database' | 'file';
+}
+
+/**
+ * Resolves the configuration a run will use, and pins it.
+ *
+ * The database is the source of truth once a version has been published. The
+ * file is the fallback for a checkout that has never run `pnpm kora
+ * agent:publish`, and it is the only reason `config/agent.yaml` is still read at
+ * runtime. Which one was used is recorded on the result, so a trace never has to
+ * be guessed at.
+ */
+export async function resolveAgentConfig(tenantId: string): Promise<ResolvedAgentConfig> {
+  const file = loadAgentConfig();
+
+  try {
+    const { loadActive, loadPolicyBundle } = await import('@kora/db');
+    const version = await loadActive(tenantId);
+    const compiledPolicy = await loadPolicyBundle(tenantId, version.policyBundle);
+
+    return {
+      configVersion: version.id,
+      agentVersionId: version.id,
+      maxSteps: version.maxSteps,
+      runDeadlineMs: version.runDeadlineMs,
+      confidenceThreshold: version.confidenceThreshold,
+      allowedTools: version.allowedTools,
+      permissions: version.permissions,
+      compiledPolicy,
+      systemPolicy: version.systemPrompt,
+      source: 'database',
+    };
+  } catch (e) {
+    if ((e as ConfigError).code !== 'NO_ACTIVE_AGENT_VERSION') throw e;
+    return {
+      configVersion: file.configVersion,
+      agentVersionId: null,
+      maxSteps: file.maxSteps,
+      runDeadlineMs: file.runDeadlineMs,
+      confidenceThreshold: file.confidenceThreshold,
+      allowedTools: file.allowedTools,
+      permissions: file.permissions,
+      compiledPolicy: file.compiledPolicy,
+      systemPolicy: SYSTEM_POLICY,
+      source: 'file',
+    };
   }
 }

@@ -9,4 +9,6 @@ export * from './approvals.js';
 export * from './escalations.js';
 export * from './evaluations.js';
 export * from './observability.js';
+export * from './agents.js';
+export * from './policies.js';
 export * from './events.js';

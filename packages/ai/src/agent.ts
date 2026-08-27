@@ -20,7 +20,7 @@ import {
   registry,
 } from '@kora/tools';
 import { type ToolSet, ToolLoopAgent, hasToolCall, stepCountIs, tool } from 'ai';
-import { type AgentConfig, loadAgentConfig } from './config.js';
+import { type ResolvedAgentConfig, resolveAgentConfig } from './config.js';
 import { escalate } from './escalation.js';
 import { UNGROUNDED_FALLBACK, checkGrounding } from './grounding.js';
 import { detectIntent } from './intent.js';
@@ -135,7 +135,7 @@ function summarizeForModel(output: unknown): string {
 }
 
 function buildTools(args: {
-  config: AgentConfig;
+  config: ResolvedAgentConfig;
   ctx: Omit<ToolContext, 'idempotencyKey' | 'signal' | 'policy' | 'gathered'>;
   deploymentMode: DeploymentMode;
   run: RunHandle;
@@ -238,7 +238,9 @@ export async function runAgentTurn(args: {
   faults?: Record<string, string>;
 }): Promise<TurnResult> {
   const env = serverEnv();
-  const config = loadAgentConfig();
+  // Pinned once, here. A version published mid-run does not change this run's
+  // behaviour, which is what makes an in-flight conversation survive a promotion.
+  const config = await resolveAgentConfig(args.tenantId);
   const repos = withTenant(args.tenantId);
   const deploymentMode = args.deploymentMode ?? env.KORA_DEPLOYMENT_MODE;
 
@@ -254,6 +256,7 @@ export async function runAgentTurn(args: {
     tenantId: args.tenantId,
     conversationId: args.conversationId,
     agentConfigVersion: config.configVersion,
+    agentVersionId: config.agentVersionId,
     triggerMessageId: customerMessage.id,
   });
 
@@ -516,7 +519,7 @@ export async function runAgentTurn(args: {
  * is allowed to reach it.
  */
 export function gateToolsByState(
-  config: AgentConfig,
+  config: ResolvedAgentConfig,
   intent: Intent,
   state: Pick<TurnState, 'gathered'>,
 ): string[] {

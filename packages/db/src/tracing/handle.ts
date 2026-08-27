@@ -6,6 +6,7 @@ export async function startRun(input: {
   tenantId: string;
   conversationId: string;
   agentConfigVersion: string;
+  agentVersionId?: string | null;
   triggerMessageId?: string;
 }): Promise<RunHandle> {
   const repos = createRepositories(input.tenantId);
@@ -14,6 +15,7 @@ export async function startRun(input: {
     conversationId: input.conversationId,
     traceId,
     agentConfigVersion: input.agentConfigVersion,
+    agentVersionId: input.agentVersionId ?? null,
     triggerMessageId: input.triggerMessageId ?? null,
     startedAt: now(),
   });

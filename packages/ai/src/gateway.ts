@@ -1,6 +1,20 @@
-import { ModelError, type Result, err, logger, now, ok, serverEnv } from '@kora/core';
+import {
+  ModelError,
+  RETRY_POLICY,
+  type Result,
+  TIMEOUT_BUDGET_MS,
+  backoffMs,
+  err,
+  isRetryable,
+  logger,
+  now,
+  ok,
+  serverEnv,
+} from '@kora/core';
 import { withTenant } from '@kora/db';
+import { breaker, modelBreakerKey } from '@kora/tools';
 import type { LanguageModel } from 'ai';
+import { fallbackModelFor } from './fallback.js';
 import { getModel, providerName } from './models.js';
 import { costUsdMicros } from './pricing.js';
 
@@ -76,13 +90,14 @@ async function recordCall(args: {
   latencyMs: number;
   status: string;
   errorCode?: string;
+  provider?: string;
 }): Promise<void> {
   try {
     await withTenant(args.tenantId).llmCalls.create({
       runId: args.run?.runId ?? null,
       purpose: args.purpose,
       model: args.model,
-      provider: providerName(),
+      provider: args.provider ?? providerName(),
       inputTokens: args.usage.inputTokens,
       outputTokens: args.usage.outputTokens,
       cacheReadTokens: args.usage.cacheReadTokens,
