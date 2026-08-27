@@ -5,6 +5,7 @@ import { EvaluationPanel } from '@/components/kora/evaluation-panel';
 import { HandoffPanel } from '@/components/kora/handoff-panel';
 import { TraceHeaderActions } from '@/components/kora/trace-header-actions';
 import { TraceTimeline } from '@/components/kora/trace-timeline';
+import { TraceVerdict } from '@/components/kora/trace-verdict';
 import { ContextCards, type ContextCardItem } from '@/components/ops/context-cards';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -21,8 +22,8 @@ function Conversation({ trace }: { trace: TraceDto }) {
         <Message key={message.id} from={message.role === 'customer' ? 'user' : 'assistant'}>
           <MessageContent>
             <MessageBubble
-              variant={message.role === 'customer' ? 'solid' : 'soft'}
               align={message.role === 'customer' ? 'end' : 'start'}
+              variant={message.role === 'customer' ? 'soft' : 'solid'}
             >
               <MessageBubbleContent>{message.content}</MessageBubbleContent>
             </MessageBubble>
@@ -76,10 +77,10 @@ export default async function TracePage({
   if (!trace) notFound();
 
   return (
-    <main className="flex flex-col gap-6 p-6">
+    <main className="flex flex-col gap-6 p-8">
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div className="space-y-1">
-          <h1 className="font-semibold text-2xl tracking-tight">Trace</h1>
+          <h1 className="font-semibold text-xl tracking-tight">Trace</h1>
           <p className="font-mono text-muted-foreground text-xs">{trace.run.traceId}</p>
           <div className="flex flex-wrap items-center gap-2 pt-1">
             <Badge variant="secondary">{trace.run.intent ?? 'no intent'}</Badge>
@@ -98,6 +99,8 @@ export default async function TracePage({
         </div>
         <TraceHeaderActions trace={trace} />
       </header>
+
+      <TraceVerdict trace={trace} />
 
       <div className="hidden gap-6 lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)_minmax(0,1fr)]">
         <div className="min-w-0">

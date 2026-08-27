@@ -1,35 +1,90 @@
 'use client';
 
 import { CodeBlock } from '@/components/agents/code-block';
-import { Badge } from '@/components/ui/badge';
-import { formatDuration } from '@/lib/ops/format';
+import { StatusPill } from '@/components/kora/status-pill';
+import { EMPTY, formatDuration, formatUsd, humanizeEnum } from '@/lib/ops/format';
 import { cn } from '@/lib/utils';
 import type { PolicyCheckDto, RunStepDto, ToolExecutionDto, TraceDto } from '@/lib/api/schemas';
 
-type Entry =
-  | { kind: 'state'; id: string; state: string; durationMs: number | null }
-  | { kind: 'step'; id: string; step: RunStepDto }
-  | { kind: 'tool'; id: string; execution: ToolExecutionDto }
-  | { kind: 'policy'; id: string; check: PolicyCheckDto };
-
 /**
  * "We chose not to" and "it failed" are the two things an operator most often
- * confuses in a trace, so denied, simulated, failed and executed rows each get
- * their own tone and their own test id.
+ * confuses in a trace. Every status therefore carries a dot AND a word, and the
+ * legend below the timeline names each one. An undocumented colour is
+ * decoration.
  */
-const TOOL_TONE: Record<string, string> = {
-  ok: 'border-l-emerald-500',
-  replayed: 'border-l-sky-500',
-  simulated: 'border-l-violet-500',
-  denied: 'border-l-amber-500',
-  failed: 'border-l-destructive',
+const STATUS: Record<string, { dot: string; label: string }> = {
+  ok: { dot: 'bg-success', label: 'executed' },
+  replayed: { dot: 'bg-info', label: 'replayed' },
+  simulated: { dot: 'bg-info', label: 'simulated, nothing was written' },
+  awaiting_approval: { dot: 'bg-warning', label: 'waiting on a person' },
+  denied: { dot: 'bg-warning', label: 'denied by policy, never ran' },
+  invalid_input: { dot: 'bg-destructive', label: 'rejected, bad arguments' },
+  failed: { dot: 'bg-destructive', label: 'failed' },
 };
+
+const LEGEND = ['ok', 'simulated', 'denied', 'failed'] as const;
+
+function statusOf(status: string) {
+  return STATUS[status] ?? { dot: 'bg-muted-foreground', label: humanizeEnum(status) };
+}
+
+function Dot({ status }: { status: string }) {
+  return <span aria-hidden className={cn('size-2 shrink-0 rounded-full', statusOf(status).dot)} />;
+}
 
 function json(value: unknown): string {
   return JSON.stringify(value ?? null, null, 2);
 }
 
-function buildEntries(trace: TraceDto): Entry[] {
+const MAX_SCALAR = 28;
+
+function scalars(value: unknown, limit: number): string[] {
+  if (value === null || value === undefined) return [];
+  if (typeof value !== 'object') {
+    const text = String(value);
+    return [text.length > MAX_SCALAR ? `${text.slice(0, MAX_SCALAR)}…` : text];
+  }
+  const out: string[] = [];
+  for (const item of Object.values(value as Record<string, unknown>)) {
+    if (out.length >= limit) break;
+    out.push(...scalars(item, limit - out.length));
+  }
+  return out.slice(0, limit);
+}
+
+/**
+ * `get_order(9832) → delivered, INR 8,999` instead of forty lines of JSON. The
+ * JSON is still one click away; it is just no longer the default, because three
+ * open panes in a scrolling column hide the thing they are evidence for.
+ */
+function summarize(execution: ToolExecutionDto): string {
+  const args = scalars(execution.input, 2).join(', ');
+  const call = `${execution.toolName}(${args})`;
+  if (execution.status === 'failed') return `${call} → ${execution.errorCode ?? 'error'}`;
+  const result = scalars(execution.output, 3).join(', ');
+  return result ? `${call} → ${result}` : call;
+}
+
+/** A tool call and the policy checks that gated it, in one card. */
+interface Call {
+  kind: 'tool';
+  id: string;
+  execution: ToolExecutionDto;
+  checks: PolicyCheckDto[];
+}
+
+type Item =
+  | Call
+  | { kind: 'step'; id: string; step: RunStepDto }
+  | { kind: 'policy'; id: string; check: PolicyCheckDto };
+
+interface Group {
+  state: string;
+  durationMs: number | null;
+  items: Item[];
+}
+
+function buildGroups(trace: TraceDto): Group[] {
   const toolByStep = new Map(
     trace.toolExecutions.filter((e) => e.stepId).map((e) => [e.stepId, e]),
   );
@@ -41,88 +96,126 @@ function buildEntries(trace: TraceDto): Entry[] {
     checksByStep.set(check.stepId, list);
   }
 
-  const entries: Entry[] = [];
+  const groups: Group[] = [{ state: '', durationMs: null, items: [] }];
   const usedTools = new Set<string>();
   const usedChecks = new Set<string>();
+  const current = () => groups[groups.length - 1] as Group;
 
   for (const step of trace.steps) {
     if (step.kind === 'state') {
       const state = typeof step.payload.state === 'string' ? step.payload.state : 'unknown';
-      entries.push({ kind: 'state', id: step.id, state, durationMs: step.durationMs });
+      groups.push({ state, durationMs: step.durationMs, items: [] });
       continue;
     }
 
+    const checks = checksByStep.get(step.id) ?? [];
     const execution = toolByStep.get(step.id);
+
     if (execution) {
       usedTools.add(execution.id);
-      entries.push({ kind: 'tool', id: execution.id, execution });
-    } else {
-      entries.push({ kind: 'step', id: step.id, step });
+      for (const check of checks) usedChecks.add(check.id);
+      // The check that blocked create_replacement belongs inside that card, not
+      // in a flat list five rows below it.
+      current().items.push({ kind: 'tool', id: execution.id, execution, checks });
+      continue;
     }
 
-    for (const check of checksByStep.get(step.id) ?? []) {
+    current().items.push({ kind: 'step', id: step.id, step });
+    for (const check of checks) {
       usedChecks.add(check.id);
-      entries.push({ kind: 'policy', id: check.id, check });
+      current().items.push({ kind: 'policy', id: check.id, check });
     }
   }
 
   for (const execution of trace.toolExecutions) {
-    if (!usedTools.has(execution.id)) entries.push({ kind: 'tool', id: execution.id, execution });
+    if (usedTools.has(execution.id)) continue;
+    current().items.push({ kind: 'tool', id: execution.id, execution, checks: [] });
   }
   for (const check of trace.policyChecks) {
-    if (!usedChecks.has(check.id)) entries.push({ kind: 'policy', id: check.id, check });
+    if (usedChecks.has(check.id)) continue;
+    current().items.push({ kind: 'policy', id: check.id, check });
   }
 
-  return entries;
+  // A state heading with nothing under it is a label for an empty region.
+  return groups.filter((group) => group.items.length > 0);
 }
 
-function ToolRow({ execution }: { execution: ToolExecutionDto }) {
+function PolicyDetail({ check, nested }: { check: PolicyCheckDto; nested?: boolean }) {
+  const tone = check.decision === 'allow' ? 'ok' : check.decision === 'deny' ? 'danger' : 'warn';
+  return (
+    <div className={cn('space-y-2 text-xs', nested && 'rounded-md border bg-muted/30 p-3')}>
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-muted-foreground">policy check</span>
+        <StatusPill status={tone}>{humanizeEnum(check.decision)}</StatusPill>
+        <span className="font-mono">{check.ruleId}</span>
+      </div>
+      <p>{check.reason}</p>
+      <p className="font-mono text-muted-foreground">
+        {check.policyKey} {check.policyVersion}
+        {check.missingFacts.length > 0 ? ` · missing ${check.missingFacts.join(', ')}` : ''}
+      </p>
+      <details>
+        <summary className="cursor-pointer text-muted-foreground">facts the rule saw</summary>
+        <div className="pt-2">
+          <CodeBlock code={json(check.facts)} language="json" maxHeight={180} wrap />
+        </div>
+      </details>
+    </div>
+  );
+}
+
+function ToolCard({ execution, checks }: Call) {
   const failed = execution.status === 'failed';
   return (
-    <details
-      data-testid={`trace-tool-${execution.status}`}
-      className={cn('rounded-md border border-l-4 bg-card', TOOL_TONE[execution.status] ?? '')}
-    >
+    <details className="rounded-md border bg-card" data-testid={`trace-tool-${execution.status}`}>
       <summary className="flex cursor-pointer flex-wrap items-center gap-2 px-3 py-2 text-sm">
-        <span className="font-medium font-mono">{execution.toolName}</span>
-        <Badge variant={failed ? 'destructive' : 'secondary'}>{execution.status}</Badge>
-        {execution.verified !== null ? (
-          <Badge variant={execution.verified ? 'default' : 'destructive'}>
-            {execution.verified ? 'verified' : 'unverified'}
-          </Badge>
-        ) : null}
-        <span className="ml-auto text-muted-foreground tabular-nums">
+        <Dot status={execution.status} />
+        <span className="min-w-0 truncate font-mono">{summarize(execution)}</span>
+        <span className="text-muted-foreground text-xs">{statusOf(execution.status).label}</span>
+        {execution.verified === false ? <StatusPill status="danger">unverified</StatusPill> : null}
+        <span className="ml-auto text-muted-foreground text-xs tabular-nums">
           {formatDuration(execution.durationMs)}
         </span>
       </summary>
       <div className="space-y-3 border-t px-3 py-3">
-        <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs sm:grid-cols-4">
+        {checks.map((check) => (
+          <PolicyDetail check={check} key={check.id} nested />
+        ))}
+        <dl className="grid grid-cols-[7rem_1fr] gap-y-1 text-xs">
           <dt className="text-muted-foreground">attempt</dt>
           <dd className="tabular-nums">{execution.attempt}</dd>
           <dt className="text-muted-foreground">idempotency</dt>
-          <dd className="truncate font-mono">{execution.idempotencyKey ?? '—'}</dd>
+          <dd className="truncate font-mono">{execution.idempotencyKey ?? EMPTY}</dd>
           {failed ? (
             <>
               <dt className="text-muted-foreground">error code</dt>
-              <dd className="font-mono">{execution.errorCode ?? '—'}</dd>
+              <dd className="font-mono">{execution.errorCode ?? EMPTY}</dd>
               <dt className="text-muted-foreground">error</dt>
-              <dd className="col-span-3 break-words">{execution.errorMessage ?? '—'}</dd>
+              <dd className="break-words">{execution.errorMessage ?? EMPTY}</dd>
             </>
           ) : null}
         </dl>
-        <CodeBlock code={json(execution.input)} language="json" filename="input" maxHeight={220} />
+        <CodeBlock
+          code={json(execution.input)}
+          filename="input"
+          language="json"
+          maxHeight={220}
+          wrap
+        />
         <CodeBlock
           code={json(failed ? execution.errorMessage : execution.output)}
-          language="json"
           filename={failed ? 'upstream response' : 'output'}
+          language="json"
           maxHeight={220}
+          wrap
         />
         {execution.verifyObserved !== null && execution.verifyObserved !== undefined ? (
           <CodeBlock
             code={json(execution.verifyObserved)}
-            language="json"
             filename="read-back"
+            language="json"
             maxHeight={180}
+            wrap
           />
         ) : null}
       </div>
@@ -130,96 +223,83 @@ function ToolRow({ execution }: { execution: ToolExecutionDto }) {
   );
 }
 
-function PolicyRow({ check }: { check: PolicyCheckDto }) {
-  return (
-    <details data-testid={`trace-policy-${check.decision}`} className="rounded-md border bg-card">
-      <summary className="flex flex-wrap items-center gap-2 px-3 py-2 text-sm cursor-pointer">
-        <span className="text-muted-foreground">policy check</span>
-        <span className="font-medium font-mono">{check.action}</span>
-        <Badge variant={check.decision === 'allow' ? 'secondary' : 'destructive'}>
-          {check.decision}
-        </Badge>
-      </summary>
-      <div className="space-y-3 border-t px-3 py-3 text-xs">
-        <dl className="grid grid-cols-[8rem_1fr] gap-y-1">
-          <dt className="text-muted-foreground">rule</dt>
-          <dd className="font-mono">{check.ruleId}</dd>
-          <dt className="text-muted-foreground">policy</dt>
-          <dd className="font-mono">
-            {check.policyKey} {check.policyVersion}
-          </dd>
-          <dt className="text-muted-foreground">reason</dt>
-          <dd>{check.reason}</dd>
-          {check.missingFacts.length > 0 ? (
-            <>
-              <dt className="text-muted-foreground">missing facts</dt>
-              <dd className="font-mono">{check.missingFacts.join(', ')}</dd>
-            </>
-          ) : null}
-        </dl>
-        <CodeBlock code={json(check.facts)} language="json" filename="facts" maxHeight={180} />
-      </div>
-    </details>
-  );
-}
-
-function StepRow({ step }: { step: RunStepDto }) {
+function StepCard({ step }: { step: RunStepDto }) {
   const failed = step.status === 'failed';
   return (
-    <details
-      data-testid={`trace-step-${step.kind}`}
-      className={cn('rounded-md border bg-card', failed && 'border-l-4 border-l-destructive')}
-    >
-      <summary className="flex flex-wrap items-center gap-2 px-3 py-2 text-sm cursor-pointer">
-        <span className="font-medium">{step.kind}</span>
-        {failed ? <Badge variant="destructive">failed</Badge> : null}
-        <span className="ml-auto text-muted-foreground tabular-nums">
+    <details className="rounded-md border bg-card" data-testid={`trace-step-${step.kind}`}>
+      <summary className="flex cursor-pointer flex-wrap items-center gap-2 px-3 py-2 text-sm">
+        <Dot status={failed ? 'failed' : 'ok'} />
+        <span>{humanizeEnum(step.kind)}</span>
+        {failed ? <StatusPill status="danger">failed</StatusPill> : null}
+        <span className="ml-auto text-muted-foreground text-xs tabular-nums">
           {formatDuration(step.durationMs)}
         </span>
       </summary>
       <div className="border-t px-3 py-3">
-        <CodeBlock code={json(step.payload)} language="json" maxHeight={220} />
+        <CodeBlock code={json(step.payload)} language="json" maxHeight={220} wrap />
       </div>
     </details>
   );
 }
 
 export function TraceTimeline({ trace }: { trace: TraceDto }) {
-  const entries = buildEntries(trace);
+  const groups = buildGroups(trace);
 
   return (
     <div className="flex flex-col gap-2">
       {trace.run.inProgress ? (
         <p
-          data-testid="trace-live-indicator"
           className="flex items-center gap-2 text-muted-foreground text-sm"
+          data-testid="trace-live-indicator"
         >
-          <span className="inline-block size-2 animate-pulse rounded-full bg-sky-500" aria-hidden />
+          <span aria-hidden className="inline-block size-2 animate-pulse rounded-full bg-info" />
           This run is still in progress.
         </p>
       ) : null}
 
-      {entries.map((entry) => {
-        if (entry.kind === 'state') {
-          return (
+      {groups.map((group) => (
+        <div className="flex flex-col gap-2" key={group.state || 'ungrouped'}>
+          {group.state ? (
             <div
-              key={entry.id}
+              className="flex items-baseline gap-2 pt-3 font-medium text-muted-foreground text-xs uppercase tracking-[0.06em]"
               data-testid="trace-state"
-              className="pt-3 font-medium font-mono text-muted-foreground text-xs uppercase tracking-wide"
             >
-              {entry.state}
+              <span className="font-mono">{group.state}</span>
+              <span className="tabular-nums">{formatDuration(group.durationMs)}</span>
             </div>
-          );
-        }
-        if (entry.kind === 'tool') return <ToolRow key={entry.id} execution={entry.execution} />;
-        if (entry.kind === 'policy') return <PolicyRow key={entry.id} check={entry.check} />;
-        return <StepRow key={entry.id} step={entry.step} />;
-      })}
+          ) : null}
+          {group.items.map((item) =>
+            item.kind === 'tool' ? (
+              <ToolCard {...item} key={item.id} />
+            ) : item.kind === 'policy' ? (
+              <div
+                className="rounded-md border bg-card px-3 py-2"
+                key={item.id}
+                data-testid={`trace-policy-${item.check.decision}`}
+              >
+                <PolicyDetail check={item.check} />
+              </div>
+            ) : (
+              <StepCard key={item.id} step={item.step} />
+            ),
+          )}
+        </div>
+      ))}
 
-      <p className="pt-3 text-muted-foreground text-xs tabular-nums">
+      <dl className="flex flex-wrap gap-x-4 gap-y-1 pt-4 text-muted-foreground text-xs">
+        {LEGEND.map((key) => (
+          <div className="flex items-center gap-1.5" key={key}>
+            <Dot status={key} />
+            <dt className="sr-only">{key}</dt>
+            <dd>{statusOf(key).label}</dd>
+          </div>
+        ))}
+      </dl>
+
+      <p className="text-muted-foreground text-xs tabular-nums">
         {trace.run.stepCount} steps · {formatDuration(trace.totals.durationMs)} ·{' '}
-        {trace.totals.tokensIn + trace.totals.tokensOut} tokens · $
-        {(trace.totals.costUsdMicros / 1_000_000).toFixed(4)}
+        {(trace.totals.tokensIn + trace.totals.tokensOut).toLocaleString()} tokens ·{' '}
+        {formatUsd(trace.totals.costUsdMicros)}
       </p>
     </div>
   );

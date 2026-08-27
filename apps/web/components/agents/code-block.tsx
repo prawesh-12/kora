@@ -2,7 +2,7 @@
 "use client";
 // beui.dev/components/agents/code-block
 
-import { Check, Copy, FileCode2, LoaderCircle } from "lucide-react";
+import { Copy, FileCode2, LoaderCircle } from "lucide-react";
 import { motion, useReducedMotion } from "motion/react";
 import {
   type ReactNode,
@@ -123,21 +123,17 @@ export function CodeBlock({
         <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground/55">
           {language}
         </span>
-        <span
-          className={cn(
-            "ml-auto inline-flex shrink-0 items-center gap-1 text-[10px] font-medium",
-            streaming
-              ? "text-blue-600 dark:text-blue-400"
-              : "text-emerald-600 dark:text-emerald-400",
-          )}
-        >
-          {streaming ? (
+        {/* kora: the completed badge is dropped. A green "Ready" check on a
+            static JSON pane that never streamed is decoration, and it reads as
+            a verdict on the content next to real pass/fail pills. */}
+        {streaming ? (
+          <span className="ml-auto inline-flex shrink-0 items-center gap-1 font-medium text-[10px] text-info">
             <LoaderCircle className={cn("size-3", !reduce && "animate-spin")} />
-          ) : (
-            <Check className="size-3" />
-          )}
-          {streaming ? "Writing" : "Ready"}
-        </span>
+            Writing
+          </span>
+        ) : (
+          <span className="ml-auto" />
+        )}
         {copyable || onCopy ? (
           <motion.button
             type="button"

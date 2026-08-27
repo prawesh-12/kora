@@ -1,13 +1,16 @@
 'use client';
 
-import { Badge } from '@/components/ui/badge';
+import { StatusPill, type Status } from '@/components/kora/status-pill';
+import { humanizeEnum } from '@/lib/ops/format';
 import type { EvaluationDto } from '@/lib/api/schemas';
 
-const VERDICT_VARIANT = {
-  MET: 'default',
-  UNMET: 'destructive',
-  CANNOT_ASSESS: 'outline',
-} as const;
+/** Grey is missing data, never a soft fail. A check that could not be assessed
+ *  is missing data. */
+const VERDICT_STATUS: Record<string, Status> = {
+  MET: 'ok',
+  UNMET: 'danger',
+  CANNOT_ASSESS: 'muted',
+};
 
 export function EvaluationPanel({
   evaluation,
@@ -33,9 +36,9 @@ export function EvaluationPanel({
         <span className="font-medium font-mono text-xs uppercase tracking-wide">
           Verified resolution
         </span>
-        <Badge variant={evaluation.verifiedResolution ? 'default' : 'destructive'}>
-          {evaluation.verifiedResolution ? 'YES' : 'NO'}
-        </Badge>
+        <StatusPill status={evaluation.verifiedResolution ? 'ok' : 'danger'}>
+          {evaluation.verifiedResolution ? 'yes' : 'no'}
+        </StatusPill>
       </div>
       <ul className="divide-y">
         {evaluation.results.map((result) => (
@@ -46,9 +49,9 @@ export function EvaluationPanel({
                 {result.critical ? (
                   <span className="text-muted-foreground text-xs">critical</span>
                 ) : null}
-                <Badge className="ml-auto" variant={VERDICT_VARIANT[result.verdict]}>
-                  {result.verdict}
-                </Badge>
+                <StatusPill className="ml-auto" status={VERDICT_STATUS[result.verdict] ?? 'muted'}>
+                  {humanizeEnum(result.verdict)}
+                </StatusPill>
               </summary>
               <p className="px-4 pb-3 text-muted-foreground text-sm">{result.evidence}</p>
             </details>
