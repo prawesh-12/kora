@@ -37,7 +37,10 @@ export function EmptyState({
   className?: string;
 }) {
   return (
-    <Empty className={cn('border', className)}>
+    // `flex-none` beats the primitive's `flex-1`: inside a flex column an empty
+    // state would otherwise stretch to the height the populated component would
+    // have had, which is the one thing an empty state must not do.
+    <Empty className={cn('flex-none border py-8', className)}>
       <EmptyHeader>
         <EmptyMedia variant="icon">
           <Icon aria-hidden />

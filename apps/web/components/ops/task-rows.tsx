@@ -38,29 +38,27 @@ export function TaskRows({
               'flex w-full items-center gap-4 rounded-lg border bg-card px-3 py-2.5 text-left transition-colors',
               'hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
               item.selected === true && 'border-primary bg-muted',
-              item.urgent === true && 'border-destructive/60',
+              item.urgent === true && 'border-warning/60',
             )}
           >
+            {item.amount === undefined ? null : (
+              <span className="w-28 shrink-0 font-semibold text-foreground text-lg tabular-nums">
+                {item.amount}
+              </span>
+            )}
             <span className="min-w-0 flex-1">
-              <span className="block truncate text-sm font-medium text-foreground">
+              <span className="block truncate font-medium text-foreground text-sm">
                 {item.title}
               </span>
-              <span className="block truncate text-xs text-muted-foreground">{item.subtitle}</span>
+              <span className="block truncate text-muted-foreground text-xs">{item.subtitle}</span>
             </span>
-            <span className="flex shrink-0 flex-col items-end gap-0.5">
-              {item.amount !== undefined && (
-                <span className="text-base leading-none font-semibold tabular-nums text-foreground">
-                  {item.amount}
-                </span>
+            <span
+              className={cn(
+                'shrink-0 text-muted-foreground text-xs',
+                item.urgent === true && 'font-medium text-warning',
               )}
-              <span
-                className={cn(
-                  'text-xs text-muted-foreground',
-                  item.urgent === true && 'font-medium text-destructive',
-                )}
-              >
-                {item.meta}
-              </span>
+            >
+              {item.meta}
             </span>
           </button>
         </li>

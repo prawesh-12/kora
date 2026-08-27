@@ -1,8 +1,11 @@
 import { now } from '@kora/core';
+import { ShieldCheck } from 'lucide-react';
 import Link from 'next/link';
+import type { ReactNode } from 'react';
 import { ApprovalQueue, type QueueItem } from '@/components/kora/approval-queue';
-import { Button } from '@/components/ui/button';
+import { EmptyState } from '@/components/kora/states';
 import { loadApprovalDetail, loadApprovalQueue } from '@/lib/ops/data';
+import { cn } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
 
@@ -85,65 +88,94 @@ export default async function ApprovalsPage({
   };
 
   return (
-    <main className="flex flex-col gap-6 p-6">
+    <main className="flex flex-col gap-6 p-8">
       <header className="space-y-1">
-        <h1 className="font-semibold text-2xl tracking-tight">Approvals</h1>
+        <h1 className="font-semibold text-xl tracking-tight">Approvals</h1>
         <p className="text-muted-foreground text-sm">
           Sorted by money at risk, highest first. Anything past half its approval window is marked.
           An approval past its expiry is handed to a person the moment this page is opened.
         </p>
       </header>
 
-      <div className="flex flex-col gap-2">
-        <div className="flex flex-wrap gap-2">
+      <div className="flex flex-col gap-3">
+        <ChipGroup label="Status">
           {STATUSES.map((option) => (
-            <Button
+            <Chip
+              active={status === option && params.scope !== 'today'}
+              href={withFilters({ status: option })}
               key={option}
-              asChild
-              size="sm"
-              variant={status === option && params.scope !== 'today' ? 'default' : 'outline'}
             >
-              <Link href={withFilters({ status: option })}>{option}</Link>
-            </Button>
+              {option}
+            </Chip>
           ))}
-          <Button asChild size="sm" variant={params.scope === 'today' ? 'default' : 'outline'}>
-            <Link href="/ops/approvals?status=decided&scope=today">Decided today</Link>
-          </Button>
-        </div>
+          <Chip active={params.scope === 'today'} href="/ops/approvals?status=decided&scope=today">
+            decided today
+          </Chip>
+        </ChipGroup>
 
-        <div className="flex flex-wrap gap-2">
+        <ChipGroup label="Value at risk">
           {BANDS.map((band) => (
-            <Button
+            <Chip
+              active={bandQuery === band.query}
+              href={withFilters({ band: band.query })}
               key={band.label}
-              asChild
-              size="sm"
-              variant={bandQuery === band.query ? 'secondary' : 'ghost'}
             >
-              <Link href={withFilters({ band: band.query })}>{band.label}</Link>
-            </Button>
+              {band.label}
+            </Chip>
           ))}
-        </div>
+        </ChipGroup>
 
         {tools.length > 1 ? (
-          <div className="flex flex-wrap gap-2">
-            <Button asChild size="sm" variant={params.tool ? 'ghost' : 'secondary'}>
-              <Link href={withFilters({ tool: '' })}>All tools</Link>
-            </Button>
+          <ChipGroup label="Proposed tool">
+            <Chip active={!params.tool} href={withFilters({ tool: '' })}>
+              any
+            </Chip>
             {tools.map((tool) => (
-              <Button
-                key={tool}
-                asChild
-                size="sm"
-                variant={params.tool === tool ? 'secondary' : 'ghost'}
-              >
-                <Link href={withFilters({ tool })}>{tool}</Link>
-              </Button>
+              <Chip active={params.tool === tool} href={withFilters({ tool })} key={tool}>
+                {tool.replace(/_/g, ' ')}
+              </Chip>
             ))}
-          </div>
+          </ChipGroup>
         ) : null}
       </div>
 
-      <ApprovalQueue items={items} />
+      {items.length === 0 ? (
+        <EmptyState
+          action={{ label: 'See the rule that decides', href: '/ops/versions' }}
+          description="A risky action appears here when the policy engine holds it back for a person. Nothing is waiting right now."
+          icon={ShieldCheck}
+          title="No approvals waiting"
+        />
+      ) : (
+        <ApprovalQueue items={items} />
+      )}
     </main>
+  );
+}
+
+/** Bands, statuses and tools are three questions, so each says which it answers. */
+function ChipGroup({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <span className="w-28 shrink-0 font-medium text-muted-foreground text-xs uppercase tracking-[0.06em]">
+        {label}
+      </span>
+      {children}
+    </div>
+  );
+}
+
+function Chip({ active, href, children }: { active: boolean; href: string; children: ReactNode }) {
+  return (
+    <Link
+      aria-current={active ? 'true' : undefined}
+      className={cn(
+        'rounded-full border px-3 py-1 text-sm hover:bg-muted/60',
+        active && 'border-foreground bg-foreground text-background hover:bg-foreground',
+      )}
+      href={href}
+    >
+      {children}
+    </Link>
   );
 }
