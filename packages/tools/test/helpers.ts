@@ -3,6 +3,7 @@ import { type RunHandle, closeDb, sql, startRun, withTenant } from '@kora/db';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { ExecuteToolArgs } from '../src/pipeline.js';
+import { closeBreaker } from '../src/breaker.js';
 import { registry } from '../src/tools/index.js';
 
 export const TENANT = 'ten_pipeline_test';
@@ -72,6 +73,7 @@ export async function cleanupTenant(): Promise<void> {
   await sql()`DELETE FROM idempotency_keys WHERE tenant_id = ${TENANT}`;
   await sql()`DELETE FROM conversations WHERE tenant_id = ${TENANT}`;
   await sql()`DELETE FROM tenants WHERE id = ${TENANT}`;
+  await closeBreaker();
   await closeDb();
 }
 

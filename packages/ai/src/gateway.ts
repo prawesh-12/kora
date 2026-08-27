@@ -124,64 +124,140 @@ export interface CallModelArgs<T> {
   usageOf?: (result: T) => unknown;
 }
 
-export async function callModel<T>(args: CallModelArgs<T>): Promise<Result<T, ModelError>> {
-  const model = getModel(args.purpose);
-  const modelId = (model as { modelId?: string }).modelId ?? String(model);
-  const usageOf = args.usageOf ?? ((r: T) => (r as { usage?: unknown }).usage);
+interface ModelTarget {
+  model: LanguageModel;
+  modelId: string;
+  provider: string;
+}
 
-  let lastError: ModelError | null = null;
+function sleep(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
+}
 
-  for (let attempt = 0; attempt < 2; attempt++) {
-    const startedAt = Date.now();
-    const controller = new AbortController();
-    const timer = setTimeout(
-      () => controller.abort(new Error('model call timed out')),
-      args.timeoutMs,
-    );
+async function attemptCall<T>(
+  args: CallModelArgs<T>,
+  target: ModelTarget,
+  timeoutMs: number,
+  attempt: number,
+  usageOf: (result: T) => unknown,
+): Promise<Result<T, ModelError>> {
+  const startedAt = Date.now();
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(new Error('model call timed out')), timeoutMs);
 
-    try {
-      const result = await args.fn(model, controller.signal);
-      clearTimeout(timer);
-      await recordCall({
-        purpose: args.purpose,
-        model: modelId,
-        run: args.run,
-        tenantId: args.tenantId,
-        usage: normaliseUsage(usageOf(result)),
-        latencyMs: Date.now() - startedAt,
-        status: 'ok',
-      });
-      return ok(result);
-    } catch (e) {
-      clearTimeout(timer);
-      const { code, retryable } = classify(e);
-      await recordCall({
-        purpose: args.purpose,
-        model: modelId,
-        run: args.run,
-        tenantId: args.tenantId,
-        usage: ZERO_USAGE,
-        latencyMs: Date.now() - startedAt,
-        status: 'failed',
-        errorCode: code,
-      });
-
-      lastError = new ModelError(`${args.purpose} model call failed: ${(e as Error).message}`, {
+  try {
+    const result = await args.fn(target.model, controller.signal);
+    clearTimeout(timer);
+    await recordCall({
+      purpose: args.purpose,
+      model: target.modelId,
+      provider: target.provider,
+      run: args.run,
+      tenantId: args.tenantId,
+      usage: normaliseUsage(usageOf(result)),
+      latencyMs: Date.now() - startedAt,
+      status: 'ok',
+    });
+    return ok(result);
+  } catch (e) {
+    clearTimeout(timer);
+    const { code, retryable } = classify(e);
+    await recordCall({
+      purpose: args.purpose,
+      model: target.modelId,
+      provider: target.provider,
+      run: args.run,
+      tenantId: args.tenantId,
+      usage: ZERO_USAGE,
+      latencyMs: Date.now() - startedAt,
+      status: 'failed',
+      errorCode: code,
+    });
+    return err(
+      new ModelError(`${args.purpose} model call failed: ${(e as Error).message}`, {
         code,
         retryable,
-        context: { model: modelId, attempt: attempt + 1 },
+        context: { model: target.modelId, attempt },
         cause: e,
-      });
+      }),
+    );
+  }
+}
 
-      if (!retryable) break;
-      if (attempt === 0) {
-        const jitter = 150 + Math.floor(Math.random() * 350);
-        await new Promise((r) => setTimeout(r, jitter));
+export async function callModel<T>(args: CallModelArgs<T>): Promise<Result<T, ModelError>> {
+  const usageOf = args.usageOf ?? ((r: T) => (r as { usage?: unknown }).usage);
+  // The caller may ask for less than the model-call budget but never for more.
+  const timeoutMs = Math.min(args.timeoutMs, TIMEOUT_BUDGET_MS.modelCall);
+  const policy = RETRY_POLICY.model_call;
+
+  const model = getModel(args.purpose);
+  const primary: ModelTarget = {
+    model,
+    modelId: (model as { modelId?: string }).modelId ?? String(model),
+    provider: providerName(),
+  };
+  const breakerKey = modelBreakerKey(primary.provider);
+
+  let lastError: ModelError | null = null;
+  const gate = await breaker().gate(breakerKey, 'read');
+
+  if (gate.pass) {
+    for (let i = 0; i < policy.attempts; i++) {
+      const result = await attemptCall(args, primary, timeoutMs, i + 1, usageOf);
+      if (result.ok) {
+        await breaker().recordSuccess(breakerKey);
+        return result;
       }
+      lastError = result.error;
+      if (!isRetryable('model_call', result.error)) break;
+      if (i < policy.attempts - 1) await sleep(backoffMs(policy, i + 1));
     }
+    if (lastError && isRetryable('model_call', lastError)) {
+      await breaker().recordFailure(breakerKey);
+    }
+  } else {
+    lastError = new ModelError(
+      `the ${primary.provider} provider is failing, so calls to it are paused`,
+      { code: 'MODEL_UNAVAILABLE', retryable: true, context: { provider: primary.provider } },
+    );
   }
 
-  return err(lastError ?? new ModelError('model call failed', { code: 'MODEL_REQUEST_FAILED' }));
+  if (!lastError) return err(new ModelError('model call failed', { code: 'MODEL_REQUEST_FAILED' }));
+  if (!isRetryable('model_call', lastError)) return err(lastError);
+
+  let fallback: ReturnType<typeof fallbackModelFor>;
+  try {
+    fallback = fallbackModelFor(args.purpose);
+  } catch (e) {
+    logger().error({ err: e }, 'the configured agent fallback model cannot be used');
+    return err(lastError);
+  }
+  if (!fallback) return err(lastError);
+
+  // A silent fallback hides a provider outage: the primary can be down all day while
+  // every answer still looks fine. The marker on this line and the `fallback:` prefix
+  // on the `llm_calls` provider column are what make the outage visible afterwards.
+  logger().warn(
+    {
+      code: 'model.fallback_used',
+      primary: primary.modelId,
+      fallback: fallback.modelId,
+      tenantId: args.tenantId,
+      runId: args.run?.runId ?? null,
+      cause: lastError.code,
+    },
+    'model.fallback_used: the primary agent model failed and the fallback provider answered instead',
+  );
+
+  const target: ModelTarget = { ...fallback, provider: `fallback:${fallback.provider}` };
+  const fallbackKey = modelBreakerKey(target.provider);
+  const attempted = await attemptCall(args, target, timeoutMs, policy.attempts + 1, usageOf);
+  if (attempted.ok) {
+    await breaker().recordSuccess(fallbackKey);
+    return attempted;
+  }
+  if (isRetryable('model_call', attempted.error)) await breaker().recordFailure(fallbackKey);
+  return err(attempted.error);
 }
 
 export function runDeadline(): Date {
