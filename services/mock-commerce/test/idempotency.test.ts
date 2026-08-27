@@ -94,9 +94,20 @@ describe('seed determinism', () => {
     const second = await dump();
 
     expect(second).toEqual(first);
-    expect(first.orders.map((o) => o.id)).toEqual(['9832', '9833', '9834', '9835', '9836']);
+    expect(first.orders.map((o) => o.id)).toEqual([
+      '9832',
+      '9833',
+      '9834',
+      '9835',
+      '9836',
+      '9837',
+      '9838',
+      '9839',
+      '9840',
+      '9841',
+    ]);
     expect(first.replacements).toEqual([{ id: 'REP-0001', order_id: '9836' }]);
     expect(first.customers).toEqual([{ id: 'cus_014' }]);
-    expect(first.items).toHaveLength(5);
+    expect(first.items).toHaveLength(10);
   });
 });

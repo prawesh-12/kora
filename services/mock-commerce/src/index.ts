@@ -5,9 +5,12 @@ import { Hono, type MiddlewareHandler } from 'hono';
 import { closeDb } from './db.js';
 import { type AppEnv, faultInjection } from './faults.js';
 import { readRequestLog, requestLog } from './request-log.js';
+import { cancellationsRoutes } from './routes/cancellations.js';
 import { customersRoutes } from './routes/customers.js';
 import { ordersRoutes } from './routes/orders.js';
+import { refundsRoutes } from './routes/refunds.js';
 import { replacementsRoutes } from './routes/replacements.js';
+import { ticketsRoutes } from './routes/tickets.js';
 import { resetBody } from './schema.js';
 import { resetOrders, seed } from './seed.js';
 
@@ -64,6 +67,9 @@ app.get('/admin/request-log', async (c) => {
 app.route('/customers', customersRoutes);
 app.route('/orders', ordersRoutes);
 app.route('/replacements', replacementsRoutes);
+app.route('/refunds', refundsRoutes);
+app.route('/cancellations', cancellationsRoutes);
+app.route('/tickets', ticketsRoutes);
 
 app.notFound((c) => c.json({ error: { code: 'NOT_FOUND' } }, 404));
 app.onError((err, c) =>

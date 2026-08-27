@@ -37,6 +37,12 @@ async function toResponses(rows: readonly OrderRow[]): Promise<OrderResponse[]> 
   const replacementRows = await sql<{ id: string; order_id: string }[]>`
     select id, order_id from acme_replacements
     where order_id in ${sql(ids)} and hidden = false order by id`;
+  const refundRows = await sql<{ id: string; order_id: string; amount_minor: string }[]>`
+    select id, order_id, amount_minor from acme_refunds
+    where order_id in ${sql(ids)} and hidden = false order by id`;
+  const cancellationRows = await sql<{ id: string; order_id: string }[]>`
+    select id, order_id from acme_cancellations
+    where order_id in ${sql(ids)} and hidden = false order by id`;
 
   const itemsByOrder = new Map<string, OrderItemResponse[]>();
   for (const item of itemRows) {
@@ -58,6 +64,21 @@ async function toResponses(rows: readonly OrderRow[]): Promise<OrderResponse[]> 
     replacementsByOrder.set(rep.order_id, list);
   }
 
+  const refundsByOrder = new Map<string, { ids: string[]; totalMinor: number }>();
+  for (const refund of refundRows) {
+    const entry = refundsByOrder.get(refund.order_id) ?? { ids: [], totalMinor: 0 };
+    entry.ids.push(refund.id);
+    entry.totalMinor += Number(refund.amount_minor);
+    refundsByOrder.set(refund.order_id, entry);
+  }
+
+  const cancellationsByOrder = new Map<string, string[]>();
+  for (const c of cancellationRows) {
+    const list = cancellationsByOrder.get(c.order_id) ?? [];
+    list.push(c.id);
+    cancellationsByOrder.set(c.order_id, list);
+  }
+
   return rows.map((row) => ({
     id: row.id,
     customerId: row.customer_id,
@@ -68,6 +89,9 @@ async function toResponses(rows: readonly OrderRow[]): Promise<OrderResponse[]> 
     placedAt: row.placed_at.toISOString(),
     deliveredAt: row.delivered_at ? row.delivered_at.toISOString() : null,
     replacementIds: replacementsByOrder.get(row.id) ?? [],
+    refundIds: refundsByOrder.get(row.id)?.ids ?? [],
+    refundedAmountMinor: refundsByOrder.get(row.id)?.totalMinor ?? 0,
+    cancellationIds: cancellationsByOrder.get(row.id) ?? [],
   }));
 }
 

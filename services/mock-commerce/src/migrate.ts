@@ -1,11 +1,15 @@
-import { readFile } from 'node:fs/promises';
+import { readdir, readFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { sql } from './db.js';
 
-const migrationFile = fileURLToPath(new URL('../migrations/0000_acme.sql', import.meta.url));
+const migrationsDir = fileURLToPath(new URL('../migrations/', import.meta.url));
 
 export async function migrate(): Promise<void> {
-  await sql.unsafe(await readFile(migrationFile, 'utf8'));
+  const files = (await readdir(migrationsDir)).filter((f) => f.endsWith('.sql')).sort();
+  for (const file of files) {
+    await sql.unsafe(await readFile(join(migrationsDir, file), 'utf8'));
+  }
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
