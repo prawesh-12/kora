@@ -3,6 +3,7 @@
 import {
   ClipboardCheck,
   EyeOff,
+  GitBranch,
   GaugeCircle,
   LayoutDashboard,
   ListFilter,
@@ -30,6 +31,7 @@ const NAV = [
   { href: '/ops/conversations', label: 'Conversations', icon: ListFilter },
   { href: '/ops/approvals', label: 'Approvals', icon: ClipboardCheck },
   { href: '/ops/shadow', label: 'Shadow mode', icon: EyeOff },
+  { href: '/ops/versions', label: 'Versions', icon: GitBranch },
   { href: '/chat', label: 'Customer chat', icon: MessagesSquare },
 ];
 
