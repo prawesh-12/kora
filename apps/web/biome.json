@@ -11,6 +11,7 @@
       "!components/ui",
       "!components/agents",
       "!components/motion",
+      "!components/reui",
       "!lib/hooks",
       "!lib/ease.ts",
       "!lib/touch.ts",

@@ -10,3 +10,6 @@ allowBuilds:
   unrs-resolver: true
   "@tailwindcss/oxide": true
   msgpackr-extract: true
+
+minimumReleaseAgeExclude:
+  - '@tanstack/charts@0.16.0'
