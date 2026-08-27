@@ -95,3 +95,36 @@ export const TERMINAL_STATES: readonly AgentState[] = ['RESOLVED', 'NEEDS_HUMAN'
 export function isTerminalState(s: AgentState): boolean {
   return TERMINAL_STATES.includes(s);
 }
+
+/**
+ * Why a run failed, from Appendix C. The order of this list is the order the
+ * classifier walks: root cause first, symptom last.
+ */
+export type FailureCode =
+  | 'STATE_FAILURE'
+  | 'INTENT_FAILURE'
+  | 'RETRIEVAL_FAILURE'
+  | 'KNOWLEDGE_FAILURE'
+  | 'TOOL_SELECTION_FAILURE'
+  | 'ARGUMENT_FAILURE'
+  | 'POLICY_FAILURE'
+  | 'TOOL_EXECUTION_FAILURE'
+  | 'OUTCOME_FAILURE'
+  | 'HALLUCINATION'
+  | 'ESCALATION_FAILURE'
+  | 'LATENCY_FAILURE';
+
+export const FAILURE_CODES: readonly FailureCode[] = [
+  'STATE_FAILURE',
+  'INTENT_FAILURE',
+  'RETRIEVAL_FAILURE',
+  'KNOWLEDGE_FAILURE',
+  'TOOL_SELECTION_FAILURE',
+  'ARGUMENT_FAILURE',
+  'POLICY_FAILURE',
+  'TOOL_EXECUTION_FAILURE',
+  'OUTCOME_FAILURE',
+  'HALLUCINATION',
+  'ESCALATION_FAILURE',
+  'LATENCY_FAILURE',
+];

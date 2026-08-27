@@ -14,9 +14,9 @@ function unmet(input: EvaluationInput): string[] {
 }
 
 describe('a fully passing run', () => {
-  it('meets all seven checks except the one with no scenario', () => {
+  it('meets every check except the one with no scenario', () => {
     const results = runChecks(passingInput());
-    expect(results).toHaveLength(7);
+    expect(results).toHaveLength(9);
     expect(results.filter((c) => c.verdict === 'UNMET')).toEqual([]);
     expect(verdicts(passingInput()).tool_correctness?.verdict).toBe('CANNOT_ASSESS');
   });

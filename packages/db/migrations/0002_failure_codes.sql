@@ -1,0 +1,1 @@
+ALTER TABLE "evaluations" ADD COLUMN "failure_codes" text[] DEFAULT '{}' NOT NULL;

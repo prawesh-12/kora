@@ -2,6 +2,7 @@ import { logger, now } from '@kora/core';
 import { assembleTrace, withTenant } from '@kora/db';
 import type { AssembledTrace } from '@kora/db';
 import { CHECKS } from './checks/index.js';
+import { type Failure, classifyFailures } from './classify.js';
 import { snapshotExternalState } from './snapshot.js';
 import type { CheckResult, EvaluationInput, EvaluationRecord, ScenarioSpec } from './types.js';
 
@@ -58,6 +59,11 @@ export async function evaluateRun(args: {
         critical: r.critical,
         evidence: r.evidence,
       })),
+      failures: (existing.failureCodes as Failure['code'][]).map((code) => ({
+        code,
+        detail: '',
+        evidence: 'recorded on the original evaluation',
+      })),
       createdAt: existing.createdAt,
     };
   }
@@ -70,6 +76,7 @@ export async function evaluateRun(args: {
 
   const checks = runChecks({ trace, externalState, scenario: args.scenario });
   const verifiedResolution = verifiedResolutionOf(trace, checks);
+  const failures = classifyFailures({ trace, externalState, scenario: args.scenario, checks });
 
   const row = await repos.evaluations.upsert(
     {
@@ -77,6 +84,7 @@ export async function evaluateRun(args: {
       conversationId: trace.run.conversationId,
       agentConfigVersion: trace.run.agentConfigVersion,
       verifiedResolution,
+      failureCodes: failures.map((f) => f.code),
       createdAt: now(),
     },
     checks.map((c) => ({
@@ -103,6 +111,7 @@ export async function evaluateRun(args: {
     agentConfigVersion: row.agentConfigVersion,
     verifiedResolution: row.verifiedResolution,
     checks,
+    failures,
     createdAt: row.createdAt,
   };
 }

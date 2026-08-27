@@ -15,6 +15,7 @@ export const evaluations = pgTable(
       .references(() => conversations.id, { onDelete: 'cascade' }),
     agentConfigVersion: text('agent_config_version').notNull(),
     verifiedResolution: boolean('verified_resolution').notNull(),
+    failureCodes: text('failure_codes').array().notNull().default([]),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [

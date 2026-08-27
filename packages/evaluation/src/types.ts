@@ -1,3 +1,4 @@
+import type { FailureCode } from '@kora/core';
 import type { AssembledTrace, OrderResponse, ReplacementResponse } from './deps.js';
 
 export interface ExternalStateSnapshot {
@@ -38,6 +39,8 @@ export interface EvaluationInput {
   trace: AssembledTrace;
   externalState: ExternalStateSnapshot;
   scenario?: ScenarioSpec | undefined;
+  /** Set for classification, which reads the verdicts rather than recomputing them. */
+  checks?: CheckResult[] | undefined;
 }
 
 export type Verdict = 'MET' | 'UNMET' | 'CANNOT_ASSESS';
@@ -58,5 +61,6 @@ export interface EvaluationRecord {
   agentConfigVersion: string;
   verifiedResolution: boolean;
   checks: CheckResult[];
+  failures: Array<{ code: FailureCode; detail: string; evidence: string }>;
   createdAt: Date;
 }

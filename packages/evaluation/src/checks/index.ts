@@ -288,6 +288,47 @@ export const responseGrounded: Check = (input) => {
       );
 };
 
+const LATENCY_BUDGET_MS = 45_000;
+
+/** Did the model keep getting a tool's arguments wrong? */
+export const argumentsValid: Check = (input) => {
+  const id = 'arguments_valid';
+  const byTool = new Map<string, number>();
+  for (const e of input.trace.toolExecutions) {
+    if (e.status !== 'invalid_input' && e.errorCode !== 'INVALID_INPUT') continue;
+    byTool.set(e.toolName, (byTool.get(e.toolName) ?? 0) + 1);
+  }
+
+  const repeated = [...byTool].filter(([, n]) => n >= 2);
+  if (repeated.length > 0) {
+    return result(
+      id,
+      false,
+      'UNMET',
+      repeated.map(([tool, n]) => `${tool} rejected ${n} times`).join('; '),
+    );
+  }
+  const total = [...byTool.values()].reduce((n, v) => n + v, 0);
+  return result(
+    id,
+    false,
+    'MET',
+    total === 0 ? 'every tool input parsed first time' : `${total} input corrected once`,
+  );
+};
+
+/** Did the run finish inside its budget? */
+export const latencyBudget: Check = (input) => {
+  const id = 'latency_budget';
+  const durationMs = input.trace.run.durationMs;
+  if (durationMs === null) {
+    return result(id, false, 'CANNOT_ASSESS', 'the run never finished, so it has no duration');
+  }
+  return durationMs <= LATENCY_BUDGET_MS
+    ? result(id, false, 'MET', `${durationMs}ms of a ${LATENCY_BUDGET_MS}ms budget`)
+    : result(id, false, 'UNMET', `${durationMs}ms, over the ${LATENCY_BUDGET_MS}ms budget`);
+};
+
 export const CHECKS: Check[] = [
   outcomeAchieved,
   policyCompliance,
@@ -296,4 +337,6 @@ export const CHECKS: Check[] = [
   idempotencyClean,
   escalationCorrect,
   responseGrounded,
+  argumentsValid,
+  latencyBudget,
 ];
