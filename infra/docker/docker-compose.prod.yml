@@ -1,0 +1,88 @@
+# The three application images. Staging and production run this same file with a
+# different environment; nothing here is staging-only.
+#
+# Postgres and Redis are not defined here. Both environments use managed
+# instances, and locally you get them from `docker-compose.yml`:
+#
+#   docker compose -f infra/docker/docker-compose.yml \
+#                  -f infra/docker/docker-compose.prod.yml up -d
+#
+# Migrations are not run by any of these services. Run
+# `bash infra/scripts/migrate-job.sh` first, as its own job.
+name: kora
+
+x-app-env: &app-env
+  NODE_ENV: production
+  DATABASE_URL: ${DATABASE_URL:?set DATABASE_URL}
+  DATABASE_APP_URL: ${DATABASE_APP_URL:-}
+  REDIS_URL: ${REDIS_URL:?set REDIS_URL}
+  KORA_APP_URL: ${KORA_APP_URL:-http://localhost:3000}
+  BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:3000}
+  BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?set BETTER_AUTH_SECRET}
+  KORA_TENANT_ID: ${KORA_TENANT_ID:-ten_acme}
+  KORA_MODEL_PROVIDER: ${KORA_MODEL_PROVIDER:-mock}
+  KORA_MODEL_AGENT: ${KORA_MODEL_AGENT:-mock-agent}
+  KORA_MODEL_CLASSIFIER: ${KORA_MODEL_CLASSIFIER:-mock-classifier}
+  KORA_MODEL_EMBEDDING: ${KORA_MODEL_EMBEDDING:-mock-embedding}
+  KORA_MODEL_JUDGE: ${KORA_MODEL_JUDGE:-mockjudge-v1}
+  OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+  ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+  ACME_BASE_URL: ${ACME_BASE_URL:-http://acme:4001}
+  ACME_API_KEY: ${ACME_API_KEY:?set ACME_API_KEY}
+  KORA_DEPLOYMENT_MODE: ${KORA_DEPLOYMENT_MODE:-human_approval}
+  LOG_LEVEL: ${LOG_LEVEL:-info}
+
+services:
+  web:
+    image: ${KORA_IMAGE_REPO:-kora}/web:${KORA_IMAGE_TAG:-latest}
+    build:
+      context: ../..
+      dockerfile: apps/web/Dockerfile
+    restart: unless-stopped
+    environment: *app-env
+    ports:
+      - '${KORA_WEB_PORT:-3000}:3000'
+    healthcheck:
+      test: ['CMD', 'node', '-e', "fetch('http://127.0.0.1:3000/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+
+  worker:
+    image: ${KORA_IMAGE_REPO:-kora}/worker:${KORA_IMAGE_TAG:-latest}
+    build:
+      context: ../..
+      dockerfile: services/worker/Dockerfile
+    restart: unless-stopped
+    environment: *app-env
+    # Long enough for an in-flight evaluation to finish; the worker waits 30s for
+    # its jobs before it closes.
+    stop_grace_period: 40s
+    deploy:
+      resources:
+        limits:
+          memory: 768M
+
+  acme:
+    image: ${KORA_IMAGE_REPO:-kora}/mock-commerce:${KORA_IMAGE_TAG:-latest}
+    build:
+      context: ../..
+      dockerfile: services/mock-commerce/Dockerfile
+    restart: unless-stopped
+    environment: *app-env
+    ports:
+      - '${KORA_ACME_PORT:-4001}:4001'
+    healthcheck:
+      test: ['CMD', 'node', '-e', "fetch('http://127.0.0.1:4001/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+    deploy:
+      resources:
+        limits:
+          memory: 256M

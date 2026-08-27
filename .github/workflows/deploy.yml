@@ -1,0 +1,163 @@
+name: deploy
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Which environment to deploy
+        type: choice
+        options: [staging, production]
+        default: staging
+
+concurrency:
+  group: deploy-${{ inputs.environment || 'staging' }}
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_REPO: ghcr.io/${{ github.repository }}
+
+jobs:
+  images:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        include:
+          - name: web
+            dockerfile: apps/web/Dockerfile
+          - name: worker
+            dockerfile: services/worker/Dockerfile
+          - name: mock-commerce
+            dockerfile: services/mock-commerce/Dockerfile
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          push: true
+          tags: |
+            ${{ env.IMAGE_REPO }}/${{ matrix.name }}:${{ github.sha }}
+            ${{ env.IMAGE_REPO }}/${{ matrix.name }}:latest
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+
+  # Migrations are their own job, before anything is rolled out, and never on app
+  # boot. The advisory lock inside the script means a second deploy that starts
+  # while this one is running waits rather than running DDL alongside it.
+  migrate:
+    needs: images
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: ${{ inputs.environment || 'staging' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.17.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+      - run: cp .env.example .env
+
+      - name: apply migrations
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: bash infra/scripts/migrate-job.sh
+
+  release:
+    needs: migrate
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: ${{ inputs.environment || 'staging' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # Set the KORA_DEPLOY_HOST variable on the environment to turn this on. Without
+      # it the workflow stops after the migration rather than pretending to deploy.
+      - name: check the environment is configured
+        id: target
+        run: |
+          if [ -z "${{ vars.KORA_DEPLOY_HOST }}" ]; then
+            echo "KORA_DEPLOY_HOST is not set for this environment, so there is nowhere to deploy." >&2
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: roll out
+        if: steps.target.outputs.configured == 'true'
+        env:
+          DEPLOY_HOST: ${{ vars.KORA_DEPLOY_HOST }}
+          DEPLOY_USER: ${{ vars.KORA_DEPLOY_USER }}
+          DEPLOY_PATH: ${{ vars.KORA_DEPLOY_PATH }}
+          SSH_KEY: ${{ secrets.KORA_DEPLOY_SSH_KEY }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy
+          chmod 600 ~/.ssh/deploy
+          ssh_opts="-i $HOME/.ssh/deploy -o StrictHostKeyChecking=accept-new"
+
+          scp $ssh_opts infra/docker/docker-compose.prod.yml \
+            "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/docker-compose.prod.yml"
+
+          # Staging and production run the same images, identified by the same tag.
+          ssh $ssh_opts "$DEPLOY_USER@$DEPLOY_HOST" \
+            "cd $DEPLOY_PATH && \
+             echo '${{ github.token }}' | docker login ghcr.io -u ${{ github.actor }} --password-stdin && \
+             KORA_IMAGE_REPO=${{ env.IMAGE_REPO }} KORA_IMAGE_TAG=$IMAGE_TAG \
+             docker compose --env-file .env -f docker-compose.prod.yml pull && \
+             KORA_IMAGE_REPO=${{ env.IMAGE_REPO }} KORA_IMAGE_TAG=$IMAGE_TAG \
+             docker compose --env-file .env -f docker-compose.prod.yml up -d --remove-orphans"
+
+  # The gate. `/readyz` is the endpoint that knows whether the process can serve,
+  # and it is the last thing between a green build and calling the deploy done.
+  smoke:
+    needs: release
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: ${{ inputs.environment || 'staging' }}
+    steps:
+      - name: wait for readiness
+        env:
+          APP_URL: ${{ vars.KORA_APP_URL }}
+        run: |
+          if [ -z "$APP_URL" ]; then
+            echo "KORA_APP_URL is not set for this environment, so there is nothing to smoke test." >&2
+            exit 0
+          fi
+          for attempt in $(seq 1 30); do
+            code="$(curl -s -o /tmp/readyz.json -w '%{http_code}' "$APP_URL/readyz" || true)"
+            if [ "$code" = "200" ]; then
+              cat /tmp/readyz.json
+              echo
+              echo "ready after $attempt attempt(s)"
+              exit 0
+            fi
+            echo "attempt $attempt: $code"
+            sleep 10
+          done
+          echo "the deployment never became ready" >&2
+          cat /tmp/readyz.json 2>/dev/null || true
+          exit 1
