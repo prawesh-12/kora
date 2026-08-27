@@ -1,5 +1,5 @@
 import { type AgentState, newId, now } from '@kora/core';
-import { and, asc, desc, eq, gte, inArray, lte, sql as raw } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, inArray, lte, sql as raw, sql as rawSql } from 'drizzle-orm';
 import { type Database, type Tx, db } from '../client.js';
 import * as s from '../schema/index.js';
 
@@ -452,4 +452,21 @@ export type Repositories = ReturnType<typeof createRepositories>;
 
 export function withTenant(tenantId: string, conn?: Database | Tx): Repositories {
   return createRepositories(tenantId, conn);
+}
+
+/**
+ * Repositories bound to a transaction that has `kora.tenant_id` set locally.
+ *
+ * The connection-level setting covers a process serving one tenant. This is what
+ * a process serving several needs, and what the isolation tests use to act as a
+ * different tenant without opening a second pool.
+ */
+export async function withTenantTx<T>(
+  tenantId: string,
+  fn: (repos: Repositories, tx: Tx) => Promise<T>,
+): Promise<T> {
+  return db().transaction(async (tx) => {
+    await tx.execute(rawSql`SELECT set_config('kora.tenant_id', ${tenantId}, true)`);
+    return fn(createRepositories(tenantId, tx), tx);
+  });
 }

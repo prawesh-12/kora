@@ -4,6 +4,11 @@ import { ConfigError } from './errors.js';
 const serverSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   DATABASE_URL: z.string().min(1),
+  /**
+   * The runtime connection. Points at a non-superuser role so row-level security
+   * is actually enforced; migrations keep using DATABASE_URL as the owner.
+   */
+  DATABASE_APP_URL: z.string().optional(),
   REDIS_URL: z.string().min(1),
   KORA_APP_URL: z.string().url().default('http://localhost:3000'),
   KORA_TENANT_ID: z.string().min(1).default('ten_acme'),
@@ -17,6 +22,7 @@ const serverSchema = z.object({
   KORA_MODEL_AGENT: z.string().min(1).default('mock-agent'),
   KORA_MODEL_CLASSIFIER: z.string().min(1).default('mock-classifier'),
   KORA_MODEL_EMBEDDING: z.string().min(1).default('mock-embedding'),
+  KORA_MODEL_AGENT_FALLBACK: z.string().min(1).optional(),
   KORA_MODEL_JUDGE: z.string().min(1).default('mockjudge-v1'),
   KORA_JUDGE_SAMPLE_RATE: z.coerce.number().min(0).max(1).default(0.2),
   KORA_RUBRIC_VERSION: z.string().min(1).default('support-v1'),
@@ -34,7 +40,12 @@ const serverSchema = z.object({
   KORA_CONFIDENCE_THRESHOLD: z.coerce.number().min(0).max(1).default(0.7),
   KORA_APPROVAL_TTL_MINUTES: z.coerce.number().int().positive().default(60),
   KORA_APPROVAL_WEBHOOK_URL: z.string().url().optional(),
-  KORA_DEPLOYMENT_MODE: z.enum(['simulation', 'human_approval', 'full']).default('full'),
+  /** Encrypts business API credentials at rest. Rotatable without a redeploy. */
+  KORA_SECRET_KEY: z.string().min(16).optional(),
+  KORA_RETENTION_DAYS: z.coerce.number().int().positive().default(90),
+  KORA_DEPLOYMENT_MODE: z
+    .enum(['simulation', 'shadow', 'human_approval', 'limited', 'full'])
+    .default('full'),
 
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
   LOG_PRETTY: z

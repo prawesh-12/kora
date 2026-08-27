@@ -8,6 +8,7 @@ import { evaluateRunJob } from './jobs/evaluate-run.js';
 import { cleanupIdempotencyJob } from './jobs/cleanup-idempotency.js';
 import { expireApprovalsJob } from './jobs/expire-approvals.js';
 import { ingestDocumentJob } from './jobs/ingest-document.js';
+import { purgeRetentionJob } from './jobs/purge-retention.js';
 import { replayPendingEventsJob } from './jobs/replay-pending-events.js';
 import {
   CONCURRENCY,
@@ -36,6 +37,8 @@ export async function startWorker() {
           return expireApprovalsJob();
         case 'replay-pending-events':
           return replayPendingEventsJob(queues);
+        case 'purge-retention':
+          return purgeRetentionJob();
         default:
           return;
       }

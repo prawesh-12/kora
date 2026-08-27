@@ -74,7 +74,19 @@ export type RunStepKind =
   | 'response'
   | 'state';
 
-export type DeploymentMode = 'simulation' | 'human_approval' | 'full';
+/**
+ * The deployment ladder. One rung at a time, and every rung above `simulation`
+ * is enforced in the pipeline rather than in a prompt.
+ */
+export type DeploymentMode = 'simulation' | 'shadow' | 'human_approval' | 'limited' | 'full';
+
+export const DEPLOYMENT_LADDER: readonly DeploymentMode[] = [
+  'simulation',
+  'shadow',
+  'human_approval',
+  'limited',
+  'full',
+];
 
 export const AGENT_STATES: readonly AgentState[] = [
   'NEW',

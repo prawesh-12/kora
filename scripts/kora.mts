@@ -125,6 +125,21 @@ async function main(): Promise<number> {
         return 0;
       }
 
+      case 'security:isolation': {
+        const { buildManifest, unguardedRoutes } = await import('./isolation-suite.js');
+        const manifest = buildManifest(process.cwd());
+        const unguarded = unguardedRoutes(manifest);
+        for (const r of manifest) {
+          console.log(`${r.guarded ? 'guarded' : 'public '}  ${r.path}`);
+        }
+        if (unguarded.length > 0) {
+          console.error(`\n${unguarded.length} route(s) with no operator check.`);
+          return 1;
+        }
+        console.log(`\n${manifest.length} routes, none unguarded.`);
+        return 0;
+      }
+
       case 'approvals:expire': {
         const { expireOverdueApprovals } = await import('@kora/db');
         const expired = await expireOverdueApprovals(serverEnv().KORA_TENANT_ID);
@@ -143,7 +158,7 @@ async function main(): Promise<number> {
 
       default:
         console.error(
-          'usage: pnpm kora <ingest|migrate|seed|idempotency:cleanup|smoke:model|scenarios|bench|agent:publish|agent:versions|agent:rollback|judge:goldset|judge:calibrate|approvals:expire>',
+          'usage: pnpm kora <ingest|migrate|seed|idempotency:cleanup|smoke:model|scenarios|bench|agent:publish|agent:versions|agent:rollback|judge:goldset|judge:calibrate|approvals:expire|security:isolation>',
         );
         return 1;
     }
