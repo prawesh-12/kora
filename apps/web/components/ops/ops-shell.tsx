@@ -2,6 +2,7 @@
 
 import {
   ClipboardCheck,
+  EyeOff,
   GaugeCircle,
   LayoutDashboard,
   ListFilter,
@@ -28,6 +29,7 @@ const NAV = [
   { href: '/ops/evaluations', label: 'Evaluations', icon: GaugeCircle },
   { href: '/ops/conversations', label: 'Conversations', icon: ListFilter },
   { href: '/ops/approvals', label: 'Approvals', icon: ClipboardCheck },
+  { href: '/ops/shadow', label: 'Shadow mode', icon: EyeOff },
   { href: '/chat', label: 'Customer chat', icon: MessagesSquare },
 ];
 

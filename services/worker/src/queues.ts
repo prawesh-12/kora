@@ -58,4 +58,5 @@ export const REPEATABLE: Array<{ name: string; queue: QueueName; pattern: string
   { name: 'expire-approvals', queue: 'maintenance', pattern: '* * * * *' },
   { name: 'replay-pending-events', queue: 'maintenance', pattern: '*/5 * * * *' },
   { name: 'purge-retention', queue: 'maintenance', pattern: '0 3 * * *' },
+  { name: 'shadow-compare', queue: 'maintenance', pattern: '0 2 * * *' },
 ];

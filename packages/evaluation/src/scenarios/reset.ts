@@ -48,11 +48,12 @@ export async function clearIdempotency(tenantId: string): Promise<void> {
  * request log rather than from anything Kora recorded: the whole point of the
  * shadow assertion is that Kora's own view might be wrong.
  */
-export async function acmeWritePosts(): Promise<number> {
+export async function acmeWritePosts(since: Date): Promise<number> {
   const rows = await sql()<{ n: string }[]>`
     SELECT count(*) AS n FROM acme_request_log
     WHERE method = 'POST'
       AND reached_business_logic = true
-      AND path NOT LIKE '/admin/%'`;
+      AND path NOT LIKE '/admin/%'
+      AND created_at >= ${since.toISOString()}::timestamptz`;
   return Number(rows[0]?.n ?? 0);
 }

@@ -310,6 +310,7 @@ export async function runScenarios(argv: string[] = [], deps?: ScenarioDeps): Pr
   let exitCode = 0;
 
   for (let pass = 1; pass <= repeat; pass++) {
+    const passStartedAt = new Date();
     // Full reset at the start of every pass. The per-scenario reset is scoped to
     // the orders that scenario touches, so without this a pass inherits whatever
     // the previous one left behind and the suite stops being reproducible.
@@ -328,7 +329,7 @@ export async function runScenarios(argv: string[] = [], deps?: ScenarioDeps): Pr
     // so of course they do not hold. The only thing worth asserting is that
     // nothing was written.
     if (modeOverride === 'shadow') {
-      const writes = await acmeWritePosts();
+      const writes = await acmeWritePosts(passStartedAt);
       console.log(`\n${results.length} scenarios ran in shadow mode.`);
       console.log(`Write requests that reached Acme: ${writes}`);
       if (writes > 0) exitCode = 1;

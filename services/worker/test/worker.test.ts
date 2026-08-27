@@ -2,6 +2,7 @@ import { now, serverEnv } from '@kora/core';
 import { closeDb, emit, sql, withTenant } from '@kora/db';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { wireEnqueue } from '../src/enqueue.js';
+import { REPEATABLE } from '../src/queues.js';
 import { type WorkerHandle, startWorker } from '../src/index.js';
 
 const TENANT = serverEnv().KORA_TENANT_ID;
@@ -166,11 +167,12 @@ describe('the catch-up path', () => {
 
 describe('repeatable jobs', () => {
   it('registers a scheduler for every maintenance job', async () => {
+    // Derived from REPEATABLE rather than listed here, so adding a job cannot
+    // leave a stale expectation that passes for the wrong reason.
+    const expected = REPEATABLE.filter((r) => r.queue === 'maintenance')
+      .map((r) => r.name)
+      .sort();
     const schedulers = await handle!.queues.maintenance.getJobSchedulers();
-    expect(schedulers.map((s) => s.key).sort()).toEqual([
-      'cleanup-idempotency',
-      'expire-approvals',
-      'replay-pending-events',
-    ]);
+    expect(schedulers.map((s) => s.key).sort()).toEqual(expected);
   });
 });

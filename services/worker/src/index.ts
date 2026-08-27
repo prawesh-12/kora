@@ -9,6 +9,7 @@ import { cleanupIdempotencyJob } from './jobs/cleanup-idempotency.js';
 import { expireApprovalsJob } from './jobs/expire-approvals.js';
 import { ingestDocumentJob } from './jobs/ingest-document.js';
 import { purgeRetentionJob } from './jobs/purge-retention.js';
+import { shadowCompareJob } from './jobs/shadow-compare.js';
 import { replayPendingEventsJob } from './jobs/replay-pending-events.js';
 import {
   CONCURRENCY,
@@ -39,6 +40,8 @@ export async function startWorker() {
           return replayPendingEventsJob(queues);
         case 'purge-retention':
           return purgeRetentionJob();
+        case 'shadow-compare':
+          return shadowCompareJob();
         default:
           return;
       }

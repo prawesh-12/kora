@@ -1,4 +1,12 @@
-import { type AgentState, type RunOutcome, type RunStepKind, logger, newId, now } from '@kora/core';
+import {
+  type AgentState,
+  type DeploymentMode,
+  type RunOutcome,
+  type RunStepKind,
+  logger,
+  newId,
+  now,
+} from '@kora/core';
 import { createRepositories } from '../repositories/index.js';
 import type { RunHandle } from './types.js';
 
@@ -8,6 +16,7 @@ export async function startRun(input: {
   agentConfigVersion: string;
   agentVersionId?: string | null;
   triggerMessageId?: string;
+  deploymentMode?: DeploymentMode;
 }): Promise<RunHandle> {
   const repos = createRepositories(input.tenantId);
   const traceId = newId('tr');
@@ -17,6 +26,7 @@ export async function startRun(input: {
     agentConfigVersion: input.agentConfigVersion,
     agentVersionId: input.agentVersionId ?? null,
     triggerMessageId: input.triggerMessageId ?? null,
+    deploymentMode: input.deploymentMode ?? 'full',
     startedAt: now(),
   });
 

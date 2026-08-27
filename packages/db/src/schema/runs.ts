@@ -1,6 +1,6 @@
 import { desc } from 'drizzle-orm';
 import { bigint, index, integer, jsonb, pgTable, real, text, timestamp } from 'drizzle-orm/pg-core';
-import type { AgentState, Intent, RunOutcome, RunStepKind } from '@kora/core';
+import type { AgentState, DeploymentMode, Intent, RunOutcome, RunStepKind } from '@kora/core';
 import { conversations } from './conversations.js';
 
 export const agentRuns = pgTable(
@@ -15,6 +15,8 @@ export const agentRuns = pgTable(
     agentConfigVersion: text('agent_config_version').notNull(),
     /** Set once at run start. In-flight runs finish on the version they began with. */
     agentVersionId: text('agent_version_id'),
+    /** Which rung of the deployment ladder produced this run. */
+    deploymentMode: text('deployment_mode').notNull().default('full').$type<DeploymentMode>(),
     triggerMessageId: text('trigger_message_id'),
     startedAt: timestamp('started_at', { withTimezone: true }).notNull().defaultNow(),
     finishedAt: timestamp('finished_at', { withTimezone: true }),

@@ -259,6 +259,7 @@ export async function runAgentTurn(args: {
   });
 
   const run = await startRun({
+    deploymentMode,
     tenantId: args.tenantId,
     conversationId: args.conversationId,
     agentConfigVersion: config.configVersion,
