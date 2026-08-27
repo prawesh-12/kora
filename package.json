@@ -1,0 +1,30 @@
+{
+  "name": "kora",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.17.0",
+  "engines": {
+    "node": ">=24",
+    "pnpm": ">=10"
+  },
+  "scripts": {
+    "build": "turbo build",
+    "dev": "turbo dev",
+    "typecheck": "turbo typecheck",
+    "test": "turbo test",
+    "lint": "biome check . && tsx scripts/check-deps.ts && tsx scripts/check-acme-imports.ts",
+    "format": "biome format --write .",
+    "infra:up": "bash infra/scripts/up.sh",
+    "infra:down": "bash infra/scripts/down.sh",
+    "infra:reset": "bash infra/scripts/reset.sh",
+    "kora": "tsx scripts/kora.ts"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.4.0",
+    "turbo": "^2.10.12",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.11",
+    "@types/node": "^24.10.1"
+  }
+}

@@ -1,0 +1,36 @@
+# Development notes
+docs/
+extras/
+
+# Dependencies
+node_modules/
+
+# Build output
+.next/
+dist/
+build/
+out/
+
+# Runtime / generated files
+coverage/
+.tmp/
+temp/
+
+# Environment / secrets
+.env
+
+# Logs
+*.log
+logs/
+
+# OS / editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Git
+.git/
+
+# Docker generated/runtime data
+docker-volumes/
