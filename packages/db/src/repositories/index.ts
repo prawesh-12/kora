@@ -290,16 +290,14 @@ export function createRepositories(tenantId: string, conn: Database = db()) {
             return existing!;
           }
           if (results.length > 0) {
-            await tx
-              .insert(s.evaluationResults)
-              .values(
-                results.map((r) => ({
-                  ...r,
-                  id: newId('evr'),
-                  tenantId,
-                  evaluationId: created.id,
-                })),
-              );
+            await tx.insert(s.evaluationResults).values(
+              results.map((r) => ({
+                ...r,
+                id: newId('evr'),
+                tenantId,
+                evaluationId: created.id,
+              })),
+            );
           }
           return created;
         });

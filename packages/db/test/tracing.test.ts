@@ -93,7 +93,7 @@ describe('trace writer', () => {
     const steps = await withTenant(TENANT).steps.listForRun(run.runId);
     const failed = steps.find((s) => s.status === 'failed');
     expect(failed).toBeDefined();
-    expect((failed?.payload as { error: string }).error).toBe('upstream exploded');
+    expect((failed!.payload as { error: string }).error).toBe('upstream exploded');
   });
 
   it('assembles a crashed run that never called finish', async () => {
