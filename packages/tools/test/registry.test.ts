@@ -4,15 +4,18 @@ import { ToolRegistry } from '../src/registry.js';
 import { registry } from '../src/tools/index.js';
 
 describe('tool registry', () => {
-  it('holds exactly the six M0 tools', () => {
+  it('holds exactly the nine tools', () => {
     expect(
       registry
         .list()
         .map((t) => t.name)
         .sort(),
     ).toEqual([
+      'cancel_order',
       'check_policy',
+      'create_refund',
       'create_replacement',
+      'create_ticket',
       'escalate_to_human',
       'get_customer',
       'get_order',
@@ -49,9 +52,11 @@ describe('tool registry', () => {
     }
   });
 
-  it('gives every write tool a verify or marks it read-only', () => {
-    const write = registry.get('create_replacement', 1);
-    expect(write.verify).toBeTypeOf('function');
+  it('gives every write tool a verify', () => {
+    for (const tool of registry.list()) {
+      if (tool.sideEffect === 'read' || tool.name === 'escalate_to_human') continue;
+      expect(tool.verify, `${tool.name} has no verify`).toBeTypeOf('function');
+    }
   });
 });
 

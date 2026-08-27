@@ -59,8 +59,8 @@ export function evaluatePolicy(
       for (const c of rule.conditions) factsUsed[c.fact] = facts[c.fact];
       return {
         decision: rule.decision,
-        policyKey: policy.key,
-        policyVersion: policy.version,
+        policyKey: rule.policyKey,
+        policyVersion: rule.policyVersion,
         ruleId: rule.id,
         reason: rule.reason,
         factsUsed,

@@ -17,6 +17,7 @@ export const checkPolicy = defineTool({
   inputSchema: z.object({
     action: z.string().min(1),
     orderId: z.string().optional(),
+    amountMinor: z.number().int().positive().optional(),
   }),
   outputSchema: z.object({
     decision: z.enum(['allow', 'deny', 'require_approval']),
@@ -32,7 +33,7 @@ export const checkPolicy = defineTool({
   idempotent: true,
   inputExamples: [{ input: { action: 'create_replacement', orderId: '9832' } }],
   async execute(input, ctx) {
-    const facts = buildFacts(input.action, ctx.gathered, now());
+    const facts = buildFacts(input.action, ctx.gathered, now(), input);
     const result = evaluatePolicy(ctx.policy, facts, now());
 
     // Record the evaluation for the action that was asked about. Without this, a

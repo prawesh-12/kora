@@ -221,6 +221,8 @@ function recordOutcome(def: ToolDefinition, outcome: ToolOutcome<unknown>, state
   // Facts for the policy engine come from here, and only from here.
   if (def.name === 'get_order') {
     state.gathered.order = output as unknown as NonNullable<GatheredContext['order']>;
+    const refunded = (output as { refundedAmountMinor?: number }).refundedAmountMinor;
+    if (typeof refunded === 'number') state.gathered.refundedAmountMinor = refunded;
   }
   if (def.name === 'get_customer') {
     state.gathered.customer = output as unknown as NonNullable<GatheredContext['customer']>;

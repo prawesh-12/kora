@@ -9,6 +9,12 @@ export interface PolicyFacts {
   itemCategory?: string;
   daysSinceDelivery?: number;
   alreadyReplaced?: boolean;
+  /** Refund facts, all derived from the order record. */
+  orderTotalMinor?: number;
+  refundedAmountMinor?: number;
+  requestedAmountMinor?: number;
+  fullyRefunded?: boolean;
+  exceedsRemaining?: boolean;
   channel: 'web';
   [k: string]: unknown;
 }
@@ -34,6 +40,9 @@ export interface Condition {
 
 export interface CompiledRule {
   id: string;
+  /** Which file in the bundle this rule came from, so a check names its source. */
+  policyKey: string;
+  policyVersion: string;
   decision: PolicyDecision;
   reason: string;
   conditions: Condition[];
@@ -46,4 +55,6 @@ export interface CompiledPolicy {
   currency: string;
   default: PolicyDecision;
   rules: CompiledRule[];
+  /** One entry per file in the bundle, in the order they are checked. */
+  sources: Array<{ key: string; version: string }>;
 }

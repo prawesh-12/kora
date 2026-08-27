@@ -4,6 +4,8 @@ description: Acme Store damaged item replacement rules
 currency: INR
 default: require_approval
 
+# This is the first file in the bundle, so its rules are checked first. The read
+# and escalation rules below are the bundle's, not just this file's.
 rules:
   - id: reads_always_allowed
     when:
@@ -16,6 +18,12 @@ rules:
       action: { eq: escalate_to_human }
     decision: allow
     reason: Escalation is always permitted
+
+  - id: ticket_always_allowed
+    when:
+      action: { eq: create_ticket }
+    decision: allow
+    reason: Raising an internal ticket is always permitted
 
   - id: outside_return_window
     when:

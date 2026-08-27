@@ -61,3 +61,60 @@ describe('buildFacts', () => {
     expect(facts.daysSinceDelivery).toBe(12);
   });
 });
+
+describe('refund facts', () => {
+  const refundOrder = { ...order, totalAmountMinor: 349900 };
+
+  it('derives the remaining balance from the order and what is already refunded', () => {
+    const facts = buildFacts(
+      'create_refund',
+      { order: refundOrder, refundedAmountMinor: 100000 },
+      AT,
+      { amountMinor: 200000 },
+    );
+    expect(facts).toMatchObject({
+      orderTotalMinor: 349900,
+      refundedAmountMinor: 100000,
+      requestedAmountMinor: 200000,
+      fullyRefunded: false,
+      exceedsRemaining: false,
+    });
+  });
+
+  it('flags a request for more than what is left', () => {
+    const facts = buildFacts(
+      'create_refund',
+      { order: refundOrder, refundedAmountMinor: 300000 },
+      AT,
+      { amountMinor: 100000 },
+    );
+    expect(facts.exceedsRemaining).toBe(true);
+  });
+
+  it('flags an order that is already fully refunded', () => {
+    const facts = buildFacts(
+      'create_refund',
+      { order: refundOrder, refundedAmountMinor: 349900 },
+      AT,
+      { amountMinor: 1 },
+    );
+    expect(facts.fullyRefunded).toBe(true);
+  });
+
+  it('omits the requested amount when the input does not carry an integer', () => {
+    for (const amountMinor of [undefined, '200000', 1.5, null]) {
+      const facts = buildFacts('create_refund', { order: refundOrder }, AT, { amountMinor });
+      expect(facts.requestedAmountMinor).toBeUndefined();
+      expect(facts.exceedsRemaining).toBeUndefined();
+    }
+  });
+
+  it('compares the requested amount against the record, never trusting it alone', () => {
+    // The model could ask for anything. The comparison is what makes it safe.
+    const facts = buildFacts('create_refund', { order: refundOrder }, AT, {
+      amountMinor: 99_999_999,
+    });
+    expect(facts.exceedsRemaining).toBe(true);
+    expect(facts.orderTotalMinor).toBe(349900);
+  });
+});

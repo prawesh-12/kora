@@ -8,6 +8,9 @@ allowedTools:
   - { name: search_knowledge,   version: 1 }
   - { name: check_policy,       version: 1 }
   - { name: create_replacement, version: 1 }
+  - { name: create_refund,      version: 1 }
+  - { name: cancel_order,       version: 1 }
+  - { name: create_ticket,      version: 1 }
   - { name: escalate_to_human,  version: 1 }
 permissions:
   - orders:read
@@ -15,5 +18,10 @@ permissions:
   - knowledge:read
   - policy:read
   - orders:write
+  - payments:write
+  - tickets:write
   - escalation:write
-policy: config/policies/acme-damaged-order.yaml
+policyBundle:
+  - config/policies/acme-damaged-order.yaml
+  - config/policies/acme-refunds.yaml
+  - config/policies/acme-cancellations.yaml

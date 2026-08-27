@@ -140,7 +140,7 @@ export async function executeTool(args: ExecuteToolArgs): Promise<ToolOutcome<un
   }
 
   // 5. Policy check. Always written, including on allow.
-  const facts = buildFacts(tool.name, gathered, now());
+  const facts = buildFacts(tool.name, gathered, now(), input);
   const decision = evaluatePolicy(policy, facts, now());
   const check = await repos.policyChecks.create({
     runId: run.runId,

@@ -1,4 +1,4 @@
-import { compilePolicy, logger, newId, now, serverEnv } from '@kora/core';
+import { compilePolicyBundle, logger, newId, now, serverEnv } from '@kora/core';
 import { type RunHandle, closeDb, sql, startRun, withTenant } from '@kora/db';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -7,11 +7,13 @@ import { registry } from '../src/tools/index.js';
 
 export const TENANT = 'ten_pipeline_test';
 
-export const policy = compilePolicy(
-  readFileSync(
-    join(import.meta.dirname, '../../../config/policies/acme-damaged-order.yaml'),
-    'utf8',
-  ),
+const POLICY_FILES = ['acme-damaged-order', 'acme-refunds', 'acme-cancellations'];
+
+export const policy = compilePolicyBundle(
+  POLICY_FILES.map((name) => ({
+    key: name,
+    yaml: readFileSync(join(import.meta.dirname, `../../../config/policies/${name}.yaml`), 'utf8'),
+  })),
 );
 
 export const ALL_TOOLS = registry.list().map((t) => ({ name: t.name, version: t.version }));

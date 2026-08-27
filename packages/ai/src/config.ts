@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
-import { type CompiledPolicy, ConfigError, compilePolicy } from '@kora/core';
+import { basename, join } from 'node:path';
+import { type CompiledPolicy, ConfigError, compilePolicyBundle } from '@kora/core';
 import { z } from 'zod';
 import { parse as parseYaml } from 'yaml';
 
@@ -13,7 +13,7 @@ const schema = z
     confidenceThreshold: z.number().min(0).max(1),
     allowedTools: z.array(z.object({ name: z.string(), version: z.number().int() })).min(1),
     permissions: z.array(z.string()).min(1),
-    policy: z.string(),
+    policyBundle: z.array(z.string()).min(1),
   })
   .strict();
 
@@ -39,7 +39,12 @@ export function loadAgentConfig(path = join(REPO_ROOT, 'config/agent.yaml')): Ag
     );
   }
 
-  const compiledPolicy = compilePolicy(readFileSync(join(REPO_ROOT, parsed.data.policy), 'utf8'));
+  const compiledPolicy = compilePolicyBundle(
+    parsed.data.policyBundle.map((file) => ({
+      key: basename(file, '.yaml'),
+      yaml: readFileSync(join(REPO_ROOT, file), 'utf8'),
+    })),
+  );
   cached = {
     ...parsed.data,
     configVersion: createHash('sha256').update(source).digest('hex').slice(0, 16),

@@ -11,6 +11,7 @@ export const orderSchema = z.object({
     'delivered',
     'cancelled',
     'replacement_created',
+    'refunded',
   ]),
   items: z.array(
     z.object({
@@ -26,6 +27,37 @@ export const orderSchema = z.object({
   placedAt: z.string(),
   deliveredAt: z.string().nullable(),
   replacementIds: z.array(z.string()),
+  refundIds: z.array(z.string()).default([]),
+  refundedAmountMinor: z.number().int().default(0),
+  cancellationIds: z.array(z.string()).default([]),
+});
+
+export const refundSchema = z.object({
+  id: z.string(),
+  orderId: z.string(),
+  amountMinor: z.number().int(),
+  currency: z.string(),
+  reason: z.enum(['damaged', 'missing_item', 'wrong_item', 'not_as_described']),
+  status: z.enum(['created', 'processing', 'settled']),
+  createdAt: z.string(),
+});
+
+export const cancellationSchema = z.object({
+  id: z.string(),
+  orderId: z.string(),
+  reason: z.enum(['customer_request', 'duplicate_order', 'address_problem']),
+  status: z.enum(['created', 'processing', 'cancelled']),
+  createdAt: z.string(),
+});
+
+export const ticketSchema = z.object({
+  id: z.string(),
+  customerId: z.string(),
+  orderId: z.string().nullable(),
+  subject: z.string(),
+  priority: z.enum(['low', 'normal', 'high']),
+  status: z.enum(['open', 'closed']),
+  createdAt: z.string(),
 });
 
 export const customerSchema = z.object({
@@ -46,6 +78,31 @@ export const replacementSchema = z.object({
 export type OrderResponse = z.infer<typeof orderSchema>;
 export type CustomerResponse = z.infer<typeof customerSchema>;
 export type ReplacementResponse = z.infer<typeof replacementSchema>;
+export type RefundResponse = z.infer<typeof refundSchema>;
+export type CancellationResponse = z.infer<typeof cancellationSchema>;
+export type TicketResponse = z.infer<typeof ticketSchema>;
+
+export interface CreateRefundRequest {
+  orderId: string;
+  amountMinor: number;
+  reason: 'damaged' | 'missing_item' | 'wrong_item' | 'not_as_described';
+  idempotencyKey: string;
+}
+
+export interface CancelOrderRequest {
+  orderId: string;
+  reason: 'customer_request' | 'duplicate_order' | 'address_problem';
+  idempotencyKey: string;
+}
+
+export interface CreateTicketRequest {
+  customerId: string;
+  orderId?: string | undefined;
+  subject: string;
+  body: string;
+  priority: 'low' | 'normal' | 'high';
+  idempotencyKey: string;
+}
 
 export interface CreateReplacementRequest {
   orderId: string;
@@ -155,6 +212,14 @@ export interface AcmeClient {
   createReplacement(req: CreateReplacementRequest, opts: RequestOpts): Promise<ReplacementResponse>;
   getReplacement(id: string, opts: RequestOpts): Promise<ReplacementResponse>;
   listReplacements(orderId: string, opts: RequestOpts): Promise<ReplacementResponse[]>;
+  createRefund(req: CreateRefundRequest, opts: RequestOpts): Promise<RefundResponse>;
+  getRefund(id: string, opts: RequestOpts): Promise<RefundResponse>;
+  listRefunds(orderId: string, opts: RequestOpts): Promise<RefundResponse[]>;
+  cancelOrder(req: CancelOrderRequest, opts: RequestOpts): Promise<CancellationResponse>;
+  getCancellation(id: string, opts: RequestOpts): Promise<CancellationResponse>;
+  listCancellations(orderId: string, opts: RequestOpts): Promise<CancellationResponse[]>;
+  createTicket(req: CreateTicketRequest, opts: RequestOpts): Promise<TicketResponse>;
+  getTicket(id: string, opts: RequestOpts): Promise<TicketResponse>;
 }
 
 export const acme: AcmeClient = {
@@ -179,4 +244,41 @@ export const acme: AcmeClient = {
         opts,
       )
     ).replacements,
+
+  createRefund: (req, opts) =>
+    request('/refunds', refundSchema, opts, { method: 'POST', body: JSON.stringify(req) }),
+
+  getRefund: (id, opts) => request(`/refunds/${encodeURIComponent(id)}`, refundSchema, opts),
+
+  listRefunds: async (orderId, opts) =>
+    (
+      await request(
+        `/refunds?orderId=${encodeURIComponent(orderId)}`,
+        z.object({ refunds: z.array(refundSchema) }),
+        opts,
+      )
+    ).refunds,
+
+  cancelOrder: (req, opts) =>
+    request('/cancellations', cancellationSchema, opts, {
+      method: 'POST',
+      body: JSON.stringify(req),
+    }),
+
+  getCancellation: (id, opts) =>
+    request(`/cancellations/${encodeURIComponent(id)}`, cancellationSchema, opts),
+
+  listCancellations: async (orderId, opts) =>
+    (
+      await request(
+        `/cancellations?orderId=${encodeURIComponent(orderId)}`,
+        z.object({ cancellations: z.array(cancellationSchema) }),
+        opts,
+      )
+    ).cancellations,
+
+  createTicket: (req, opts) =>
+    request('/tickets', ticketSchema, opts, { method: 'POST', body: JSON.stringify(req) }),
+
+  getTicket: (id, opts) => request(`/tickets/${encodeURIComponent(id)}`, ticketSchema, opts),
 };

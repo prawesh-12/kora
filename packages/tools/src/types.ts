@@ -78,6 +78,8 @@ export interface GatheredContext {
     replacementIds: string[];
   };
   customer?: { id: string; name: string; email: string };
+  /** Total already refunded on the order, read back from the business system. */
+  refundedAmountMinor?: number;
   retrievedChunkIds?: string[];
   intent?: string;
   lastPolicyDecision?: PolicyDecision;
