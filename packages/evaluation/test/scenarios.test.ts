@@ -1,7 +1,7 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { scenarioSchema } from '../../../scenarios/schema.js';
+import { scenarioSchema } from '../src/scenarios/schema.js';
 
 const SCENARIO_DIR = join(import.meta.dirname, '../../../scenarios');
 const SEEDED_ORDERS = new Set(['9832', '9833', '9834', '9835', '9836']);
@@ -30,7 +30,11 @@ describe('scenario files', () => {
       const parsed = scenarioSchema.safeParse(raw);
       if (!parsed.success) {
         throw new Error(
-          parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('\n'),
+          parsed.error.issues
+            .map(
+              (i: { path: PropertyKey[]; message: string }) => `${i.path.join('.')}: ${i.message}`,
+            )
+            .join('\n'),
         );
       }
     });

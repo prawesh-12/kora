@@ -13,7 +13,28 @@ export type AgentState =
   | 'ACTION_FAILED'
   | 'NEEDS_HUMAN';
 
-export type Intent = 'DAMAGED_ORDER' | 'HUMAN_REQUEST' | 'OUT_OF_SCOPE';
+export type Intent =
+  | 'ORDER_STATUS'
+  | 'DAMAGED_ORDER'
+  | 'CANCEL_ORDER'
+  | 'REFUND_REQUEST'
+  | 'HUMAN_REQUEST'
+  | 'OUT_OF_SCOPE';
+
+export const INTENTS: readonly Intent[] = [
+  'ORDER_STATUS',
+  'DAMAGED_ORDER',
+  'CANCEL_ORDER',
+  'REFUND_REQUEST',
+  'HUMAN_REQUEST',
+  'OUT_OF_SCOPE',
+];
+
+/** Intents that can never lead to a write, whatever the model proposes. */
+export const READ_ONLY_INTENTS: readonly Intent[] = ['ORDER_STATUS'];
+
+/** Intents that hand over immediately, with no context gathering at all. */
+export const HANDOVER_INTENTS: readonly Intent[] = ['HUMAN_REQUEST', 'OUT_OF_SCOPE'];
 
 export type PolicyDecision = 'allow' | 'deny' | 'require_approval';
 

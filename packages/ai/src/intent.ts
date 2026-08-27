@@ -8,7 +8,14 @@ import { INTENT_SYSTEM_PROMPT, buildIntentPrompt } from './prompts/intent.js';
 const RECENT_MESSAGES = 6;
 
 const intentSchema = z.object({
-  intent: z.enum(['DAMAGED_ORDER', 'HUMAN_REQUEST', 'OUT_OF_SCOPE']),
+  intent: z.enum([
+    'ORDER_STATUS',
+    'DAMAGED_ORDER',
+    'CANCEL_ORDER',
+    'REFUND_REQUEST',
+    'HUMAN_REQUEST',
+    'OUT_OF_SCOPE',
+  ]),
   confidence: z.number().min(0).max(1),
   orderReference: z.string().nullable(),
   evidence: z.string().max(200),

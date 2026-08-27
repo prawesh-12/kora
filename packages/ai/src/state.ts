@@ -1,5 +1,10 @@
 import { type AgentState, KoraError } from '@kora/core';
 
+/**
+ * `RESPONDING -> IDENTIFYING_INTENT` is how a customer changes their mind
+ * mid-conversation. It resets the intent but keeps the context already gathered,
+ * so the agent does not fetch the same order twice.
+ */
 export const TRANSITIONS: Record<AgentState, AgentState[]> = {
   NEW: ['IDENTIFYING_INTENT'],
   IDENTIFYING_INTENT: ['GATHERING_CONTEXT', 'NEEDS_HUMAN'],
@@ -9,7 +14,7 @@ export const TRANSITIONS: Record<AgentState, AgentState[]> = {
   WAITING_FOR_TOOL: ['VERIFYING', 'ACTION_FAILED'],
   VERIFYING: ['RESPONDING', 'NEEDS_HUMAN'],
   ACTION_FAILED: ['WAITING_FOR_TOOL', 'NEEDS_HUMAN'],
-  RESPONDING: ['RESOLVED', 'NEEDS_HUMAN'],
+  RESPONDING: ['RESOLVED', 'NEEDS_HUMAN', 'IDENTIFYING_INTENT'],
   RESOLVED: ['IDENTIFYING_INTENT'],
   NEEDS_HUMAN: [],
 };

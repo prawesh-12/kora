@@ -1,108 +1,22 @@
+import { HUMAN_PHRASES, ORDER_REF, intentPlanner } from './intent-planner.js';
 import type { MockPlanner, MockPlannerContext, MockTurn } from './language-model.js';
 
-const ORDER_REF = /\b(\d{4,})\b/;
-
-const HUMAN_PHRASES = [
-  'talk to a human',
-  'talk to a person',
-  'speak to a human',
-  'speak to a person',
-  'real person',
-  'human agent',
-  'put me through',
-  "don't want to talk to a bot",
-  'do not want to talk to a bot',
-  'not a bot',
-  'agent please',
-];
-
-const DAMAGE_PHRASES = [
-  'broken',
-  'damaged',
-  'smashed',
-  'cracked',
-  'shattered',
-  'arrived broken',
-  'came smashed',
-  'faulty',
-  'defective',
-];
-
-/**
- * The classifier prompt wraps the transcript in a tagged block and ends with an
- * instruction line, so the last line of the user message is not the customer's.
- */
-function lastCustomerTurn(ctx: MockPlannerContext): string {
-  const customerLines = ctx.customerText
-    .split('\n')
-    .map((l) => l.trim())
-    .filter((l) => l.startsWith('Customer:'))
-    .map((l) => l.slice('Customer:'.length).trim());
-  return (customerLines.at(-1) ?? ctx.customerText).toLowerCase();
-}
-
-/**
- * The classifier. Recognised by the JSON response format the intent step asks for.
- */
-export const intentPlanner: MockPlanner = (ctx) => {
-  if (ctx.options.responseFormat?.type !== 'json') return undefined;
-
-  const text = lastCustomerTurn(ctx);
-  const orderReference = text.match(ORDER_REF)?.[1] ?? null;
-
-  const wantsHuman = HUMAN_PHRASES.some((p) => text.includes(p));
-  const damaged = DAMAGE_PHRASES.some((p) => text.includes(p));
-
-  if (wantsHuman) {
-    return {
-      text: JSON.stringify({
-        intent: 'HUMAN_REQUEST',
-        confidence: 0.97,
-        orderReference,
-        evidence: 'the customer asked to be put through to a person',
-      }),
-    };
-  }
-
-  if (damaged && orderReference) {
-    return {
-      text: JSON.stringify({
-        intent: 'DAMAGED_ORDER',
-        confidence: 0.94,
-        orderReference,
-        evidence: 'the customer reports a damaged item on a specific order',
-      }),
-    };
-  }
-
-  if (damaged) {
-    return {
-      text: JSON.stringify({
-        intent: 'DAMAGED_ORDER',
-        confidence: 0.62,
-        orderReference: null,
-        evidence: 'damage is mentioned but no order is identified',
-      }),
-    };
-  }
-
-  return {
-    text: JSON.stringify({
-      intent: 'OUT_OF_SCOPE',
-      confidence: 0.55,
-      orderReference,
-      evidence: 'the request does not match a supported workflow',
-    }),
-  };
-};
+export { intentPlanner };
 
 interface OrderView {
   id: string;
   status: string;
   items: Array<{ sku: string; category: string; quantity: number; unitAmountMinor: number }>;
   totalAmountMinor: number;
+  currency: string;
   deliveredAt: string | null;
   replacementIds: string[];
+}
+
+interface ToolFailure {
+  ok?: false;
+  reason?: string;
+  awaitingApproval?: boolean;
 }
 
 function findToolResult<T>(ctx: MockPlannerContext, toolName: string): T | null {
@@ -114,17 +28,22 @@ function findToolResult<T>(ctx: MockPlannerContext, toolName: string): T | null 
 }
 
 function isFailure(output: unknown): boolean {
-  return Boolean(output && typeof output === 'object' && (output as { ok?: boolean }).ok === false);
+  return Boolean(output && typeof output === 'object' && (output as ToolFailure).ok === false);
 }
 
 function called(ctx: MockPlannerContext, name: string): boolean {
   return ctx.calledTools.includes(name);
 }
 
+function money(amountMinor: number, currency: string): string {
+  return `${currency} ${(amountMinor / 100).toLocaleString('en-IN')}`;
+}
+
 /**
- * The agent loop. Walks the damaged-order workflow one tool at a time, reacting to
- * what the previous tool actually returned. It never invents an id or an amount:
- * every fact in the final message comes out of a tool result.
+ * The offline agent. Walks whichever workflow the exposed tool set implies, one
+ * tool at a time, reacting to what the previous tool actually returned. It never
+ * invents an id or an amount: every fact in a final message comes from a tool
+ * result or from the order record.
  */
 export const agentPlanner: MockPlanner = (ctx): MockTurn | undefined => {
   if (ctx.options.responseFormat?.type === 'json') return undefined;
@@ -133,11 +52,9 @@ export const agentPlanner: MockPlanner = (ctx): MockTurn | undefined => {
   const text = ctx.customerText.toLowerCase();
   const orderId = text.match(ORDER_REF)?.[1];
 
-  // The escalation tool is terminal, so the loop stops right after it. Say the
-  // customer-facing part in the same turn or it never gets said.
-  const escalate = (reason: string, text: string): MockTurn => ({
-    text,
-    toolCalls: [{ toolName: 'escalate_to_human', input: { reason, summary: text } }],
+  const escalate = (reason: string, message: string): MockTurn => ({
+    text: message,
+    toolCalls: [{ toolName: 'escalate_to_human', input: { reason, summary: message } }],
   });
 
   if (HUMAN_PHRASES.some((p) => text.includes(p))) {
@@ -158,92 +75,81 @@ export const agentPlanner: MockPlanner = (ctx): MockTurn | undefined => {
     return { toolCalls: [{ toolName: 'get_order', input: { orderId } }] };
   }
 
-  const order = findToolResult<OrderView | { ok: false }>(ctx, 'get_order');
-  if (!order || isFailure(order)) {
+  const fetched = findToolResult<OrderView | ToolFailure>(ctx, 'get_order');
+  if (!fetched || isFailure(fetched)) {
     return escalate(
       'TOOL_FAILED',
       `I could not look up order ${orderId} just now, so I have asked a colleague to check it. I have not made any changes.`,
     );
   }
-  const found = order as OrderView;
+  const order = fetched as OrderView;
+
+  const action = has('create_refund')
+    ? 'create_refund'
+    : has('cancel_order')
+      ? 'cancel_order'
+      : has('create_replacement')
+        ? 'create_replacement'
+        : null;
+
+  // A status question exposes no write tool at all, so it is answered from the
+  // order record alone. No policy check, nothing to gate.
+  if (!action) {
+    const delivered = order.deliveredAt
+      ? `It was delivered on ${order.deliveredAt.slice(0, 10)}.`
+      : 'It has not been delivered yet.';
+    return { text: `Order ${order.id} is currently ${order.status}. ${delivered}` };
+  }
 
   if (!called(ctx, 'search_knowledge') && has('search_knowledge')) {
     return {
       toolCalls: [
         {
           toolName: 'search_knowledge',
-          input: { query: 'damaged item replacement policy', topic: 'returns' },
+          input: { query: 'returns refunds cancellations policy', topic: 'returns' },
         },
       ],
     };
   }
 
   const knowledge = findToolResult<{ chunks?: unknown[] }>(ctx, 'search_knowledge');
-  const knowledgeEmpty = !knowledge || (knowledge.chunks?.length ?? 0) === 0;
-  if (knowledgeEmpty) {
+  if (!knowledge || (knowledge.chunks?.length ?? 0) === 0) {
     return escalate(
       'UNSUPPORTED_SCENARIO',
-      'I could not confirm the current replacement policy, so I have not made any changes. A colleague will confirm what we can do and get back to you.',
+      'I could not confirm the current policy, so I have not made any changes. A colleague will confirm what we can do and get back to you.',
     );
   }
 
   if (!called(ctx, 'check_policy') && has('check_policy')) {
-    return {
-      toolCalls: [
-        { toolName: 'check_policy', input: { action: 'create_replacement', orderId: found.id } },
-      ],
-    };
+    return { toolCalls: [{ toolName: 'check_policy', input: { action, orderId: order.id } }] };
   }
 
   const policy = findToolResult<{ decision?: string; reason?: string }>(ctx, 'check_policy');
-
   if (policy?.decision === 'deny') {
+    return { text: `I am not able to do that for order ${order.id}. ${policy.reason}.` };
+  }
+
+  if (!called(ctx, action)) {
+    return { toolCalls: [{ toolName: action, input: inputFor(action, order) }] };
+  }
+
+  const result = findToolResult<Record<string, unknown> & ToolFailure>(ctx, action);
+
+  if (result?.awaitingApproval) {
     return {
-      text: `I am not able to arrange a replacement for order ${found.id}. ${policy.reason}.`,
+      text: 'This one needs a quick check by a colleague before I can go ahead. I will come back to you as soon as it is approved.',
     };
   }
 
-  if (!called(ctx, 'create_replacement') && has('create_replacement')) {
-    const item = found.items[0];
-    return {
-      toolCalls: [
-        {
-          toolName: 'create_replacement',
-          input: {
-            orderId: found.id,
-            items: [{ sku: item?.sku ?? 'UNKNOWN', quantity: item?.quantity ?? 1 }],
-            reason: 'damaged',
-          },
-        },
-      ],
-    };
-  }
-
-  const replacement = findToolResult<{
-    id?: string;
-    ok?: boolean;
-    reason?: string;
-    awaitingApproval?: boolean;
-  }>(ctx, 'create_replacement');
-
-  // Waiting on a person is not a failure, and must not escalate.
-  if (replacement?.awaitingApproval) {
-    return {
-      text: `This one needs a quick check by a colleague before I can send it. I will come back to you as soon as it is approved.`,
-    };
-  }
-
-  if (replacement && replacement.ok === false) {
+  if (result && result.ok === false) {
     return escalate(
       'TOOL_FAILED',
-      `I was not able to complete the replacement for order ${found.id} just now. I have not confirmed any change, and a colleague will pick this up and confirm shortly.`,
+      `I was not able to complete this for order ${order.id} just now. I have not confirmed any change, and a colleague will pick it up and confirm shortly.`,
     );
   }
 
-  if (replacement?.id) {
-    return {
-      text: `Thanks for letting us know. I have arranged a replacement for order ${found.id}. Your replacement reference is ${replacement.id} and it is on its way.`,
-    };
+  if (result?.id) {
+    return { text: confirmationFor(action, order, result) };
   }
 
   if (called(ctx, 'escalate_to_human')) {
@@ -255,5 +161,39 @@ export const agentPlanner: MockPlanner = (ctx): MockTurn | undefined => {
     'I am not able to complete this myself, so a colleague will pick it up and come back to you.',
   );
 };
+
+function inputFor(action: string, order: OrderView): Record<string, unknown> {
+  const item = order.items[0];
+  switch (action) {
+    case 'create_refund':
+      return { orderId: order.id, amountMinor: order.totalAmountMinor, reason: 'damaged' };
+    case 'cancel_order':
+      return { orderId: order.id, reason: 'customer_request' };
+    default:
+      return {
+        orderId: order.id,
+        items: [{ sku: item?.sku ?? 'UNKNOWN', quantity: item?.quantity ?? 1 }],
+        reason: 'damaged',
+      };
+  }
+}
+
+function confirmationFor(
+  action: string,
+  order: OrderView,
+  result: Record<string, unknown>,
+): string {
+  switch (action) {
+    case 'create_refund':
+      return `Thanks for letting us know. I have arranged a refund of ${money(
+        Number(result.amountMinor ?? order.totalAmountMinor),
+        String(result.currency ?? order.currency),
+      )} for order ${order.id}. Your refund reference is ${result.id}.`;
+    case 'cancel_order':
+      return `Order ${order.id} has been cancelled. Your cancellation reference is ${result.id} and nothing will be shipped.`;
+    default:
+      return `Thanks for letting us know. I have arranged a replacement for order ${order.id}. Your replacement reference is ${result.id} and it is on its way.`;
+  }
+}
 
 export const DEFAULT_PLANNERS: MockPlanner[] = [intentPlanner, agentPlanner];

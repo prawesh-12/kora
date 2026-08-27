@@ -2,7 +2,9 @@ import {
   type AgentState,
   type DeploymentMode,
   type EscalationReason,
+  HANDOVER_INTENTS,
   type Intent,
+  READ_ONLY_INTENTS,
   type RunOutcome,
   childLogger,
   now,
@@ -27,8 +29,23 @@ import { getModel } from './models.js';
 import { assemblePrompt } from './prompts/assemble.js';
 import { assertTransition } from './state.js';
 
-/** Read tools are exposed first; the write tool only appears once an order exists. */
+/** Read tools are exposed first; a write tool only appears once an order exists. */
 const READ_TOOLS = ['get_order', 'get_customer', 'search_knowledge', 'check_policy'];
+
+/**
+ * Which write tool each intent is allowed to reach. A tool absent from this map
+ * is never exposed for that intent, whatever the model proposes, so
+ * `gateToolsByState` removes a whole class of wrong-tool errors without any
+ * prompt engineering. `ORDER_STATUS` has none by design.
+ */
+const WRITE_TOOLS_BY_INTENT: Record<Intent, string[]> = {
+  ORDER_STATUS: [],
+  DAMAGED_ORDER: ['create_replacement'],
+  CANCEL_ORDER: ['cancel_order'],
+  REFUND_REQUEST: ['create_refund'],
+  HUMAN_REQUEST: [],
+  OUT_OF_SCOPE: [],
+};
 
 export interface TurnResult {
   runId: string;
@@ -353,19 +370,19 @@ export async function runAgentTurn(args: {
   }
 
   // HUMAN_REQUEST and OUT_OF_SCOPE hand over with zero context-gathering calls.
-  if (intent === 'HUMAN_REQUEST') {
-    return handOver(
-      'CUSTOMER_REQUESTED',
-      'Of course. I have passed you to a colleague and someone will be with you shortly.',
-      intent,
-    );
-  }
-  if (intent === 'OUT_OF_SCOPE') {
-    return handOver(
-      'UNSUPPORTED_SCENARIO',
-      'That is not something I can help with directly. I have passed it to a colleague who will come back to you shortly.',
-      intent,
-    );
+  // These hand over with zero context-gathering calls.
+  if (HANDOVER_INTENTS.includes(intent)) {
+    return intent === 'HUMAN_REQUEST'
+      ? handOver(
+          'CUSTOMER_REQUESTED',
+          'Of course. I have passed you to a colleague and someone will be with you shortly.',
+          intent,
+        )
+      : handOver(
+          'UNSUPPORTED_SCENARIO',
+          'That is not something I can help with directly. I have passed it to a colleague who will come back to you shortly.',
+          intent,
+        );
   }
 
   await move('GATHERING_CONTEXT');
@@ -383,6 +400,10 @@ export async function runAgentTurn(args: {
 
   const tools = buildTools({ config, ctx, deploymentMode, run, state, faults: args.faults ?? {} });
 
+  // Recorded so an operator can prove from the trace which tools were ever on the
+  // table, rather than inferring it from what happened to be called.
+  const exposedTools: string[][] = [];
+
   const agent = new ToolLoopAgent({
     model: getModel('agent'),
     instructions: assemblePrompt({
@@ -393,13 +414,10 @@ export async function runAgentTurn(args: {
     }),
     tools,
     stopWhen: [stepCountIs(config.maxSteps), hasToolCall('escalate_to_human')],
-    prepareStep: ({ steps }) => {
-      // create_replacement only appears once an order has actually been fetched.
-      const active = state.gathered.order
-        ? config.allowedTools.map((t) => t.name)
-        : [...READ_TOOLS, 'escalate_to_human'];
-      void steps;
-      return { activeTools: active as never };
+    prepareStep: () => {
+      const activeTools = gateToolsByState(config, intent, state);
+      exposedTools.push(activeTools);
+      return { activeTools: activeTools as never };
     },
   });
 
@@ -409,7 +427,9 @@ export async function runAgentTurn(args: {
   try {
     const result = await agent.generate({ prompt: args.message });
     text = result.text.trim();
+    await run.record('model', { intent, exposedTools });
   } catch (e) {
+    await run.record('model', { intent, exposedTools }, 'failed');
     logger.error({ err: e }, 'the agent loop threw');
     return handOver(
       'TOOL_FAILED',
@@ -465,4 +485,26 @@ export async function runAgentTurn(args: {
   await run.record('response', { text });
   await move('RESOLVED');
   return finish(text, 'resolved_automatically', null, intent);
+}
+
+/**
+ * Narrows the tool set per step. Read tools are always available; a write tool
+ * appears only once an order has actually been fetched, and only if this intent
+ * is allowed to reach it.
+ */
+export function gateToolsByState(
+  config: AgentConfig,
+  intent: Intent,
+  state: Pick<TurnState, 'gathered'>,
+): string[] {
+  const registered = new Set(config.allowedTools.map((t) => t.name));
+  const active = [...READ_TOOLS, 'escalate_to_human'].filter((n) => registered.has(n));
+
+  if (READ_ONLY_INTENTS.includes(intent)) return active;
+  if (!state.gathered.order) return active;
+
+  for (const name of WRITE_TOOLS_BY_INTENT[intent]) {
+    if (registered.has(name)) active.push(name);
+  }
+  return active;
 }

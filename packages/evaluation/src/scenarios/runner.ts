@@ -269,13 +269,14 @@ export async function runScenarios(
     return 1;
   }
 
-  // Full reset once up front. The per-scenario reset is scoped to the orders that
-  // scenario touches, so without this the suite inherits whatever the last run left.
-  await resetAcmeOrders();
-
   let exitCode = 0;
 
   for (let pass = 1; pass <= repeat; pass++) {
+    // Full reset at the start of every pass. The per-scenario reset is scoped to
+    // the orders that scenario touches, so without this a pass inherits whatever
+    // the previous one left behind and the suite stops being reproducible.
+    await resetAcmeOrders();
+
     const results: ScenarioOutcome[] = [];
     // Sequential on purpose: the scenarios share one Acme dataset, and a scoped
     // reset for one order still races a run that is reading the same order.
