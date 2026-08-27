@@ -1,6 +1,12 @@
 'use client';
 
-import { ClipboardCheck, LayoutDashboard, MessagesSquare } from 'lucide-react';
+import {
+  ClipboardCheck,
+  GaugeCircle,
+  LayoutDashboard,
+  ListFilter,
+  MessagesSquare,
+} from 'lucide-react';
 import { usePathname, useRouter } from 'next/navigation';
 import type { ReactNode } from 'react';
 import {
@@ -19,6 +25,8 @@ import {
 
 const NAV = [
   { href: '/ops', label: 'Overview', icon: LayoutDashboard },
+  { href: '/ops/evaluations', label: 'Evaluations', icon: GaugeCircle },
+  { href: '/ops/conversations', label: 'Conversations', icon: ListFilter },
   { href: '/ops/approvals', label: 'Approvals', icon: ClipboardCheck },
   { href: '/chat', label: 'Customer chat', icon: MessagesSquare },
 ];

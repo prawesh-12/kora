@@ -62,10 +62,12 @@ export function decodeCursor(raw: string): ConversationCursor | null {
  * get slower with every week of traffic, and a run inserted while an operator is
  * paging would shift every later page by one row.
  */
+const ts = (d: Date): SQL => sql`${d.toISOString()}::timestamptz`;
+
 export function conversationPageSql(f: ConversationListFilter): SQL {
   const parts: SQL[] = [sql`r.tenant_id = ${f.tenantId}`];
-  if (f.from) parts.push(sql`r.started_at >= ${f.from}`);
-  if (f.to) parts.push(sql`r.started_at <= ${f.to}`);
+  if (f.from) parts.push(sql`r.started_at >= ${ts(f.from)}`);
+  if (f.to) parts.push(sql`r.started_at <= ${ts(f.to)}`);
   if (f.intent) parts.push(sql`r.intent = ${f.intent}`);
   if (f.outcome) parts.push(sql`r.outcome = ${f.outcome}`);
   if (f.failureCode) parts.push(sql`e.failure_codes[1] = ${f.failureCode}`);
@@ -75,7 +77,7 @@ export function conversationPageSql(f: ConversationListFilter): SQL {
   }
   if (f.escalationStatus) parts.push(sql`esc.status = ${f.escalationStatus}`);
   if (f.cursor) {
-    parts.push(sql`(r.started_at, r.id) < (${f.cursor.startedAt}, ${f.cursor.id})`);
+    parts.push(sql`(r.started_at, r.id) < (${ts(f.cursor.startedAt)}, ${f.cursor.id})`);
   }
 
   return sql`

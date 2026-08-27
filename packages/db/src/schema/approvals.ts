@@ -1,3 +1,4 @@
+import { desc } from 'drizzle-orm';
 import { index, jsonb, pgTable, text, timestamp } from 'drizzle-orm/pg-core';
 import { user } from './auth.js';
 import { agentRuns } from './runs.js';
@@ -26,5 +27,7 @@ export const approvals = pgTable(
   (t) => [
     index('approvals_tenant_status_idx').on(t.tenantId, t.status),
     index('approvals_run_idx').on(t.runId),
+    index('approvals_tenant_status_expires_idx').on(t.tenantId, t.status, t.expiresAt),
+    index('approvals_tenant_decided_idx').on(t.tenantId, desc(t.decidedAt)),
   ],
 );

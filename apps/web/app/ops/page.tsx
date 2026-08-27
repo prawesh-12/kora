@@ -10,35 +10,45 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { loadMetrics, loadRecentRuns } from '@/lib/ops/data';
+import { formatDuration, formatRate, formatUsdMicros } from '@/lib/ops/format';
 
 export const dynamic = 'force-dynamic';
-
-function formatDuration(ms: number | null): string {
-  if (ms === null) return '—';
-  return ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(2)}s`;
-}
-
-function formatUsd(micros: number): string {
-  return `$${(micros / 1_000_000).toFixed(4)}`;
-}
 
 export default async function OverviewPage() {
   const [metrics, runs] = await Promise.all([loadMetrics(), loadRecentRuns()]);
 
-  const rate = metrics.verifiedResolutionRate;
   const cards: InsightCardItem[] = [
-    { id: 'total', label: 'Total runs', value: String(metrics.totalRuns), hint: 'last 30 days' },
-    { id: 'resolved', label: 'Resolved', value: String(metrics.resolved), tone: 'positive' },
-    { id: 'escalated', label: 'Escalated', value: String(metrics.escalated), tone: 'warning' },
-    { id: 'failed', label: 'Failed', value: String(metrics.failed), tone: 'danger' },
+    { id: 'total', label: 'Total runs', value: String(metrics.runs.total), hint: 'last 30 days' },
     {
       id: 'verified',
       label: 'Verified resolution rate',
-      value: rate === null ? '—' : `${(rate * 100).toFixed(0)}%`,
-      hint: `n = ${metrics.evaluatedCount}`,
+      value: formatRate(metrics.verifiedResolutionRate),
+      hint: `n = ${metrics.runs.evaluated}, ${metrics.runs.pending} pending`,
+      tone: 'positive',
     },
-    { id: 'latency', label: 'Average latency', value: formatDuration(metrics.avgLatencyMs) },
-    { id: 'cost', label: 'Average cost', value: formatUsd(metrics.avgCostUsdMicros) },
+    {
+      id: 'automation',
+      label: 'Automation rate',
+      value: formatRate(metrics.automationRate),
+      hint: `${metrics.runs.eligible} eligible runs`,
+    },
+    {
+      id: 'escalation',
+      label: 'Escalation rate',
+      value: formatRate(metrics.escalationRate),
+      tone: 'warning',
+    },
+    {
+      id: 'latency',
+      label: 'Latency p50 / p95',
+      value: `${formatDuration(metrics.latencyMs.p50)} / ${formatDuration(metrics.latencyMs.p95)}`,
+    },
+    {
+      id: 'cost',
+      label: 'Cost per resolution',
+      value: formatUsdMicros(metrics.costPerResolutionUsdMicros),
+      hint: `${metrics.verifiedResolutions} verified resolutions`,
+    },
   ];
 
   return (
@@ -54,7 +64,12 @@ export default async function OverviewPage() {
       <InsightCards items={cards} />
 
       <section className="space-y-3">
-        <h2 className="font-medium text-lg">Recent runs</h2>
+        <div className="flex items-baseline justify-between gap-3">
+          <h2 className="font-medium text-lg">Recent runs</h2>
+          <Link href="/ops/conversations" className="text-sm underline underline-offset-4">
+            All conversations
+          </Link>
+        </div>
         {runs.length === 0 ? (
           <p className="text-muted-foreground text-sm">No runs yet.</p>
         ) : (
@@ -83,7 +98,7 @@ export default async function OverviewPage() {
                     </TableCell>
                     <TableCell>{run.intent ?? '—'}</TableCell>
                     <TableCell>{run.outcome ?? 'in progress'}</TableCell>
-                    <TableCell>{run.finalState ?? '—'}</TableCell>
+                    <TableCell>{run.state ?? '—'}</TableCell>
                     <TableCell className="tabular-nums">{formatDuration(run.durationMs)}</TableCell>
                     <TableCell>
                       {run.verifiedResolution === null ? (

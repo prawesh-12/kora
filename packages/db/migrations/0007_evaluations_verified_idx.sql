@@ -1,0 +1,1 @@
+CREATE INDEX IF NOT EXISTS "evaluations_tenant_verified_idx" ON "evaluations" USING btree ("tenant_id","verified_resolution");

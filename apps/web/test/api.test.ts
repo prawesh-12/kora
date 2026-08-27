@@ -212,27 +212,25 @@ describe('operator routes', () => {
     expect(body.latestRunId).toMatch(/^run_/);
   });
 
-  it('reports metrics as zeros rather than NaN for an empty range', async () => {
+  it('reports no data rather than NaN for an empty range', async () => {
     await signInAsOperator();
 
     const res = await getMetrics(
-      new Request('http://localhost/api/metrics?from=1990-01-01&to=1990-01-02'),
+      new Request('http://localhost/api/metrics?from=1990-01-01&to=1990-03-01'),
     );
     expect(res.status).toBe(200);
 
     const body = (await res.json()) as {
-      totalRuns: number;
+      runs: { total: number; evaluated: number; pending: number };
       verifiedResolutionRate: number | null;
-      evaluatedCount: number;
-      avgLatencyMs: number;
-      avgCostUsdMicros: number;
+      automationRate: number | null;
+      costPerResolutionUsdMicros: number | null;
     };
     expect(body).toMatchObject({
-      totalRuns: 0,
+      runs: { total: 0, evaluated: 0, pending: 0 },
       verifiedResolutionRate: null,
-      evaluatedCount: 0,
-      avgLatencyMs: 0,
-      avgCostUsdMicros: 0,
+      automationRate: null,
+      costPerResolutionUsdMicros: null,
     });
   });
 });

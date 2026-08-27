@@ -1,5 +1,5 @@
 import { newId, now } from '@kora/core';
-import { type SQL, and, eq, sql } from 'drizzle-orm';
+import { type SQL, and, eq, lte, sql } from 'drizzle-orm';
 import { type Database, type Tx, db } from '../client.js';
 import * as s from '../schema/index.js';
 
@@ -47,6 +47,8 @@ export type DecisionOutcome =
   | { kind: 'expired'; approval: QueuedApproval }
   | { kind: 'conflict'; approval: QueuedApproval }
   | { kind: 'missing' };
+
+const ts = (d: Date): SQL => sql`${d.toISOString()}::timestamptz`;
 
 const EXPIRY_REPLY =
   'Nobody was able to review this in time, so we have not made the change automatically. ' +
@@ -141,7 +143,7 @@ export function approvalQueueSql(tenantId: string, f: ApprovalQueueFilter): SQL 
       inner.push(sql`true`);
       break;
   }
-  if (f.decidedSince) inner.push(sql`a.decided_at >= ${f.decidedSince}`);
+  if (f.decidedSince) inner.push(sql`a.decided_at >= ${ts(f.decidedSince)}`);
   if (f.toolName) inner.push(sql`a.tool_name = ${f.toolName}`);
 
   const outer: SQL[] = [sql`true`];
@@ -191,7 +193,7 @@ export async function expireOverdueApprovals(
       and(
         eq(s.approvals.tenantId, tenantId),
         eq(s.approvals.status, 'pending'),
-        sql`${s.approvals.expiresAt} <= ${at}`,
+        lte(s.approvals.expiresAt, at),
         ...(opts.id ? [eq(s.approvals.id, opts.id)] : []),
       ),
     )

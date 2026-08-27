@@ -1,6 +1,14 @@
-import type { AgentState, EscalationReason, Intent, RunOutcome } from '@kora/core';
+import type { AgentState, EscalationReason, FailureCode, Intent, RunOutcome } from '@kora/core';
+import { FAILURE_CODES, INTENTS, now } from '@kora/core';
 import type { TurnResult } from '@kora/ai';
-import type { AssembledTrace } from '@kora/db';
+import type {
+  AssembledTrace,
+  ConversationSummary,
+  FailureBucket,
+  Metrics,
+  QueuedApproval,
+  VrrPoint,
+} from '@kora/db';
 import { z } from 'zod';
 import { badRequest } from './errors';
 
@@ -17,10 +25,71 @@ export const ApprovalDecisionRequest = z.object({
   note: z.string().max(2000).optional(),
 });
 
+const OUTCOMES = [
+  'resolved_automatically',
+  'escalated',
+  'failed',
+  'abandoned',
+] as const satisfies readonly RunOutcome[];
+
+function literals<T extends string>(values: readonly T[]) {
+  return z.enum(values as unknown as [T, ...T[]]);
+}
+
+const bool = z.enum(['true', 'false']).transform((v) => v === 'true');
+
 export const MetricsQuery = z.object({
   from: z.coerce.date().optional(),
   to: z.coerce.date().optional(),
+  intent: literals(INTENTS).optional(),
+  agentConfigVersion: z.string().min(1).max(200).optional(),
 });
+
+export const ConversationsQuery = z.object({
+  cursor: z.string().min(1).max(500).optional(),
+  limit: z.coerce.number().int().min(1).max(200).default(50),
+  from: z.coerce.date().optional(),
+  to: z.coerce.date().optional(),
+  intent: literals(INTENTS).optional(),
+  outcome: literals(OUTCOMES).optional(),
+  failureCode: literals(FAILURE_CODES).optional(),
+  verified: bool.optional(),
+  escalated: bool.optional(),
+  escalationStatus: z.enum(['open', 'closed']).optional(),
+});
+
+export const ApprovalsQuery = z.object({
+  status: z.enum(['pending', 'decided', 'expired', 'all']).default('pending'),
+  scope: z.enum(['today']).optional(),
+  tool: z.string().min(1).max(100).optional(),
+  minValueMinor: z.coerce.number().int().min(0).optional(),
+  maxValueMinor: z.coerce.number().int().min(1).optional(),
+});
+
+const DEFAULT_WINDOW_DAYS = 30;
+const MAX_WINDOW_DAYS = 90;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * The cap is the whole reason live aggregation is safe without a rollup table.
+ * A wider range is refused rather than allowed to scan the table and time out.
+ */
+export function resolveWindow(
+  from: Date | undefined,
+  to: Date | undefined,
+): {
+  from: Date;
+  to: Date;
+} {
+  const until = to ?? now();
+  const since = from ?? new Date(until.getTime() - DEFAULT_WINDOW_DAYS * DAY_MS);
+
+  if (since.getTime() > until.getTime()) throw badRequest('`from` must not be after `to`');
+  if (until.getTime() - since.getTime() > MAX_WINDOW_DAYS * DAY_MS) {
+    throw badRequest(`the range must be ${MAX_WINDOW_DAYS} days or less`);
+  }
+  return { from: since, to: until };
+}
 
 export async function parseBody<T extends z.ZodType>(req: Request, schema: T): Promise<z.infer<T>> {
   let raw: unknown;
@@ -104,20 +173,131 @@ export interface ApprovalDto {
   expiresAt: string;
   decidedAt: string | null;
   decidedBy: string | null;
+  decidedByName: string | null;
   decisionNote: string | null;
   amountMinor: number | null;
   currency: string | null;
 }
 
+export interface VrrPointDto {
+  day: string;
+  runs: number;
+  evaluated: number;
+  verified: number;
+  rate: number | null;
+}
+
 export interface MetricsDto {
-  totalRuns: number;
-  resolved: number;
-  escalated: number;
-  failed: number;
+  window: { from: string; to: string };
+  runs: { total: number; eligible: number; evaluated: number; pending: number };
+  coverage: { inScope: number; outOfScope: number; humanRequest: number; rate: number | null };
+  automationRate: number | null;
+  escalationRate: number | null;
   verifiedResolutionRate: number | null;
-  evaluatedCount: number;
-  avgLatencyMs: number;
-  avgCostUsdMicros: number;
+  verifiedResolutions: number;
+  policyComplianceRate: number | null;
+  toolSuccessRate: number | null;
+  groundingRate: number | null;
+  latencyMs: { p50: number | null; p95: number | null };
+  totalCostUsdMicros: number;
+  costPerResolutionUsdMicros: number | null;
+  trend: VrrPointDto[];
+}
+
+export function toMetricsDto(metrics: Metrics, trend: VrrPoint[]): MetricsDto {
+  return {
+    window: metrics.window,
+    runs: metrics.runs,
+    coverage: metrics.coverage,
+    automationRate: metrics.automationRate,
+    escalationRate: metrics.escalationRate,
+    verifiedResolutionRate: metrics.verifiedResolutionRate,
+    verifiedResolutions: metrics.verifiedResolutions,
+    policyComplianceRate: metrics.policyComplianceRate,
+    toolSuccessRate: metrics.toolSuccessRate,
+    groundingRate: metrics.groundingRate,
+    latencyMs: metrics.latencyMs,
+    totalCostUsdMicros: metrics.totalCostUsdMicros,
+    costPerResolutionUsdMicros: metrics.costPerResolutionUsdMicros,
+    trend: trend.map((p) => ({
+      day: p.day,
+      runs: p.runs,
+      evaluated: p.evaluated,
+      verified: p.verified,
+      rate: p.rate,
+    })),
+  };
+}
+
+export interface FailureBucketDto {
+  code: FailureCode;
+  count: number;
+  topDetail: string;
+}
+
+export function toFailureBucketDto(b: FailureBucket): FailureBucketDto {
+  return { code: b.code, count: b.count, topDetail: b.topDetail };
+}
+
+export interface ConversationSummaryDto {
+  runId: string;
+  conversationId: string;
+  customer: string | null;
+  startedAt: string;
+  intent: Intent | null;
+  state: AgentState | null;
+  outcome: RunOutcome | null;
+  verifiedResolution: boolean | null;
+  primaryFailureCode: FailureCode | null;
+  escalated: boolean;
+  escalationStatus: 'open' | 'closed' | null;
+  durationMs: number | null;
+  costUsdMicros: number;
+}
+
+export interface ConversationPageDto {
+  items: ConversationSummaryDto[];
+  nextCursor: string | null;
+}
+
+export function toConversationSummaryDto(c: ConversationSummary): ConversationSummaryDto {
+  return {
+    runId: c.runId,
+    conversationId: c.conversationId,
+    customer: c.customer,
+    startedAt: c.startedAt.toISOString(),
+    intent: c.intent,
+    state: c.state,
+    outcome: c.outcome,
+    verifiedResolution: c.verifiedResolution,
+    primaryFailureCode: c.primaryFailureCode,
+    escalated: c.escalated,
+    escalationStatus: c.escalationStatus,
+    durationMs: c.durationMs,
+    costUsdMicros: c.costUsdMicros,
+  };
+}
+
+export function toQueuedApprovalDto(a: QueuedApproval): ApprovalDto {
+  return {
+    id: a.id,
+    runId: a.runId,
+    conversationId: a.conversationId,
+    toolName: a.toolName,
+    proposedInput: a.proposedInput,
+    reason: a.reason,
+    ruleId: a.ruleId,
+    policyVersion: a.policyVersion,
+    status: a.status,
+    requestedAt: a.requestedAt.toISOString(),
+    expiresAt: a.expiresAt.toISOString(),
+    decidedAt: iso(a.decidedAt),
+    decidedBy: a.decidedBy,
+    decidedByName: a.decidedByName,
+    decisionNote: a.decisionNote,
+    amountMinor: a.amountMinor,
+    currency: a.currency,
+  };
 }
 
 type Row<K extends keyof AssembledTrace> = AssembledTrace[K];
@@ -200,6 +380,7 @@ export function toApprovalDto(
     expiresAt: a.expiresAt.toISOString(),
     decidedAt: iso(a.decidedAt),
     decidedBy: a.decidedBy,
+    decidedByName: null,
     decisionNote: a.decisionNote,
     ...amountAtRisk(a.proposedInput, policyCheck?.facts),
   };

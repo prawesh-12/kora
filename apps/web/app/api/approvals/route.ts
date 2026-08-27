@@ -1,26 +1,35 @@
-import { serverEnv } from '@kora/core';
-import { withTenant } from '@kora/db';
+import { now, serverEnv } from '@kora/core';
+import { listApprovalQueue } from '@kora/db';
 import { requireOperator } from '@/lib/api/auth';
 import { badRequest, handle } from '@/lib/api/errors';
-import { toApprovalDto } from '@/lib/api/schemas';
+import { ApprovalsQuery, parseQuery, toQueuedApprovalDto } from '@/lib/api/schemas';
+
+function startOfToday(): Date {
+  const today = now();
+  return new Date(today.getFullYear(), today.getMonth(), today.getDate());
+}
 
 export async function GET(req: Request): Promise<Response> {
   return handle(async () => {
     await requireOperator();
+    const query = parseQuery(req.url, ApprovalsQuery);
 
-    const status = new URL(req.url).searchParams.get('status') ?? 'pending';
-    if (status !== 'pending') throw badRequest('only status=pending is supported');
+    if (
+      query.minValueMinor !== undefined &&
+      query.maxValueMinor !== undefined &&
+      query.minValueMinor >= query.maxValueMinor
+    ) {
+      throw badRequest('`minValueMinor` must be below `maxValueMinor`');
+    }
 
-    const repos = withTenant(serverEnv().KORA_TENANT_ID);
-    await repos.approvals.expireOverdue();
-    const pending = await repos.approvals.listPending();
+    const approvals = await listApprovalQueue(serverEnv().KORA_TENANT_ID, {
+      status: query.status,
+      ...(query.scope === 'today' ? { decidedSince: startOfToday() } : {}),
+      ...(query.tool ? { toolName: query.tool } : {}),
+      ...(query.minValueMinor !== undefined ? { minValueMinor: query.minValueMinor } : {}),
+      ...(query.maxValueMinor !== undefined ? { maxValueMinor: query.maxValueMinor } : {}),
+    });
 
-    const approvals = await Promise.all(
-      pending.map(async (a) => {
-        const checks = await repos.policyChecks.listForRun(a.runId);
-        return toApprovalDto(a, checks.find((c) => c.id === a.policyCheckId) ?? null);
-      }),
-    );
-    return Response.json({ approvals });
+    return Response.json({ approvals: approvals.map(toQueuedApprovalDto) });
   });
 }

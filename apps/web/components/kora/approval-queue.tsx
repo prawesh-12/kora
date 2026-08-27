@@ -1,8 +1,8 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react';
 import { CodeBlock } from '@/components/agents/code-block';
 import {
   AnimatedToastStack,
@@ -13,6 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import type { ApprovalDto } from '@/lib/api/schemas';
+import { formatElapsed, formatMoneyMinor } from '@/lib/ops/format';
 
 export interface QueueItem extends ApprovalDto {
   customerMessage: string | null;
@@ -21,12 +22,29 @@ export interface QueueItem extends ApprovalDto {
   customer: Record<string, unknown> | null;
 }
 
-function formatMoney(amountMinor: number | null, currency: string | null): string | undefined {
-  if (amountMinor === null) return undefined;
-  return new Intl.NumberFormat('en-IN', {
-    style: 'currency',
-    currency: currency ?? 'INR',
-  }).format(amountMinor / 100);
+const TICK_MS = 30_000;
+
+interface Waiting {
+  elapsedMs: number;
+  /** True once more of the approval window has burned than remains. */
+  urgent: boolean;
+}
+
+function waitingOn(item: QueueItem, at: number): Waiting {
+  const requested = new Date(item.requestedAt).getTime();
+  const expires = new Date(item.expiresAt).getTime();
+  const elapsedMs = Math.max(at - requested, 0);
+  const ttlMs = Math.max(expires - requested, 1);
+  return { elapsedMs, urgent: item.status === 'pending' && elapsedMs > ttlMs / 2 };
+}
+
+function useNowMs(): number {
+  const [at, setAt] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setAt(Date.now()), TICK_MS);
+    return () => clearInterval(timer);
+  }, []);
+  return at;
 }
 
 export function ApprovalQueue({ items }: { items: QueueItem[] }) {
@@ -35,19 +53,26 @@ export function ApprovalQueue({ items }: { items: QueueItem[] }) {
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
   const { toasts, showToast, dismissToast } = useAnimatedToastStack({ limit: 3 });
+  const at = useNowMs();
 
   const selected = items.find((a) => a.id === selectedId) ?? null;
 
-  const rows: TaskRowItem[] = items.map((a) => ({
-    id: a.id,
-    title: a.toolName.replace(/_/g, ' '),
-    subtitle: a.reason,
-    meta: a.ruleId ?? 'no rule recorded',
-    ...(formatMoney(a.amountMinor, a.currency)
-      ? { amount: formatMoney(a.amountMinor, a.currency) as string }
-      : {}),
-    selected: a.id === selectedId,
-  }));
+  const rows: TaskRowItem[] = items.map((a) => {
+    const waiting = waitingOn(a, at);
+    const amount = formatMoneyMinor(a.amountMinor, a.currency);
+    return {
+      id: a.id,
+      title: a.toolName.replace(/_/g, ' '),
+      subtitle: a.reason,
+      meta:
+        a.status === 'pending'
+          ? `${formatElapsed(waiting.elapsedMs)}${waiting.urgent ? ' · past half its window' : ''}`
+          : a.status,
+      ...(a.amountMinor !== null ? { amount } : {}),
+      selected: a.id === selectedId,
+      urgent: waiting.urgent,
+    };
+  });
 
   async function decide(decision: 'approved' | 'denied') {
     if (!selected || busy) return;
@@ -62,7 +87,11 @@ export function ApprovalQueue({ items }: { items: QueueItem[] }) {
 
       if (res.status === 409 || res.status === 410) {
         const body = (await res.json()) as { error: { message: string } };
-        showToast({ title: 'Already decided', description: body.error.message, status: 'info' });
+        showToast({
+          title: res.status === 410 ? 'This one expired' : 'Already decided',
+          description: body.error.message,
+          status: 'info',
+        });
         router.refresh();
         return;
       }
@@ -94,14 +123,12 @@ export function ApprovalQueue({ items }: { items: QueueItem[] }) {
     }
   }
 
+  const selectedWaiting = selected ? waitingOn(selected, at) : null;
+
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]">
       <div className="min-w-0">
-        <TaskRows
-          items={rows}
-          onSelect={setSelectedId}
-          emptyLabel="Nothing waiting for a decision"
-        />
+        <TaskRows items={rows} onSelect={setSelectedId} emptyLabel="Nothing matches this filter" />
       </div>
 
       {selected ? (
@@ -111,15 +138,28 @@ export function ApprovalQueue({ items }: { items: QueueItem[] }) {
               <span className="font-medium font-mono">{selected.toolName}</span>
               {selected.amountMinor !== null ? (
                 <span data-testid="approval-amount" className="font-semibold text-2xl tabular-nums">
-                  {formatMoney(selected.amountMinor, selected.currency)}
+                  {formatMoneyMinor(selected.amountMinor, selected.currency)}
                 </span>
               ) : null}
             </div>
             <p className="pt-2 text-muted-foreground text-sm">{selected.reason}</p>
-            <div className="flex flex-wrap gap-2 pt-3">
+            <div className="flex flex-wrap items-center gap-2 pt-3">
+              <Badge variant={selected.status === 'pending' ? 'outline' : 'secondary'}>
+                {selected.status}
+              </Badge>
               {selected.ruleId ? <Badge variant="outline">{selected.ruleId}</Badge> : null}
               {selected.policyVersion ? (
                 <Badge variant="outline">{selected.policyVersion}</Badge>
+              ) : null}
+              {selectedWaiting ? (
+                <span
+                  data-testid="approval-elapsed"
+                  className={
+                    selectedWaiting.urgent ? 'font-medium text-destructive text-xs' : 'text-xs'
+                  }
+                >
+                  requested {formatElapsed(selectedWaiting.elapsedMs)}
+                </span>
               ) : null}
               <Link
                 href={`/ops/conversations/${selected.conversationId}?runId=${selected.runId}`}
@@ -128,6 +168,12 @@ export function ApprovalQueue({ items }: { items: QueueItem[] }) {
                 Open the trace
               </Link>
             </div>
+            {selected.decidedAt ? (
+              <p className="pt-2 text-muted-foreground text-xs">
+                {selected.status} by {selected.decidedByName ?? selected.decidedBy ?? 'the system'}
+                {selected.decisionNote ? ` — ${selected.decisionNote}` : ''}
+              </p>
+            ) : null}
           </div>
 
           <CodeBlock
@@ -167,21 +213,29 @@ export function ApprovalQueue({ items }: { items: QueueItem[] }) {
             </ul>
           </section>
 
-          <Textarea
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            placeholder="Why are you denying this? Stored with the decision."
-            aria-label="Decision note"
-          />
-
-          <div className="flex flex-wrap gap-2">
-            <Button onClick={() => decide('approved')} disabled={busy}>
-              Approve
-            </Button>
-            <Button variant="destructive" onClick={() => decide('denied')} disabled={busy}>
-              Deny
-            </Button>
-          </div>
+          {selected.status === 'pending' ? (
+            <>
+              <Textarea
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                placeholder="Why are you denying this? Stored with the decision."
+                aria-label="Decision note"
+              />
+              <div className="flex flex-wrap gap-2">
+                <Button onClick={() => decide('approved')} disabled={busy}>
+                  Approve
+                </Button>
+                <Button variant="destructive" onClick={() => decide('denied')} disabled={busy}>
+                  Deny
+                </Button>
+              </div>
+            </>
+          ) : (
+            <p className="text-muted-foreground text-sm">
+              This approval is {selected.status} and is kept for the record. Approvals are never
+              deleted.
+            </p>
+          )}
         </div>
       ) : null}
 

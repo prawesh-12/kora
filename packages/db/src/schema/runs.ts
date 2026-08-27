@@ -1,3 +1,4 @@
+import { desc } from 'drizzle-orm';
 import { bigint, index, integer, jsonb, pgTable, real, text, timestamp } from 'drizzle-orm/pg-core';
 import type { AgentState, Intent, RunOutcome, RunStepKind } from '@kora/core';
 import { conversations } from './conversations.js';
@@ -30,6 +31,16 @@ export const agentRuns = pgTable(
     index('agent_runs_tenant_idx').on(t.tenantId),
     index('agent_runs_conversation_idx').on(t.conversationId, t.startedAt),
     index('agent_runs_trace_idx').on(t.traceId),
+    // Covering indexes for the operator screens. Keyset pagination orders by
+    // (started_at desc, id desc), so the index has to match that exactly.
+    index('agent_runs_tenant_started_idx').on(t.tenantId, desc(t.startedAt), desc(t.id)),
+    index('agent_runs_tenant_config_started_idx').on(
+      t.tenantId,
+      t.agentConfigVersion,
+      desc(t.startedAt),
+    ),
+    index('agent_runs_tenant_intent_started_idx').on(t.tenantId, t.intent, desc(t.startedAt)),
+    index('agent_runs_tenant_outcome_started_idx').on(t.tenantId, t.outcome, desc(t.startedAt)),
   ],
 );
 

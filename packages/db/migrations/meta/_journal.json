@@ -29,6 +29,34 @@
       "when": 1787826321046,
       "tag": "0003_judge_fields",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1787826322046,
+      "tag": "0004_ops_query_indexes",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1787827444990,
+      "tag": "0005_advisory_policy_checks",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1787828345188,
+      "tag": "0006_schema_index_parity",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1787828399787,
+      "tag": "0007_evaluations_verified_idx",
+      "breakpoints": true
     }
   ]
 }

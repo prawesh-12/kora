@@ -47,11 +47,14 @@ export interface FailureBucket {
  */
 const ELIGIBLE = sql`(r.intent is null or r.intent not in ('OUT_OF_SCOPE', 'HUMAN_REQUEST'))`;
 
+/** A raw `sql` parameter skips drizzle's type mapping, so timestamps go over as text. */
+const ts = (d: Date): SQL => sql`${d.toISOString()}::timestamptz`;
+
 function runScope(f: MetricsFilter): SQL {
   const parts: SQL[] = [
     sql`r.tenant_id = ${f.tenantId}`,
-    sql`r.started_at >= ${f.from}`,
-    sql`r.started_at <= ${f.to}`,
+    sql`r.started_at >= ${ts(f.from)}`,
+    sql`r.started_at <= ${ts(f.to)}`,
   ];
   if (f.intent) parts.push(sql`r.intent = ${f.intent}`);
   if (f.agentConfigVersion) parts.push(sql`r.agent_config_version = ${f.agentConfigVersion}`);

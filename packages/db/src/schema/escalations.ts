@@ -24,5 +24,6 @@ export const escalations = pgTable(
   (t) => [
     index('escalations_tenant_status_idx').on(t.tenantId, t.status),
     index('escalations_run_idx').on(t.runId),
+    index('escalations_run_status_idx').on(t.runId, t.status),
   ],
 );

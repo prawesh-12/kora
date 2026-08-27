@@ -1,4 +1,4 @@
-import { index, jsonb, pgTable, text, timestamp } from 'drizzle-orm/pg-core';
+import { boolean, index, jsonb, pgTable, text, timestamp } from 'drizzle-orm/pg-core';
 import type { PolicyDecision } from '@kora/core';
 import { agentRuns } from './runs.js';
 
@@ -16,6 +16,12 @@ export const policyChecks = pgTable(
     ruleId: text('rule_id').notNull(),
     action: text('action').notNull(),
     decision: text('decision').$type<PolicyDecision>().notNull(),
+    /**
+     * True when the agent asked `check_policy` about an action, false when the
+     * pipeline decided one. Only the pipeline's decision gates anything, and
+     * compliance is measured against it.
+     */
+    advisory: boolean('advisory').notNull().default(false),
     reason: text('reason').notNull(),
     facts: jsonb('facts').$type<Record<string, unknown>>().notNull().default({}),
     missingFacts: text('missing_facts').array().notNull().default([]),

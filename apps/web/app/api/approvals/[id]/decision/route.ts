@@ -1,10 +1,15 @@
 import { runAgentTurn } from '@kora/ai';
 import { isTerminalState, now, serverEnv } from '@kora/core';
-import { withTenant } from '@kora/db';
+import { decideApproval, withTenant } from '@kora/db';
 import { after } from 'next/server';
 import { requireOperator } from '@/lib/api/auth';
 import { conflict, gone, handle, notFound } from '@/lib/api/errors';
-import { ApprovalDecisionRequest, parseBody, toApprovalDto, toTurnDto } from '@/lib/api/schemas';
+import {
+  ApprovalDecisionRequest,
+  parseBody,
+  toQueuedApprovalDto,
+  toTurnDto,
+} from '@/lib/api/schemas';
 
 export const maxDuration = 60;
 
@@ -28,33 +33,29 @@ export async function POST(
     const { decision, note } = await parseBody(req, ApprovalDecisionRequest);
 
     const tenantId = serverEnv().KORA_TENANT_ID;
-    const repos = withTenant(tenantId);
 
-    const before = await repos.approvals.get(id);
-    if (!before) throw notFound('approval');
-    if (before.status === 'expired') throw gone('this approval expired before it was decided');
-
-    // The update itself is the guard: a second concurrent decision matches no row.
-    const decided = await repos.approvals.decide(id, {
+    // Reads and decides through the query layer, which expires an overdue approval
+    // before it looks at it. A stale pending row can never be decided.
+    const outcome = await decideApproval(tenantId, id, {
       status: decision,
       decidedBy: operator.id,
       ...(note ? { decisionNote: note } : {}),
     });
 
-    if (!decided) {
-      const current = await repos.approvals.get(id);
-      if (current?.status === 'expired') {
-        throw gone('this approval expired before it was decided');
-      }
-      throw conflict(`this approval was already ${current?.status ?? 'decided'}`);
+    if (outcome.kind === 'missing') throw notFound('approval');
+    if (outcome.kind === 'expired') {
+      throw gone('this approval expired before it was decided, and the run was handed to a person');
+    }
+    if (outcome.kind === 'conflict') {
+      const who = outcome.approval.decidedByName ?? outcome.approval.decidedBy ?? 'someone else';
+      throw conflict(`this approval was already ${outcome.approval.status} by ${who}`);
     }
 
-    const checks = await repos.policyChecks.listForRun(decided.runId);
-    const check = checks.find((c) => c.id === decided.policyCheckId) ?? null;
+    const decided = outcome.approval;
 
     if (decision === 'denied') {
       await denyAndHandOff(tenantId, decided.runId, decided.conversationId, note ?? null);
-      return Response.json({ approval: toApprovalDto(decided, check), turn: null });
+      return Response.json({ approval: toQueuedApprovalDto(decided), turn: null });
     }
 
     const orderId = orderIdOf(decided.proposedInput);
@@ -63,8 +64,7 @@ export async function POST(
       : 'Please go ahead with the action a colleague has just approved.';
 
     // A human has signed off, so this turn runs with the approval gate lifted. The
-    // pipeline has no way to recognise an already-approved action, which is why the
-    // mode is overridden rather than the approval being replayed. See docs/decisions.md.
+    // pipeline recognises the approved row for the conversation. See docs/decisions.md.
     const turn = await runAgentTurn({
       tenantId,
       conversationId: decided.conversationId,
@@ -78,7 +78,7 @@ export async function POST(
       });
     }
 
-    return Response.json({ approval: toApprovalDto(decided, check), turn: toTurnDto(turn) });
+    return Response.json({ approval: toQueuedApprovalDto(decided), turn: toTurnDto(turn) });
   });
 }
 

@@ -1,93 +1,98 @@
+import type { Intent } from '@kora/core';
 import { now, serverEnv } from '@kora/core';
-import { assembleTrace, withTenant } from '@kora/db';
+import {
+  type ApprovalQueueFilter,
+  type ConversationListFilter,
+  assembleTrace,
+  computeMetrics,
+  failureBreakdown,
+  listApprovalQueue,
+  listConversationSummaries,
+  readApproval,
+  vrrTrend,
+  withTenant,
+} from '@kora/db';
 import {
   type ApprovalDto,
+  type ConversationPageDto,
+  type ConversationSummaryDto,
+  type FailureBucketDto,
   type MetricsDto,
   type TraceDto,
-  toApprovalDto,
+  toConversationSummaryDto,
   toEvaluationDto,
+  toFailureBucketDto,
+  toMetricsDto,
+  toQueuedApprovalDto,
   toTraceDto,
 } from '@/lib/api/schemas';
 
 const DEFAULT_WINDOW_DAYS = 30;
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 export function tenantId(): string {
   return serverEnv().KORA_TENANT_ID;
 }
 
-export async function loadMetrics(days = DEFAULT_WINDOW_DAYS): Promise<MetricsDto> {
-  const until = now();
-  const since = new Date(until.getTime() - days * 24 * 60 * 60 * 1000);
+export interface MetricsWindow {
+  days?: number;
+  from?: Date;
+  to?: Date;
+  intent?: Intent;
+  agentConfigVersion?: string;
+}
 
-  const repos = withTenant(tenantId());
-  const runs = await repos.runs.listBetween(since, until);
-  const evaluations = await repos.evaluations.forRuns(runs.map((r) => r.id));
+function windowOf(w: MetricsWindow): { tenantId: string; from: Date; to: Date } {
+  const to = w.to ?? now();
+  const from = w.from ?? new Date(to.getTime() - (w.days ?? DEFAULT_WINDOW_DAYS) * DAY_MS);
+  return { tenantId: tenantId(), from, to };
+}
 
-  const evaluatedCount = evaluations.length;
-  const verified = evaluations.filter((e) => e.verifiedResolution).length;
-  const mean = (values: number[]) =>
-    values.length === 0 ? 0 : Math.round(values.reduce((a, b) => a + b, 0) / values.length);
-
-  return {
-    totalRuns: runs.length,
-    resolved: runs.filter((r) => r.outcome === 'resolved_automatically').length,
-    escalated: runs.filter((r) => r.outcome === 'escalated').length,
-    failed: runs.filter((r) => r.outcome === 'failed').length,
-    verifiedResolutionRate: evaluatedCount === 0 ? null : verified / evaluatedCount,
-    evaluatedCount,
-    avgLatencyMs: mean(runs.map((r) => r.durationMs).filter((d): d is number => d !== null)),
-    avgCostUsdMicros: mean(runs.map((r) => Number(r.costUsdMicros))),
+export async function loadMetrics(w: MetricsWindow = {}): Promise<MetricsDto> {
+  const filter = {
+    ...windowOf(w),
+    ...(w.intent ? { intent: w.intent } : {}),
+    ...(w.agentConfigVersion ? { agentConfigVersion: w.agentConfigVersion } : {}),
   };
+  const [metrics, trend] = await Promise.all([computeMetrics(filter), vrrTrend(filter)]);
+  return toMetricsDto(metrics, trend);
 }
 
-export interface RecentRun {
-  runId: string;
-  conversationId: string;
-  intent: string | null;
-  outcome: string | null;
-  finalState: string | null;
-  startedAt: string;
-  durationMs: number | null;
-  verifiedResolution: boolean | null;
+export async function loadFailureBreakdown(w: MetricsWindow = {}): Promise<FailureBucketDto[]> {
+  const filter = {
+    ...windowOf(w),
+    ...(w.intent ? { intent: w.intent } : {}),
+    ...(w.agentConfigVersion ? { agentConfigVersion: w.agentConfigVersion } : {}),
+  };
+  return (await failureBreakdown(filter)).map(toFailureBucketDto);
 }
 
-export async function loadRecentRuns(limit = 20): Promise<RecentRun[]> {
-  const until = now();
-  const since = new Date(until.getTime() - DEFAULT_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+export type ConversationFilters = Omit<ConversationListFilter, 'tenantId' | 'limit' | 'cursor'>;
 
+export async function loadConversations(
+  filters: ConversationFilters,
+  limit = 50,
+): Promise<ConversationPageDto> {
+  const page = await listConversationSummaries({ tenantId: tenantId(), limit, ...filters });
+  return { items: page.items.map(toConversationSummaryDto), nextCursor: page.nextCursor };
+}
+
+export async function loadRecentRuns(limit = 20): Promise<ConversationSummaryDto[]> {
+  const page = await loadConversations({}, limit);
+  return page.items;
+}
+
+export async function loadApprovalQueue(
+  filter: ApprovalQueueFilter = {},
+): Promise<Array<ApprovalDto & { customerMessage: string | null }>> {
   const repos = withTenant(tenantId());
-  const runs = (await repos.runs.listBetween(since, until)).slice(0, limit);
-  const evaluations = await repos.evaluations.forRuns(runs.map((r) => r.id));
-  const verifiedByRun = new Map(evaluations.map((e) => [e.runId, e.verifiedResolution]));
-
-  return runs.map((r) => ({
-    runId: r.id,
-    conversationId: r.conversationId,
-    intent: r.intent,
-    outcome: r.outcome,
-    finalState: r.finalState,
-    startedAt: r.startedAt.toISOString(),
-    durationMs: r.durationMs,
-    verifiedResolution: verifiedByRun.get(r.id) ?? null,
-  }));
-}
-
-export async function loadPendingApprovals(): Promise<
-  Array<ApprovalDto & { customerMessage: string | null }>
-> {
-  const repos = withTenant(tenantId());
-  await repos.approvals.expireOverdue();
-  const pending = await repos.approvals.listPending();
+  const approvals = await listApprovalQueue(tenantId(), filter);
 
   return Promise.all(
-    pending.map(async (a) => {
-      const [checks, messages] = await Promise.all([
-        repos.policyChecks.listForRun(a.runId),
-        repos.messages.listForConversation(a.conversationId),
-      ]);
-      const check = checks.find((c) => c.id === a.policyCheckId) ?? null;
+    approvals.map(async (a) => {
+      const messages = await repos.messages.listForConversation(a.conversationId);
       const firstCustomer = messages.find((m) => m.role === 'customer');
-      return { ...toApprovalDto(a, check), customerMessage: firstCustomer?.content ?? null };
+      return { ...toQueuedApprovalDto(a), customerMessage: firstCustomer?.content ?? null };
     }),
   );
 }
@@ -101,11 +106,10 @@ export interface ApprovalDetail {
 
 export async function loadApprovalDetail(approvalId: string): Promise<ApprovalDetail | null> {
   const repos = withTenant(tenantId());
-  const approval = await repos.approvals.get(approvalId);
+  const approval = await readApproval(tenantId(), approvalId);
   if (!approval) return null;
 
-  const [checks, messages, executions] = await Promise.all([
-    repos.policyChecks.listForRun(approval.runId),
+  const [messages, executions] = await Promise.all([
     repos.messages.listForConversation(approval.conversationId),
     repos.toolExecutions.listForRun(approval.runId),
   ]);
@@ -116,7 +120,7 @@ export async function loadApprovalDetail(approvalId: string): Promise<ApprovalDe
   };
 
   return {
-    approval: toApprovalDto(approval, checks.find((c) => c.id === approval.policyCheckId) ?? null),
+    approval: toQueuedApprovalDto(approval),
     messages: messages.map((m) => ({
       id: m.id,
       role: m.role,

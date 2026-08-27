@@ -1,8 +1,8 @@
 import { serverEnv } from '@kora/core';
-import { computeMetrics, vrrTrend } from '@kora/db';
+import { failureBreakdown } from '@kora/db';
 import { requireOperator } from '@/lib/api/auth';
 import { handle } from '@/lib/api/errors';
-import { MetricsQuery, parseQuery, resolveWindow, toMetricsDto } from '@/lib/api/schemas';
+import { MetricsQuery, parseQuery, resolveWindow, toFailureBucketDto } from '@/lib/api/schemas';
 
 export async function GET(req: Request): Promise<Response> {
   return handle(async () => {
@@ -10,15 +10,14 @@ export async function GET(req: Request): Promise<Response> {
 
     const query = parseQuery(req.url, MetricsQuery);
     const { from, to } = resolveWindow(query.from, query.to);
-    const filter = {
+
+    const buckets = await failureBreakdown({
       tenantId: serverEnv().KORA_TENANT_ID,
       from,
       to,
       ...(query.intent ? { intent: query.intent } : {}),
       ...(query.agentConfigVersion ? { agentConfigVersion: query.agentConfigVersion } : {}),
-    };
-
-    const [metrics, trend] = await Promise.all([computeMetrics(filter), vrrTrend(filter)]);
-    return Response.json(toMetricsDto(metrics, trend));
+    });
+    return Response.json(buckets.map(toFailureBucketDto));
   });
 }

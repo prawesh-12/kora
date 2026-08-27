@@ -1,0 +1,1 @@
+ALTER TABLE "policy_checks" ADD COLUMN "advisory" boolean DEFAULT false NOT NULL;

@@ -11,6 +11,24 @@ function withId<T extends { id?: string }>(prefix: Parameters<typeof newId>[0], 
   return { ...row, id: row.id ?? newId(prefix) };
 }
 
+/**
+ * Flips anything past its TTL to `expired` before it can be read or decided.
+ * Escalating the run is the caller's job; this only closes the window in which a
+ * stale row looks actionable.
+ */
+async function expireOverdue(tenantId: string, conn: Database | Tx): Promise<void> {
+  await conn
+    .update(s.approvals)
+    .set({ status: 'expired' })
+    .where(
+      and(
+        eq(s.approvals.tenantId, tenantId),
+        eq(s.approvals.status, 'pending'),
+        lte(s.approvals.expiresAt, now()),
+      ),
+    );
+}
+
 export function createRepositories(tenantId: string, conn: Database | Tx = db()) {
   const t = eq(s.conversations.tenantId, tenantId);
 
@@ -193,7 +211,14 @@ export function createRepositories(tenantId: string, conn: Database | Tx = db())
           .returning();
         return created!;
       },
+      /**
+       * Expiry is lazy: an approval past its TTL is expired the moment anyone
+       * reads it, so the queue can never show a stale pending row and a decision
+       * on an expired approval can never succeed. `pnpm kora approvals:expire`
+       * sweeps the backlog and fires the escalations.
+       */
       async get(id: string) {
+        await expireOverdue(tenantId, conn);
         const [row] = await conn
           .select()
           .from(s.approvals)
@@ -217,6 +242,7 @@ export function createRepositories(tenantId: string, conn: Database | Tx = db())
           .orderBy(asc(s.approvals.requestedAt));
       },
       async listPending() {
+        await expireOverdue(tenantId, conn);
         return conn
           .select()
           .from(s.approvals)
@@ -231,6 +257,7 @@ export function createRepositories(tenantId: string, conn: Database | Tx = db())
         id: string,
         patch: { status: 'approved' | 'denied'; decidedBy: string; decisionNote?: string },
       ) {
+        await expireOverdue(tenantId, conn);
         const [row] = await conn
           .update(s.approvals)
           .set({ ...patch, decidedAt: now() })
