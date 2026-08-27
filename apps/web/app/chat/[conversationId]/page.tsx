@@ -1,5 +1,5 @@
 import { serverEnv } from '@kora/core';
-import { withTenant } from '@kora/db';
+import { tenantName, withTenant } from '@kora/db';
 import { ChatTranscript, type ChatMessage } from '@/components/kora/chat-transcript';
 
 export const dynamic = 'force-dynamic';
@@ -10,8 +10,12 @@ export default async function ChatPage({
   params: Promise<{ conversationId: string }>;
 }) {
   const { conversationId } = await params;
-  const repos = withTenant(serverEnv().KORA_TENANT_ID);
-  const conversation = await repos.conversations.get(conversationId);
+  const tenantId = serverEnv().KORA_TENANT_ID;
+  const repos = withTenant(tenantId);
+  const [conversation, merchant] = await Promise.all([
+    repos.conversations.get(conversationId),
+    tenantName(tenantId),
+  ]);
 
   if (!conversation) {
     return (
@@ -34,5 +38,11 @@ export default async function ChatPage({
       parts: [{ key: 'text', kind: 'text', text: m.content }],
     }));
 
-  return <ChatTranscript conversationId={conversationId} initialMessages={messages} />;
+  return (
+    <ChatTranscript
+      conversationId={conversationId}
+      initialMessages={messages}
+      merchantName={merchant ?? 'Customer support'}
+    />
+  );
 }

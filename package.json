@@ -12,7 +12,7 @@
     "dev": "turbo dev",
     "typecheck": "turbo typecheck",
     "test": "turbo test",
-    "lint": "biome check . && tsx scripts/check-deps.ts && tsx scripts/check-acme-imports.ts && tsx scripts/check-chart-imports.ts && tsx scripts/isolation-suite.ts",
+    "lint": "biome check . && bash scripts/ui-gate.sh && tsx scripts/check-deps.ts && tsx scripts/check-acme-imports.ts && tsx scripts/isolation-suite.ts",
     "format": "biome format --write .",
     "infra:up": "bash infra/scripts/up.sh",
     "infra:down": "bash infra/scripts/down.sh",

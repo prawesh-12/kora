@@ -79,12 +79,21 @@ function PartView({ part }: { part: ChatPart }) {
   }
 }
 
+/**
+ * Shown on an empty conversation. A customer landing on a blank page with a
+ * floating text box has no way to know what this is or what it can do, so the
+ * agent opens and offers the two things it actually handles.
+ */
+const STARTERS = ['My order arrived damaged', 'Where is my order', 'I want to return something'];
+
 export function ChatTranscript({
   conversationId,
   initialMessages,
+  merchantName,
 }: {
   conversationId: string;
   initialMessages: ChatMessage[];
+  merchantName: string;
 }) {
   const [messages, setMessages] = useState(initialMessages);
   const [sending, setSending] = useState(false);
@@ -152,13 +161,48 @@ export function ChatTranscript({
 
   return (
     <div className="flex h-dvh flex-col">
+      <header className="border-b">
+        <div className="mx-auto w-full max-w-[720px] px-4 py-3">
+          <p className="font-semibold text-base">{merchantName}</p>
+          <p className="text-muted-foreground text-sm">
+            Order updates, returns and replacements. Ask in your own words.
+          </p>
+        </div>
+      </header>
+
       <MessageScroller
         className="flex-1"
         label="Conversation"
         busy={sending}
         viewportProps={{ 'aria-live': 'polite', 'aria-atomic': false }}
-        contentClassName="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8"
+        contentClassName="mx-auto flex w-full max-w-[720px] flex-col gap-6 px-4 py-8"
       >
+        {messages.length === 0 ? (
+          <Message from="assistant">
+            <MessageContent className="flex flex-col gap-3">
+              <MessageBubble align="start" variant="solid">
+                <MessageBubbleContent>
+                  Hi, I can help with an order that arrived damaged, a return, or finding out where
+                  your order is. What is going on?
+                </MessageBubbleContent>
+              </MessageBubble>
+              <div className="flex flex-wrap gap-2">
+                {STARTERS.map((starter) => (
+                  <button
+                    className="rounded-full border px-3 py-1.5 text-sm transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    disabled={sending}
+                    key={starter}
+                    onClick={() => void send(starter)}
+                    type="button"
+                  >
+                    {starter}
+                  </button>
+                ))}
+              </div>
+            </MessageContent>
+          </Message>
+        ) : null}
+
         {messages.map((message) => (
           <Message key={message.id} from={message.role === 'customer' ? 'user' : 'assistant'}>
             <MessageContent className="flex flex-col gap-3">
@@ -178,9 +222,9 @@ export function ChatTranscript({
       </MessageScroller>
 
       <div className="border-t bg-background">
-        <div className="mx-auto w-full max-w-2xl px-4 py-4">
+        <div className="mx-auto w-full max-w-[720px] px-4 py-4">
           <PromptInput
-            placeholder={online ? 'Tell us what went wrong' : 'You appear to be offline'}
+            placeholder={online ? 'Tell us what happened' : 'You appear to be offline'}
             disabled={sending || !online}
             loading={sending}
             onSubmit={send}
