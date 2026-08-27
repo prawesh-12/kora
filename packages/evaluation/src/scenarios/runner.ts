@@ -12,9 +12,9 @@ import type { ScenarioSpec } from '../types.js';
 import { type Assertion, assertH1, assertScenario } from './assert.js';
 import {
   acmeIsUp,
+  clearIdempotency,
   acmeWritePosts,
   acmeRequestLog,
-  clearIdempotency,
   knowledgeIsPopulated,
   orderStatus,
   replacementsForOrder,
@@ -99,7 +99,7 @@ export async function runScenario(
   const { runAgentTurn } = deps;
   const startedAt = Date.now();
   const repos = withTenant(tenantId);
-  const touchedOrders = scenario.seed.orderId ? [scenario.seed.orderId] : undefined;
+  const touchedOrders = scenario.seed.orderId ? [scenario.seed.orderId] : [];
 
   const base: ScenarioOutcome = {
     id: scenario.id,
@@ -116,8 +116,12 @@ export async function runScenario(
   };
 
   try {
-    await resetAcmeOrders(touchedOrders);
-    await clearIdempotency(tenantId);
+    // A scenario with no seeded order resets nothing. Passing an empty list used
+    // to mean "reset everything", which wiped the fixture out from under whatever
+    // was running concurrently, and the per-order lock cannot help because such a
+    // scenario holds no order's chain. That is one intermittent benchmark failure
+    // per few runs, and it looks exactly like a real regression.
+    if (touchedOrders.length > 0) await resetAcmeOrders(touchedOrders);
     await setKnowledgeStatus(tenantId, scenario.emptyKnowledge ? 'superseded' : 'active');
 
     const faults: Record<string, string> = {};
@@ -311,10 +315,13 @@ export async function runScenarios(argv: string[] = [], deps?: ScenarioDeps): Pr
 
   for (let pass = 1; pass <= repeat; pass++) {
     const passStartedAt = new Date();
-    // Full reset at the start of every pass. The per-scenario reset is scoped to
-    // the orders that scenario touches, so without this a pass inherits whatever
-    // the previous one left behind and the suite stops being reproducible.
+    // Full reset at the start of every pass, and only here. The per-scenario reset
+    // is scoped to the orders that scenario touches, so without this a pass
+    // inherits whatever the previous one left behind and the suite stops being
+    // reproducible. Doing either of these mid-pass wipes state out from under a
+    // scenario running concurrently.
     await resetAcmeOrders();
+    await clearIdempotency(tenantId);
 
     const results: ScenarioOutcome[] = [];
     // Sequential on purpose: the scenarios share one Acme dataset, and a scoped

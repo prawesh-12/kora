@@ -39,6 +39,14 @@ export async function setKnowledgeStatus(tenantId: string, status: string): Prom
   await sql()`UPDATE documents SET status = ${status} WHERE tenant_id = ${tenantId}`;
 }
 
+/**
+ * Deletes every claim for the tenant. Only safe between passes, never during one:
+ * scenarios run concurrently, and deleting a claim another scenario is holding is
+ * how a benchmark manufactures the duplicate write it is meant to detect.
+ *
+ * A scenario does not need this. Each one opens a new conversation and the
+ * idempotency key is scoped to the conversation, so nothing can collide.
+ */
 export async function clearIdempotency(tenantId: string): Promise<void> {
   await sql()`DELETE FROM idempotency_keys WHERE tenant_id = ${tenantId}`;
 }

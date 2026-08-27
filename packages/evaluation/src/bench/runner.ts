@@ -6,6 +6,7 @@ import { type ScenarioDeps, type ScenarioOutcome, runScenario } from '../scenari
 import {
   acmeIsUp,
   knowledgeIsPopulated,
+  clearIdempotency,
   resetAcmeOrders,
   setKnowledgeStatus,
 } from '../scenarios/reset.js';
@@ -132,7 +133,11 @@ export async function runBenchmark(args: {
   const tenantId = serverEnv().KORA_TENANT_ID;
   const scenarios = loadBenchScenarios(args.category);
 
+  // Once, here. A scenario resets only the orders it touches, and a scenario with
+  // no order resets nothing, because either one done mid-run wipes state out from
+  // under whatever is running alongside it.
   await resetAcmeOrders();
+  await clearIdempotency(tenantId);
   await setKnowledgeStatus(tenantId, 'active');
 
   // Concurrency 5. Higher and the mock service plus provider rate limits become
