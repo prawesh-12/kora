@@ -78,6 +78,13 @@
       "when": 1787829346490,
       "tag": "0010_version_immutable",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1787829807460,
+      "tag": "0011_shadow_and_promotions",
+      "breakpoints": true
     }
   ]
 }

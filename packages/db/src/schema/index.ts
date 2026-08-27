@@ -11,4 +11,6 @@ export * from './evaluations.js';
 export * from './observability.js';
 export * from './agents.js';
 export * from './policies.js';
+export * from './shadow.js';
+export * from './promotions.js';
 export * from './events.js';
