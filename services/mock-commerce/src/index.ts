@@ -3,7 +3,7 @@ import { serve } from '@hono/node-server';
 import { serverEnv } from '@kora/core';
 import { Hono, type MiddlewareHandler } from 'hono';
 import { closeDb } from './db.js';
-import { type AppEnv, faultInjection } from './faults.js';
+import { type AppEnv, faultInjection, faultRate, setFaultRate } from './faults.js';
 import { readRequestLog, requestLog } from './request-log.js';
 import { cancellationsRoutes } from './routes/cancellations.js';
 import { customersRoutes } from './routes/customers.js';
@@ -11,7 +11,7 @@ import { ordersRoutes } from './routes/orders.js';
 import { refundsRoutes } from './routes/refunds.js';
 import { replacementsRoutes } from './routes/replacements.js';
 import { ticketsRoutes } from './routes/tickets.js';
-import { resetBody } from './schema.js';
+import { faultRateBody, resetBody } from './schema.js';
 import { resetOrders, seed } from './seed.js';
 
 const auth: MiddlewareHandler<AppEnv> = async (c, next) => {
@@ -46,6 +46,15 @@ app.post('/admin/reset', async (c) => {
   }
   await resetOrders(orderIds);
   return c.json({ ok: true, scope: 'orders', orderIds });
+});
+
+app.post('/admin/fault-rate', async (c) => {
+  const parsed = faultRateBody.safeParse(await c.req.json().catch(() => ({})));
+  if (!parsed.success) {
+    return c.json({ error: { code: 'INVALID_BODY', issues: parsed.error.issues } }, 422);
+  }
+  setFaultRate(parsed.data.rate);
+  return c.json({ ok: true, rate: faultRate() });
 });
 
 app.get('/admin/request-log', async (c) => {

@@ -29,10 +29,25 @@ function isFault(value: string): value is Fault {
   return (faults as readonly string[]).includes(value);
 }
 
+/**
+ * `serverEnv()` is parsed once per process, so a chaos run cannot change
+ * `ACME_FAULT_RATE` from outside. This override is how it turns faults on and off
+ * without a restart.
+ */
+let faultRateOverride: number | null = null;
+
+export function faultRate(): number {
+  return faultRateOverride ?? serverEnv().ACME_FAULT_RATE;
+}
+
+export function setFaultRate(rate: number | null): void {
+  faultRateOverride = rate;
+}
+
 export function requestedFault(c: Context<AppEnv>): Fault | null {
   const header = c.req.header('x-acme-fault');
   if (header) return isFault(header) ? header : null;
-  const rate = serverEnv().ACME_FAULT_RATE;
+  const rate = faultRate();
   if (rate <= 0 || Math.random() >= rate) return null;
   return randomFaults[Math.floor(Math.random() * randomFaults.length)] ?? '500';
 }

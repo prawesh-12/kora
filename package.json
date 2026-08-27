@@ -17,8 +17,11 @@
     "infra:up": "bash infra/scripts/up.sh",
     "infra:down": "bash infra/scripts/down.sh",
     "infra:reset": "bash infra/scripts/reset.sh",
+    "migrate:job": "bash infra/scripts/migrate-job.sh",
+    "backup:verify": "bash infra/scripts/backup-verify.sh",
     "kora": "tsx scripts/kora.mts",
-    "worker": "pnpm --filter @kora/worker start"
+    "worker": "pnpm --filter @kora/worker start",
+    "smoke": "url=\"${KORA_SMOKE_URL:-http://localhost:3000}\"; curl -fsS \"$url/healthz\" && echo && curl -fsS \"$url/readyz\" && echo"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.0",

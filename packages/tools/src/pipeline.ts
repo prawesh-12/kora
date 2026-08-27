@@ -2,13 +2,21 @@ import {
   type CompiledPolicy,
   type DeploymentMode,
   type KoraError,
+  RETRY_POLICY,
+  type RetryClass,
   type ToolErrorCode,
+  canonicalJson,
+  backoffMs,
+  budgetedTimeoutMs,
   evaluatePolicy,
+  isRetryable,
   newId,
   now,
   serverEnv,
 } from '@kora/core';
 import { type RunHandle, db, withTenant } from '@kora/db';
+import { capExceeded, loadCaps, spentToday } from './caps.js';
+import { breaker, toolBreakerKey } from './breaker.js';
 import { buildFacts } from './facts.js';
 import { claim, deriveKey, requestHash, settleFailure, settleSuccess } from './idempotency.js';
 import type { GatheredContext, ToolContext, ToolDefinition, ToolOutcome } from './types.js';
@@ -24,11 +32,34 @@ export interface ExecuteToolArgs {
   grantedPermissions: string[];
   gathered: GatheredContext;
   run: RunHandle;
+  /**
+   * Replay only. Outputs the original run recorded, keyed `toolName:json(input)`.
+   * Its presence is what puts the pipeline in replay: every call is served from
+   * here rather than from the business system, because replaying a read against
+   * today's state is how you get a confident, meaningless comparison.
+   */
+  recordedOutputs?: Record<string, unknown>;
 }
 
-function backoffMs(attempt: number): number {
-  return Math.floor(Math.min(2 ** attempt * 250, 4000) * Math.random());
+function retryClassOf(tool: ToolDefinition): RetryClass {
+  if (!tool.idempotent) return 'non_idempotent_write';
+  return tool.sideEffect === 'read' ? 'read_tool' : 'idempotent_write';
 }
+
+/**
+ * Keyed with canonical JSON, not `JSON.stringify`.
+ *
+ * The recorded side comes back out of a `jsonb` column, and Postgres does not
+ * preserve key order in jsonb. Two spellings of the same input would miss each
+ * other, the recorded output would be skipped, and the replay would quietly
+ * compare against a synthetic response instead.
+ */
+export function replayKey(toolName: string, input: unknown): string {
+  return `${toolName}:${canonicalJson(input)}`;
+}
+
+/** A failure that says nothing about the dependency's health must not trip its breaker. */
+const BREAKER_FAILURE_CODES: ToolErrorCode[] = ['UPSTREAM_5XX', 'UPSTREAM_TIMEOUT'];
 
 function codeOf(error: unknown, fallback: ToolErrorCode): ToolErrorCode {
   const code = (error as KoraError)?.code;
@@ -43,6 +74,7 @@ function codeOf(error: unknown, fallback: ToolErrorCode): ToolErrorCode {
     'VERIFY_FAILED',
     'DEADLINE_EXCEEDED',
     'TOOL_SELECTION_FAILURE',
+    'REPLAY_GAP',
   ];
   return known.includes(code as ToolErrorCode) ? (code as ToolErrorCode) : fallback;
 }
@@ -121,25 +153,13 @@ export async function executeTool(args: ExecuteToolArgs): Promise<ToolOutcome<un
     );
   }
 
-  // 4. Deployment mode gate.
   const isWrite = tool.sideEffect !== 'read';
-  if (deploymentMode === 'simulation' && isWrite) {
-    const output = { simulated: true, tool: tool.name, input };
-    await repos.toolExecutions.create({
-      runId: run.runId,
-      toolName: tool.name,
-      toolVersion: tool.version,
-      input,
-      output,
-      status: 'simulated',
-      startedAt,
-      finishedAt: now(),
-      durationMs: 0,
-    });
-    return { status: 'simulated', output };
-  }
 
-  // 5. Policy check. Always written, including on allow.
+  // 4. Policy check. Always written, including on allow.
+  //
+  // This runs before the deployment-mode gate rather than after it, because
+  // simulation and shadow both have to show what the policy engine *would* have
+  // decided. A replay that skipped policy evaluation would compare nothing.
   const facts = buildFacts(tool.name, gathered, now(), input);
   const decision = evaluatePolicy(policy, facts, now());
   const check = await repos.policyChecks.create({
@@ -176,8 +196,19 @@ export async function executeTool(args: ExecuteToolArgs): Promise<ToolOutcome<un
     };
   }
 
+  // 5. Limited-mode caps. Exceeding one sends the action to a person; it never
+  // fails. A rung that hard-fails is a rung operators skip.
+  let overCap: string | null = null;
+  if (isWrite && deploymentMode === 'limited') {
+    const caps = await loadCaps(args.ctx.tenantId);
+    const spent = await spentToday(args.ctx.tenantId);
+    overCap = capExceeded(caps, spent, facts.amountMinor ?? null);
+  }
+
+  // 6. Approval gate.
   const needsApproval =
     decision.decision === 'require_approval' ||
+    overCap !== null ||
     (deploymentMode === 'human_approval' && tool.sideEffect === 'write_high');
 
   if (needsApproval) {
@@ -221,22 +252,91 @@ export async function executeTool(args: ExecuteToolArgs): Promise<ToolOutcome<un
           conversationId: args.ctx.conversationId,
           toolName: tool.name,
           proposedInput: input,
-          reason: decision.reason,
+          reason: overCap ?? decision.reason,
           policyCheckId: check.id,
           status: 'pending',
           requestedAt: now(),
           expiresAt: new Date(now().getTime() + serverEnv().KORA_APPROVAL_TTL_MINUTES * 60_000),
         }));
-      await run.record('approval', {
-        tool: tool.name,
-        approvalId: approval.id,
-        reason: decision.reason,
-      });
-      return { status: 'awaiting_approval', approvalId: approval.id, reason: decision.reason };
+      const reason = overCap ?? decision.reason;
+      await run.record('approval', { tool: tool.name, approvalId: approval.id, reason });
+      return { status: 'awaiting_approval', approvalId: approval.id, reason };
     }
   }
 
-  // 6. Idempotency claim.
+  // 7. Deployment mode gate. This is the only path a write can take in simulation
+  // or shadow mode, which is what makes the assertion before execution meaningful.
+  //
+  // It sits *after* the approval branch on purpose. A write that policy says needs
+  // a person must still stop for one here: turning it into a silent simulated
+  // success would erase the one thing replay and shadow exist to measure.
+  const recorded = args.recordedOutputs?.[replayKey(tool.name, input)];
+
+  if (
+    args.recordedOutputs !== undefined &&
+    recorded === undefined &&
+    !isWrite &&
+    tool.rerunOnReplay !== true
+  ) {
+    // A read the original run never made. Serving it from the live system would
+    // compare the new version against today rather than against that day.
+    return fail(
+      'REPLAY_GAP',
+      `${tool.name} was not called in the original run, so the state it would have read is unknown`,
+      false,
+      input,
+    );
+  }
+
+  const servedFromRecord = recorded !== undefined && tool.rerunOnReplay !== true;
+
+  if (
+    servedFromRecord ||
+    (isWrite && (deploymentMode === 'simulation' || deploymentMode === 'shadow'))
+  ) {
+    const output = recorded ?? { simulated: true, tool: tool.name, input };
+    await repos.toolExecutions.create({
+      runId: run.runId,
+      toolName: tool.name,
+      toolVersion: tool.version,
+      input,
+      output,
+      status: 'simulated',
+      startedAt,
+      finishedAt: now(),
+      durationMs: 0,
+    });
+    return { status: 'simulated', output };
+  }
+
+  // 8. Circuit breaker. Checked before the claim so a downed dependency costs one
+  // Redis read instead of an idempotency row and a doomed HTTP call.
+  //
+  // Degradation ladder, in the order a dependency is allowed to fail:
+  //   retrieval down     -> answer from tool results only, never from memory, and
+  //                         escalate anything that needs policy (search_knowledge
+  //                         fails here like any other read; the agent has no memory
+  //                         path to fall back to).
+  //   business API down  -> say so plainly and escalate (this gate, plus the
+  //                         TOOL_FAILED handover in @kora/ai).
+  //   models down        -> static holding message and escalate, never queued
+  //                         silently (@kora/ai gateway and agent loop).
+  //   redis down         -> fail closed on writes. A write never runs while we
+  //                         cannot tell a healthy dependency from a downed one.
+  const breakerKey = toolBreakerKey(args.ctx.tenantId, tool.name);
+  const verdict = await breaker().gate(breakerKey, isWrite ? 'write' : 'read');
+  if (!verdict.pass) {
+    return fail(
+      'UPSTREAM_5XX',
+      verdict.reason === 'open'
+        ? `${tool.name} is failing upstream, so calls to it are paused`
+        : `${tool.name} is a write and the circuit breaker store is unreachable, so it cannot run safely`,
+      false,
+      input,
+    );
+  }
+
+  // 9. Idempotency claim.
   const key = deriveKey({
     tenantId: args.ctx.tenantId,
     conversationId: args.ctx.conversationId,
@@ -288,7 +388,16 @@ export async function executeTool(args: ExecuteToolArgs): Promise<ToolOutcome<un
     );
   }
 
-  // 7. Execute, with a bounded retry inside the run deadline.
+  // A write must never get this far in shadow mode. Stage 5 is the only path a
+  // write can take there, so this is unreachable by construction, which is
+  // precisely why it is worth asserting: an unreachable branch that becomes
+  // reachable is a silent bug otherwise.
+  if (deploymentMode === 'shadow' && isWrite) {
+    throw new Error(`${tool.name} reached execution in shadow mode; nothing may be written`);
+  }
+
+  // 10. Execute, with a bounded retry inside the run deadline.
+  const retryClass = retryClassOf(tool);
   let attempt = claimed.attempt;
   let lastCode: ToolErrorCode = 'UPSTREAM_5XX';
   let lastMessage = 'tool failed';
@@ -310,7 +419,7 @@ export async function executeTool(args: ExecuteToolArgs): Promise<ToolOutcome<un
     const controller = new AbortController();
     const timer = setTimeout(
       () => controller.abort(new Error('tool timed out')),
-      Math.min(tool.timeoutMs, remainingMs),
+      budgetedTimeoutMs(tool.timeoutMs, args.ctx.deadlineAt),
     );
     const ctx: ToolContext = {
       ...args.ctx,
@@ -325,7 +434,7 @@ export async function executeTool(args: ExecuteToolArgs): Promise<ToolOutcome<un
       const raw = await tool.execute(input, ctx);
       clearTimeout(timer);
 
-      // 8. Validate output.
+      // 11. Validate output.
       const out = tool.outputSchema.safeParse(raw);
       if (!out.success) {
         lastCode = 'MALFORMED_OUTPUT';
@@ -335,11 +444,11 @@ export async function executeTool(args: ExecuteToolArgs): Promise<ToolOutcome<un
       }
       const output = out.data;
 
-      // 9. Verify. Absence of verification is not verification.
+      // 12. Verify. Absence of verification is not verification.
       const verification = tool.verify ? await runVerification(tool, input, output, ctx) : null;
       const verified = verification ? verification.verified : null;
 
-      // 10. Settle idempotency and write the execution row together.
+      // 13. Settle idempotency and write the execution row together.
       await db().transaction(async (tx) => {
         await settleSuccess(key, output, tx);
         await withTenant(args.ctx.tenantId, tx).toolExecutions.create({
@@ -362,6 +471,7 @@ export async function executeTool(args: ExecuteToolArgs): Promise<ToolOutcome<un
         });
       });
 
+      await breaker().recordSuccess(breakerKey);
       return {
         status: 'ok',
         output,
@@ -390,13 +500,18 @@ export async function executeTool(args: ExecuteToolArgs): Promise<ToolOutcome<un
         durationMs: now().getTime() - attemptStartedAt.getTime(),
       });
 
-      // Never retry a write that is not marked idempotent.
-      if (!retryable || !tool.idempotent || attempt > tool.maxRetries) {
+      // Never retry a write that is not marked idempotent: `retryClassOf` maps it to
+      // the class that never retries.
+      if (!retryable || !isRetryable(retryClass, e) || attempt > tool.maxRetries) {
         await settleFailure(key, lastCode);
+        // One breaker failure per tool call, not per attempt: the retry table already
+        // bounds the attempts, and counting each of them would open the breaker on the
+        // second failed call and make the table meaningless.
+        if (BREAKER_FAILURE_CODES.includes(lastCode)) await breaker().recordFailure(breakerKey);
         return { status: 'failed', code: lastCode, error: lastMessage, retryable };
       }
 
-      await new Promise((r) => setTimeout(r, backoffMs(attempt)));
+      await new Promise((r) => setTimeout(r, backoffMs(RETRY_POLICY[retryClass], attempt)));
       attempt++;
     }
   }

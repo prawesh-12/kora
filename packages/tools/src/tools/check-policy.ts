@@ -27,6 +27,7 @@ export const checkPolicy = defineTool({
     missingFacts: z.array(z.string()),
   }),
   sideEffect: 'read',
+  rerunOnReplay: true,
   requiredPermission: 'policy:read',
   timeoutMs: 1000,
   maxRetries: 0,

@@ -135,3 +135,7 @@ export interface TicketResponse {
   status: 'open' | 'closed';
   createdAt: string;
 }
+
+export const faultRateBody = z.object({
+  rate: z.coerce.number().min(0).max(1).nullable().default(null),
+});

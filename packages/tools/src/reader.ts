@@ -58,6 +58,11 @@ export const acmeAdmin = {
     );
   },
 
+  /** `null` hands control back to the service's own `ACME_FAULT_RATE`. */
+  async setFaultRate(rate: number | null): Promise<void> {
+    await acmeFetch('/admin/fault-rate', { method: 'POST', body: JSON.stringify({ rate }) }, 5000);
+  },
+
   async requestLog(path: string): Promise<AcmeRequestLogEntry[]> {
     const r = await acmeFetch(`/admin/request-log?path=${encodeURIComponent(path)}`, {}, 5000);
     if (!r.ok) return [];

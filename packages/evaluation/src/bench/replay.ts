@@ -1,5 +1,6 @@
 import { logger } from '@kora/core';
 import { assembleTrace } from '@kora/db';
+import { replayKey } from '@kora/tools';
 import type { AssembledTrace } from '../deps.js';
 
 /**
@@ -27,6 +28,9 @@ export interface NotReplayable {
 
 const WRITE_TOOLS = ['create_replacement', 'create_refund', 'cancel_order', 'create_ticket'];
 
+/** Upstream conditions the recorded outputs cannot bring back. */
+const TRANSIENT_CODES = ['UPSTREAM_TIMEOUT', 'UPSTREAM_5XX', 'VERIFY_FAILED', 'DEADLINE_EXCEEDED'];
+
 export function reconstructState(trace: AssembledTrace): PointInTimeState | NotReplayable {
   const state: PointInTimeState = {
     orders: {},
@@ -45,7 +49,7 @@ export function reconstructState(trace: AssembledTrace): PointInTimeState | NotR
   }
 
   for (const execution of succeeded) {
-    const key = `${execution.toolName}:${JSON.stringify(execution.input)}`;
+    const key = replayKey(execution.toolName, execution.input);
     state.toolOutputs[key] = execution.output;
 
     if (execution.toolName === 'get_order') {
@@ -82,6 +86,20 @@ export function reconstructState(trace: AssembledTrace): PointInTimeState | NotR
     return { runId: trace.run.id, reason: 'the original run recorded no intent' };
   }
 
+  // A run whose outcome was driven by a transient upstream failure cannot be
+  // replayed: the recorded outputs are the successful ones, so the replay sails
+  // through and reports an improvement that is really a missing fault. Comparing
+  // it would measure the fault injector, not the agent.
+  const disturbed = trace.toolExecutions.find(
+    (e) => TRANSIENT_CODES.includes(e.errorCode ?? '') || e.verified === false,
+  );
+  if (disturbed) {
+    return {
+      runId: trace.run.id,
+      reason: `the original run hit ${disturbed.errorCode ?? 'a failed verification'} on ${disturbed.toolName}, which replay cannot reproduce`,
+    };
+  }
+
   return state;
 }
 
@@ -93,7 +111,14 @@ export interface ReplayCandidate {
   runId: string;
   intent: string | null;
   outcome: string | null;
+  /** Every customer message in the conversation, so the replayed turn has its context. */
   messages: string[];
+  /**
+   * Which of those messages this run answered. A conversation of three turns is
+   * three runs, and comparing turn one against turn three is how a replay reports
+   * a regression that is really an off-by-one.
+   */
+  turnIndex: number;
   state: PointInTimeState;
 }
 
@@ -296,9 +321,15 @@ export async function loadCandidates(
       continue;
     }
 
-    const messages = trace.conversation.messages
-      .filter((m) => m.role === 'customer')
-      .map((m) => m.content);
+    const customerMessages = trace.conversation.messages.filter((m) => m.role === 'customer');
+    // The customer message is written just before the run starts, so the turn
+    // this run answered is the last one at or before `startedAt`, not the first
+    // one after it. Getting this backwards compares turn one against turn two and
+    // reports a regression that is really an off-by-one.
+    const turnIndex = customerMessages.findLastIndex(
+      (m) => m.createdAt.getTime() <= trace.run.startedAt.getTime(),
+    );
+    const messages = customerMessages.map((m) => m.content);
 
     if (messages.length === 0) {
       notReplayable.push({ runId, reason: 'the original run has no customer message' });
@@ -310,6 +341,7 @@ export async function loadCandidates(
       intent: trace.run.intent,
       outcome: trace.run.outcome,
       messages,
+      turnIndex: turnIndex === -1 ? messages.length - 1 : turnIndex,
       state,
     });
   }

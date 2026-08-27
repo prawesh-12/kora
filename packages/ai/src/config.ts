@@ -107,12 +107,21 @@ export interface ResolvedAgentConfig {
  * runtime. Which one was used is recorded on the result, so a trace never has to
  * be guessed at.
  */
-export async function resolveAgentConfig(tenantId: string): Promise<ResolvedAgentConfig> {
+/**
+ * `versionId` pins a specific version instead of the active one. Replay needs it:
+ * the point is what the *new* configuration would have done, so the policy bundle
+ * has to come from that version, not from whatever is live now.
+ */
+export async function resolveAgentConfig(
+  tenantId: string,
+  versionId?: string,
+): Promise<ResolvedAgentConfig> {
   const file = loadAgentConfig();
 
   try {
-    const { loadActive, loadPolicyBundle } = await import('@kora/db');
-    const version = await loadActive(tenantId);
+    const { loadActive, loadVersion, loadPolicyBundle } = await import('@kora/db');
+    const version =
+      versionId === undefined ? await loadActive(tenantId) : await loadVersion(tenantId, versionId);
     const compiledPolicy = await loadPolicyBundle(tenantId, version.policyBundle);
 
     return {

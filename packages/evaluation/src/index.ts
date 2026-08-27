@@ -14,3 +14,5 @@ export * from './scenarios/assert.js';
 export * from './scenarios/runner.js';
 export * from './bench/replay.js';
 export * from './bench/runner.js';
+export * from './bench/chaos.js';
+export * from './bench/replay-driver.js';

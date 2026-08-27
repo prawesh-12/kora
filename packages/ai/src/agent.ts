@@ -141,6 +141,7 @@ function buildTools(args: {
   run: RunHandle;
   state: TurnState;
   faults: Record<string, string>;
+  recordedOutputs?: Record<string, unknown>;
 }) {
   const tools: ToolSet = {};
 
@@ -166,6 +167,7 @@ function buildTools(args: {
           grantedPermissions: args.config.permissions,
           gathered: args.state.gathered,
           run: args.run,
+          ...(args.recordedOutputs ? { recordedOutputs: args.recordedOutputs } : {}),
         });
 
         args.state.toolsCalled.push(def.name);
@@ -236,11 +238,15 @@ export async function runAgentTurn(args: {
   deploymentMode?: DeploymentMode;
   /** Scenario use only: arms an Acme fault for the named tool. */
   faults?: Record<string, string>;
+  /** Replay only: pins the agent version whose behaviour is being measured. */
+  agentVersionId?: string;
+  /** Replay only: the original run's tool outputs, keyed `toolName:json(input)`. */
+  recordedOutputs?: Record<string, unknown>;
 }): Promise<TurnResult> {
   const env = serverEnv();
   // Pinned once, here. A version published mid-run does not change this run's
   // behaviour, which is what makes an in-flight conversation survive a promotion.
-  const config = await resolveAgentConfig(args.tenantId);
+  const config = await resolveAgentConfig(args.tenantId, args.agentVersionId);
   const repos = withTenant(args.tenantId);
   const deploymentMode = args.deploymentMode ?? env.KORA_DEPLOYMENT_MODE;
 
@@ -424,7 +430,15 @@ export async function runAgentTurn(args: {
     logger,
   };
 
-  const tools = buildTools({ config, ctx, deploymentMode, run, state, faults: args.faults ?? {} });
+  const tools = buildTools({
+    config,
+    ctx,
+    deploymentMode,
+    run,
+    state,
+    faults: args.faults ?? {},
+    ...(args.recordedOutputs ? { recordedOutputs: args.recordedOutputs } : {}),
+  });
 
   // Recorded so an operator can prove from the trace which tools were ever on the
   // table, rather than inferring it from what happened to be called.

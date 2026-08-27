@@ -26,6 +26,7 @@ export const searchKnowledge = defineTool({
     ),
   }),
   sideEffect: 'read',
+  rerunOnReplay: true,
   requiredPermission: 'knowledge:read',
   timeoutMs: 6000,
   maxRetries: 2,

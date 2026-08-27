@@ -61,7 +61,9 @@ export type ToolErrorCode =
   | 'MALFORMED_OUTPUT'
   | 'VERIFY_FAILED'
   | 'DEADLINE_EXCEEDED'
-  | 'TOOL_SELECTION_FAILURE';
+  | 'TOOL_SELECTION_FAILURE'
+  /** Replay only: the original run never made this call, so there is nothing to serve. */
+  | 'REPLAY_GAP';
 
 export type RunStepKind =
   | 'intent'

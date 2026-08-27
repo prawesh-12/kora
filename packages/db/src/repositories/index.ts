@@ -1,5 +1,17 @@
 import { type AgentState, newId, now } from '@kora/core';
-import { and, asc, desc, eq, gte, inArray, lte, sql as raw, sql as rawSql } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  getTableColumns,
+  gte,
+  inArray,
+  lte,
+  ne,
+  sql as raw,
+  sql as rawSql,
+} from 'drizzle-orm';
 import { type Database, type Tx, db } from '../client.js';
 import * as s from '../schema/index.js';
 
@@ -241,12 +253,24 @@ export function createRepositories(tenantId: string, conn: Database | Tx = db())
           )
           .orderBy(asc(s.approvals.requestedAt));
       },
+      /**
+       * Replay conversations are excluded. Replaying historical traffic raises
+       * real approval requests, and an operator queue filling with decisions
+       * about conversations that already ended is worse than useless.
+       */
       async listPending() {
         await expireOverdue(tenantId, conn);
         return conn
-          .select()
+          .select(getTableColumns(s.approvals))
           .from(s.approvals)
-          .where(and(eq(s.approvals.tenantId, tenantId), eq(s.approvals.status, 'pending')))
+          .innerJoin(s.conversations, eq(s.conversations.id, s.approvals.conversationId))
+          .where(
+            and(
+              eq(s.approvals.tenantId, tenantId),
+              eq(s.approvals.status, 'pending'),
+              ne(s.conversations.channel, 'replay'),
+            ),
+          )
           .orderBy(asc(s.approvals.requestedAt));
       },
       /**

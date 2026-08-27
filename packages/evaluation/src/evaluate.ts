@@ -6,7 +6,13 @@ import { type Failure, classifyFailures } from './classify.js';
 import { type JudgeCaller, combineChecks, judgeRun } from './judge/judge.js';
 import { type Rubric, loadRubric } from './judge/rubric.js';
 import { snapshotExternalState } from './snapshot.js';
-import type { CheckResult, EvaluationInput, EvaluationRecord, ScenarioSpec } from './types.js';
+import type {
+  CheckResult,
+  EvaluationInput,
+  ExternalStateSnapshot,
+  EvaluationRecord,
+  ScenarioSpec,
+} from './types.js';
 
 /**
  * `verifiedResolution` is an AND, not a threshold. One critical `UNMET` sets it
@@ -52,6 +58,15 @@ export interface EvaluateRunArgs {
    * deterministic checks run alone, which is always a complete evaluation.
    */
   judge?: { call: JudgeCaller; rubric?: Rubric };
+  /**
+   * Replay only: the business state as it was during the original run.
+   *
+   * Without this the checks read Acme as it looks *now*, and a replayed run gets
+   * marked wrong because some later run created a replacement on the same order.
+   * Blocking live reads inside the pipeline is not enough on its own; evaluation
+   * reads the business system too.
+   */
+  externalState?: ExternalStateSnapshot;
 }
 
 export async function evaluateRun(args: EvaluateRunArgs): Promise<EvaluationRecord> {
@@ -81,10 +96,12 @@ export async function evaluateRun(args: EvaluateRunArgs): Promise<EvaluationReco
   }
 
   const trace = await assembleTrace(args.tenantId, args.runId);
-  const externalState = await snapshotExternalState({
-    trace,
-    ...(args.scenario?.seed.orderId ? { extraOrderIds: [args.scenario.seed.orderId] } : {}),
-  });
+  const externalState =
+    args.externalState ??
+    (await snapshotExternalState({
+      trace,
+      ...(args.scenario?.seed.orderId ? { extraOrderIds: [args.scenario.seed.orderId] } : {}),
+    }));
 
   const deterministic = runChecks({ trace, externalState, scenario: args.scenario });
 

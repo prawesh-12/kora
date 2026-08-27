@@ -1,5 +1,5 @@
 import { serverEnv } from '@kora/core';
-import { closeDb, conversations, db, eq, withTenant } from '@kora/db';
+import { and, closeDb, conversations, db, eq, events, withTenant } from '@kora/db';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 const afterCallbacks: Array<() => unknown> = [];
@@ -132,9 +132,23 @@ describe('conversations and chat', () => {
     );
     expect(res.status).toBe(200);
 
-    const turn = (await res.json()) as { finalState: string; outcome: string };
+    const turn = (await res.json()) as { finalState: string; runId: string };
     expect(turn.finalState).toBe('NEEDS_HUMAN');
-    expect(afterCallbacks.length).toBe(before + 1);
+
+    // The contract is that evaluation is scheduled, not where. With a reachable
+    // Redis the `run.finished` event is enqueued and the worker owns it. With no
+    // Redis the route falls back to `after()`. Neither path may drop the run.
+    const [event] = await db()
+      .select()
+      .from(events)
+      .where(and(eq(events.runId, turn.runId), eq(events.type, 'run.finished')));
+
+    expect(event, 'no run.finished event was written for a terminal run').toBeDefined();
+    if (event?.enqueued) {
+      expect(afterCallbacks.length).toBe(before);
+    } else {
+      expect(afterCallbacks.length).toBe(before + 1);
+    }
   });
 
   it('returns 404 for an unknown conversation id', async () => {

@@ -92,6 +92,94 @@ async function main(): Promise<number> {
         return 0;
       }
 
+      case 'replay': {
+        const { replay, renderReplay } = await import('@kora/evaluation');
+        const { runAgentTurn, makeJudgeCaller } = await import('@kora/ai');
+        const { loadActive } = await import('@kora/db');
+        const tenantId = serverEnv().KORA_TENANT_ID;
+        const arg = (name: string) => {
+          const at = rest.indexOf(`--${name}`);
+          return at === -1 ? undefined : rest[at + 1];
+        };
+
+        const active = await loadActive(tenantId).catch(() => null);
+        const from = arg('from') ?? active?.id;
+        const against = arg('against') ?? from;
+        if (!from || !against) {
+          console.error(
+            'replay needs --from <versionId> and --against <versionId>; run `pnpm kora agent:versions` to list them',
+          );
+          return 1;
+        }
+
+        const limitRaw = Number(arg('limit'));
+        const report = await replay({
+          tenantId,
+          fromVersionId: from,
+          againstVersionId: against,
+          deps: {
+            runAgentTurn,
+            judge: { call: makeJudgeCaller(tenantId) },
+          },
+          ...(Number.isFinite(limitRaw) ? { limit: limitRaw } : {}),
+        });
+
+        console.log(renderReplay(report));
+
+        // Self-replay must be clean. Drift against the identical version means
+        // uncontrolled non-determinism, and every later replay number is noise.
+        if (from === against && report.regressions.length > 0) {
+          console.error(
+            `\nSelf-replay produced ${report.regressions.length} regression(s). Fix determinism before trusting any replay number.`,
+          );
+          return 1;
+        }
+        return 0;
+      }
+
+      case 'agent:promote': {
+        const { promote, loadActive } = await import('@kora/db');
+        const tenantId = serverEnv().KORA_TENANT_ID;
+        const arg = (name: string) => {
+          const at = rest.indexOf(`--${name}`);
+          return at === -1 ? undefined : rest[at + 1];
+        };
+        const versionId = arg('version');
+        if (!versionId) {
+          console.error('agent:promote needs --version <versionId>');
+          return 1;
+        }
+
+        const accepted = (arg('accept') ?? '').split(',').filter(Boolean);
+        const result = await promote({
+          tenantId,
+          versionId,
+          actorId: arg('actor') ?? 'cli',
+          evidence: {
+            benchmarkPassed: rest.includes('--benchmark-passed'),
+            ...(arg('benchmark') ? { benchmarkRunId: arg('benchmark') } : {}),
+            ...(arg('replay') ? { replayRunId: arg('replay') } : {}),
+            ...(arg('compared') ? { replayCompared: Number(arg('compared')) } : {}),
+            ...(arg('vrr-delta') ? { replayVrrDelta: Number(arg('vrr-delta')) } : {}),
+            ...(arg('regressions')
+              ? { regressions: (arg('regressions') ?? '').split(',').filter(Boolean) }
+              : {}),
+          },
+          acceptedRegressions: accepted,
+          ...(arg('note') ? { note: arg('note') } : {}),
+        });
+
+        if (!result.promoted) {
+          console.error('Promotion blocked:');
+          for (const b of result.blocked) console.error(`  ${b.gate}: ${b.reason}`);
+          return 1;
+        }
+
+        const now = await loadActive(tenantId);
+        log.info({ versionId: now.id, version: now.version }, 'promoted');
+        return 0;
+      }
+
       case 'bench': {
         const { runBench } = await import('@kora/evaluation');
         const { runAgentTurn, makeJudgeCaller } = await import('@kora/ai');
@@ -99,6 +187,38 @@ async function main(): Promise<number> {
           runAgentTurn,
           judge: { call: makeJudgeCaller(serverEnv().KORA_TENANT_ID) },
         });
+      }
+
+      case 'chaos': {
+        const { runChaos, chaosFailures, renderChaos } = await import('@kora/evaluation');
+        const { runAgentTurn, makeJudgeCaller } = await import('@kora/ai');
+        const flag = (name: string, fallback: number) => {
+          const raw = rest.find((a) => a.startsWith(`--${name}=`))?.split('=')[1];
+          const n = raw === undefined ? Number.NaN : Number(raw);
+          return Number.isFinite(n) ? n : fallback;
+        };
+
+        const results = await runChaos({
+          deps: {
+            runAgentTurn,
+            judge: { call: makeJudgeCaller(serverEnv().KORA_TENANT_ID) },
+          },
+          faultRate: flag('fault-rate', 0.2),
+          repeat: flag('repeat', 3),
+          category: rest.find((a) => a.startsWith('--category='))?.split('=')[1],
+        });
+
+        console.log(renderChaos(results));
+        const problems = chaosFailures(results);
+        if (problems.length > 0) {
+          console.error('\nChaos found correctness failures:');
+          for (const p of problems) console.error(`  ${p}`);
+          return 1;
+        }
+        console.log(
+          '\nNo duplicate writes, no actions after a deny, no stuck runs, no false claims.',
+        );
+        return 0;
       }
 
       case 'judge:calibrate': {
@@ -158,7 +278,7 @@ async function main(): Promise<number> {
 
       default:
         console.error(
-          'usage: pnpm kora <ingest|migrate|seed|idempotency:cleanup|smoke:model|scenarios|bench|agent:publish|agent:versions|agent:rollback|judge:goldset|judge:calibrate|approvals:expire|security:isolation>',
+          'usage: pnpm kora <ingest|migrate|seed|idempotency:cleanup|smoke:model|scenarios|bench|chaos|replay|agent:publish|agent:versions|agent:promote|agent:rollback|judge:goldset|judge:calibrate|approvals:expire|security:isolation>',
         );
         return 1;
     }

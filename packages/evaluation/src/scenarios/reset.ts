@@ -42,3 +42,17 @@ export async function setKnowledgeStatus(tenantId: string, status: string): Prom
 export async function clearIdempotency(tenantId: string): Promise<void> {
   await sql()`DELETE FROM idempotency_keys WHERE tenant_id = ${tenantId}`;
 }
+
+/**
+ * Write requests that actually reached Acme. Read straight from the service's own
+ * request log rather than from anything Kora recorded: the whole point of the
+ * shadow assertion is that Kora's own view might be wrong.
+ */
+export async function acmeWritePosts(): Promise<number> {
+  const rows = await sql()<{ n: string }[]>`
+    SELECT count(*) AS n FROM acme_request_log
+    WHERE method = 'POST'
+      AND reached_business_logic = true
+      AND path NOT LIKE '/admin/%'`;
+  return Number(rows[0]?.n ?? 0);
+}

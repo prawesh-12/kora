@@ -1,12 +1,18 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { logger, serverEnv } from '@kora/core';
+import {
+  DEPLOYMENT_LADDER as DEPLOYMENT_MODES,
+  type DeploymentMode as DeploymentModeName,
+  logger,
+  serverEnv,
+} from '@kora/core';
 import { assembleTrace, withTenant } from '@kora/db';
 import { evaluateRun } from '../evaluate.js';
 import type { ScenarioSpec } from '../types.js';
 import { type Assertion, assertH1, assertScenario } from './assert.js';
 import {
   acmeIsUp,
+  acmeWritePosts,
   acmeRequestLog,
   clearIdempotency,
   knowledgeIsPopulated,
@@ -35,8 +41,10 @@ export type RunAgentTurn = (args: {
   tenantId: string;
   conversationId: string;
   message: string;
-  deploymentMode?: 'simulation' | 'human_approval' | 'full';
+  deploymentMode?: 'simulation' | 'shadow' | 'human_approval' | 'limited' | 'full';
   faults?: Record<string, string>;
+  agentVersionId?: string;
+  recordedOutputs?: Record<string, unknown>;
 }) => Promise<{ runId: string; text: string; approvalId: string | null }>;
 
 export interface ScenarioOutcome {
@@ -86,6 +94,7 @@ export async function runScenario(
   scenario: ScenarioSpec & { repeatTurn?: boolean; approval?: 'approve' | 'deny' },
   tenantId: string,
   deps: ScenarioDeps,
+  modeOverride?: DeploymentModeName,
 ): Promise<ScenarioOutcome> {
   const { runAgentTurn } = deps;
   const startedAt = Date.now();
@@ -123,7 +132,7 @@ export async function runScenario(
         tenantId,
         conversationId: conversation.id,
         message,
-        deploymentMode: scenario.deploymentMode ?? 'full',
+        deploymentMode: modeOverride ?? scenario.deploymentMode ?? 'full',
         faults,
       });
 
@@ -267,6 +276,14 @@ export async function runScenarios(argv: string[] = [], deps?: ScenarioDeps): Pr
   const ids = idIndex >= 0 ? (argv[idIndex + 1] ?? '').split(',').filter(Boolean) : undefined;
   const repeatIndex = argv.indexOf('--repeat');
   const repeat = repeatIndex >= 0 ? Number(argv[repeatIndex + 1] ?? 1) : 1;
+  const modeIndex = argv.indexOf('--mode');
+  const modeOverride =
+    modeIndex >= 0 ? (argv[modeIndex + 1] as DeploymentModeName | undefined) : undefined;
+
+  if (modeIndex >= 0 && !DEPLOYMENT_MODES.includes(modeOverride as DeploymentModeName)) {
+    console.error(`--mode must be one of ${DEPLOYMENT_MODES.join(', ')}`);
+    return 1;
+  }
 
   if (!(await acmeIsUp())) {
     console.error(
@@ -302,10 +319,22 @@ export async function runScenarios(argv: string[] = [], deps?: ScenarioDeps): Pr
     // Sequential on purpose: the scenarios share one Acme dataset, and a scoped
     // reset for one order still races a run that is reading the same order.
     for (const scenario of scenarios) {
-      results.push(await runScenario(scenario, tenantId, deps));
+      results.push(await runScenario(scenario, tenantId, deps, modeOverride));
     }
 
     if (repeat > 1) console.log(`\n=== pass ${pass} of ${repeat} ===`);
+
+    // Shadow mode is not judged on the scenario expectations: nothing was written,
+    // so of course they do not hold. The only thing worth asserting is that
+    // nothing was written.
+    if (modeOverride === 'shadow') {
+      const writes = await acmeWritePosts();
+      console.log(`\n${results.length} scenarios ran in shadow mode.`);
+      console.log(`Write requests that reached Acme: ${writes}`);
+      if (writes > 0) exitCode = 1;
+      continue;
+    }
+
     console.log(renderTable(results));
 
     const failed = results.filter((r) => !r.passed);
