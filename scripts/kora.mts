@@ -151,10 +151,21 @@ async function main(): Promise<number> {
         }
 
         const accepted = (arg('accept') ?? '').split(',').filter(Boolean);
+        // A promotion has to be attributable to a person, so `--actor` is an
+        // operator email or user id, not a free-text label.
+        const { operatorByEmailOrId } = await import('@kora/db');
+        const actor = await operatorByEmailOrId(arg('actor') ?? '');
+        if (!actor) {
+          console.error(
+            'agent:promote needs --actor <operator email or user id>; a promotion is attributable to a person',
+          );
+          return 1;
+        }
+
         const result = await promote({
           tenantId,
           versionId,
-          actorId: arg('actor') ?? 'cli',
+          actorId: actor.id,
           evidence: {
             benchmarkPassed: rest.includes('--benchmark-passed'),
             ...(arg('benchmark') ? { benchmarkRunId: arg('benchmark') } : {}),

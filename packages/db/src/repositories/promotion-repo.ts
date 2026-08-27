@@ -1,8 +1,9 @@
-import { newId, now } from '@kora/core';
-import { and, desc, eq } from 'drizzle-orm';
+import { ValidationError, newId, now } from '@kora/core';
+import { and, desc, eq, or } from 'drizzle-orm';
 import { db } from '../client.js';
 import { agentVersions } from '../schema/agents.js';
 import { promotions } from '../schema/promotions.js';
+import { user } from '../schema/auth.js';
 import { activate, loadActive, previousActive } from './agent-repo.js';
 
 export interface PromotionEvidence {
@@ -90,6 +91,12 @@ export async function promote(args: {
   const blocked = promotionGates(args.evidence, accepted);
   if (blocked.length > 0) return { blocked, promoted: false };
 
+  // A promotion is attributable to a person, so `actor_id` is a foreign key to
+  // `user`. Checked here rather than left to the constraint, because a raw
+  // foreign key violation after the version has already been activated is a
+  // confusing way to find that out.
+  await assertOperator(args.actorId);
+
   const from = await loadActive(args.tenantId).catch(() => null);
   await activate(args.tenantId, args.versionId, args.actorId);
 
@@ -154,6 +161,16 @@ export async function rollback(
   return { restoredVersionId: previous.id };
 }
 
+async function assertOperator(actorId: string): Promise<void> {
+  const [row] = await db().select({ id: user.id }).from(user).where(eq(user.id, actorId));
+  if (!row) {
+    throw new ValidationError(
+      `${actorId} is not an operator; a promotion has to be attributable to a person`,
+      { code: 'UNKNOWN_ACTOR' },
+    );
+  }
+}
+
 async function missingPolicyVersions(tenantId: string, versionIds: string[]): Promise<string[]> {
   if (versionIds.length === 0) return [];
   const { policyVersions } = await import('../schema/policies.js');
@@ -183,4 +200,16 @@ export async function promotionHistory(tenantId: string, limit = 50) {
     .where(eq(promotions.tenantId, tenantId))
     .orderBy(desc(promotions.createdAt))
     .limit(limit);
+}
+
+/** Resolves `--actor` from an email or a user id, so the CLI can name a person. */
+export async function operatorByEmailOrId(
+  emailOrId: string,
+): Promise<{ id: string; email: string } | null> {
+  if (!emailOrId) return null;
+  const [row] = await db()
+    .select({ id: user.id, email: user.email })
+    .from(user)
+    .where(or(eq(user.id, emailOrId), eq(user.email, emailOrId)));
+  return row ?? null;
 }

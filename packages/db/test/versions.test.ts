@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { ConfigError } from '@kora/core';
+import { ConfigError, newId } from '@kora/core';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { closeDb, sql } from '../src/client.js';
 import {
@@ -17,6 +17,7 @@ import {
   loadPolicyBundle,
   publishPolicy,
 } from '../src/repositories/policy-repo.js';
+import { promote, rollback } from '../src/repositories/promotion-repo.js';
 
 const TENANT = 'ten_versions_test';
 const POLICY_DIR = join(import.meta.dirname, '../../../config/policies');
@@ -38,11 +39,17 @@ const baseVersion = {
 };
 
 let agentId = '';
+let operatorId = '';
 
 beforeAll(async () => {
   await sql()`INSERT INTO tenants (id, name) VALUES (${TENANT}, 'Versions test')
               ON CONFLICT (id) DO NOTHING`;
   agentId = await ensureAgent(TENANT, 'support', 'Versions test agent');
+
+  // A promotion is attributable to a person, so the actor has to be a real user.
+  const [op] = await sql()<{ id: string }[]>`SELECT id FROM "user" LIMIT 1`;
+  if (!op) throw new Error('no operator exists; run `pnpm kora seed` first');
+  operatorId = op.id;
 });
 
 afterAll(async () => {
@@ -181,5 +188,88 @@ describe('agent versions', () => {
 
   it('fails closed when there is no active version', async () => {
     await expect(loadActive(TENANT, 'no-such-agent')).rejects.toThrow(/no active agent version/);
+  });
+});
+
+describe('the full promotion flow', () => {
+  it('promotes, records the evidence, and rolls back without a redeploy', async () => {
+    const v1 = await createDraft(TENANT, agentId, baseVersion);
+    await activate(TENANT, v1.id, 'test');
+
+    const v2 = await createDraft(TENANT, agentId, {
+      ...baseVersion,
+      systemPrompt: 'be helpful and brief',
+    });
+
+    const evidence = {
+      benchmarkPassed: true,
+      benchmarkRunId: 'bench_1',
+      replayRunId: 'replay_1',
+      replayCompared: 600,
+      replayVrrDelta: 0.02,
+      regressions: ['run_a'],
+    };
+
+    const refused = await promote({
+      tenantId: TENANT,
+      versionId: v2.id,
+      actorId: operatorId,
+      evidence,
+    });
+    expect(refused.promoted, 'promoted with an unreviewed regression').toBe(false);
+    expect(refused.blocked.map((b) => b.gate)).toEqual(['regressions']);
+    expect(
+      (await loadActive(TENANT)).id,
+      'a blocked promotion still changed the active version',
+    ).toBe(v1.id);
+
+    const done = await promote({
+      tenantId: TENANT,
+      versionId: v2.id,
+      actorId: operatorId,
+      evidence,
+      acceptedRegressions: ['run_a'],
+      note: 'reviewed, the regression is an expected policy change',
+    });
+    expect(done.promoted).toBe(true);
+    expect((await loadActive(TENANT)).id).toBe(v2.id);
+
+    const [row] = await sql()<{ from_version_id: string; benchmark_run_id: string }[]>`
+      SELECT from_version_id, benchmark_run_id FROM promotions
+      WHERE tenant_id = ${TENANT} AND version_id = ${v2.id}`;
+    expect(row?.from_version_id, 'the promotion did not record where it came from').toBe(v1.id);
+    expect(row?.benchmark_run_id).toBe('bench_1');
+
+    // Rollback has no gates and needs no redeploy.
+    const restored = await rollback(TENANT, operatorId);
+    expect(restored?.restoredVersionId).toBe(v1.id);
+    expect((await loadActive(TENANT)).id).toBe(v1.id);
+  });
+
+  it('finishes an in-flight run on the version it started with', async () => {
+    const active = await loadActive(TENANT);
+    const conversationId = newId('conv');
+    const runId = newId('run');
+
+    await sql()`INSERT INTO conversations (id, tenant_id, external_customer_id, channel, state)
+                VALUES (${conversationId}, ${TENANT}, 'cus_promo', 'web', 'NEW')`;
+    // The run pins its version at start, which is what makes this survive.
+    await sql()`INSERT INTO agent_runs
+                  (id, tenant_id, conversation_id, trace_id, agent_config_version, agent_version_id, started_at)
+                VALUES (${runId}, ${TENANT}, ${conversationId}, ${newId('tr')}, ${active.id}, ${active.id}, now())`;
+
+    const next = await createDraft(TENANT, agentId, {
+      ...baseVersion,
+      systemPrompt: 'promoted mid-run',
+    });
+    await activate(TENANT, next.id, 'test');
+
+    const [run] = await sql()<{ agent_version_id: string }[]>`
+      SELECT agent_version_id FROM agent_runs WHERE id = ${runId}`;
+    expect(run?.agent_version_id, 'a promotion rewrote an in-flight run').toBe(active.id);
+    expect((await loadActive(TENANT)).id).toBe(next.id);
+
+    await sql()`DELETE FROM agent_runs WHERE id = ${runId}`;
+    await sql()`DELETE FROM conversations WHERE id = ${conversationId}`;
   });
 });
