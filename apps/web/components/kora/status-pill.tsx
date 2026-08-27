@@ -14,11 +14,11 @@ import { cn } from '@/lib/utils';
 export type Status = 'ok' | 'warn' | 'danger' | 'info' | 'muted';
 
 const STATUS_CLASS: Record<Status, string> = {
-  ok: 'bg-success/10 text-success',
-  warn: 'bg-warning/10 text-warning',
-  danger: 'bg-destructive/10 text-destructive',
-  info: 'bg-info/10 text-info',
-  muted: 'bg-muted text-muted-foreground',
+  ok: 'bg-success/10 text-success-strong',
+  warn: 'bg-warning/10 text-warning-strong',
+  danger: 'bg-destructive/10 text-destructive-strong',
+  info: 'bg-info/10 text-info-strong',
+  muted: 'bg-muted text-muted-strong',
 };
 
 export function StatusPill({

@@ -55,7 +55,7 @@ export function TaskRows({
             <span
               className={cn(
                 'shrink-0 text-muted-foreground text-xs',
-                item.urgent === true && 'font-medium text-warning',
+                item.urgent === true && 'font-medium text-warning-strong',
               )}
             >
               {item.meta}

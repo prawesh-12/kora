@@ -81,7 +81,7 @@ export default async function ConversationsPage({
   }).toString();
 
   return (
-    <main className="flex flex-col gap-6 p-8">
+    <div className="flex flex-col gap-6 p-8">
       <header className="space-y-1">
         <h1 className="font-semibold text-xl tracking-tight">Conversations</h1>
         <p className="text-muted-foreground text-sm">
@@ -93,6 +93,6 @@ export default async function ConversationsPage({
       <ConversationFilters failureCodes={FAILURE_CODES} intents={INTENTS} />
 
       <ConversationTable page={page} apiQuery={apiQuery} />
-    </main>
+    </div>
   );
 }

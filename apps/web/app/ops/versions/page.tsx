@@ -32,7 +32,7 @@ export default async function VersionsPage() {
   const active = versions.find((v) => v.status === 'active');
 
   return (
-    <main className="flex flex-col gap-8 p-8">
+    <div className="flex flex-col gap-8 p-8">
       <header className="space-y-1">
         <h1 className="font-semibold text-xl tracking-tight">Agent versions</h1>
         <p className="text-muted-foreground text-sm">
@@ -140,6 +140,6 @@ export default async function VersionsPage() {
           </div>
         </section>
       ) : null}
-    </main>
+    </div>
   );
 }

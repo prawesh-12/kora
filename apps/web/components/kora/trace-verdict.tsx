@@ -5,9 +5,9 @@ import type { TraceDto } from '@/lib/api/schemas';
 type Tone = 'ok' | 'warn' | 'danger' | 'muted';
 
 const TONE_CLASS: Record<Tone, string> = {
-  ok: 'border-success/40 bg-success/5 text-success',
-  warn: 'border-warning/40 bg-warning/5 text-warning',
-  danger: 'border-destructive/40 bg-destructive/5 text-destructive',
+  ok: 'border-success/40 bg-success/5 text-success-strong',
+  warn: 'border-warning/40 bg-warning/5 text-warning-strong',
+  danger: 'border-destructive/40 bg-destructive/5 text-destructive-strong',
   muted: 'border-border bg-muted/40 text-muted-foreground',
 };
 
@@ -133,7 +133,7 @@ export function TraceVerdict({ trace }: { trace: TraceDto }) {
           {verdict.headline}
         </p>
         {verdict.provenance ? (
-          <p className="font-mono text-muted-foreground text-xs">{verdict.provenance}</p>
+          <p className="font-mono text-muted-strong text-xs">{verdict.provenance}</p>
         ) : null}
       </div>
     </div>

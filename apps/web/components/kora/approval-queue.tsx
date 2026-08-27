@@ -155,7 +155,9 @@ export function ApprovalQueue({ items }: { items: QueueItem[] }) {
                 <span
                   data-testid="approval-elapsed"
                   className={
-                    selectedWaiting.urgent ? 'font-medium text-destructive text-xs' : 'text-xs'
+                    selectedWaiting.urgent
+                      ? 'font-medium text-destructive-strong text-xs'
+                      : 'text-xs'
                   }
                 >
                   requested {formatElapsed(selectedWaiting.elapsedMs)}

@@ -41,7 +41,7 @@ export default async function EvaluationsPage({
   const to = metrics.window.to.slice(0, 10);
 
   return (
-    <main className="flex flex-col gap-8 p-8">
+    <div className="flex flex-col gap-8 p-8">
       <header className="space-y-1">
         <h1 className="font-semibold text-xl tracking-tight">Evaluations</h1>
         <p className="text-muted-foreground text-sm">
@@ -136,6 +136,6 @@ export default async function EvaluationsPage({
         </div>
         <FailureChart buckets={failures} days={days} />
       </section>
-    </main>
+    </div>
   );
 }

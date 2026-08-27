@@ -160,10 +160,10 @@ export function ChatTranscript({
   );
 
   return (
-    <div className="flex h-dvh flex-col">
+    <main className="flex h-dvh flex-col">
       <header className="border-b">
         <div className="mx-auto w-full max-w-[720px] px-4 py-3">
-          <p className="font-semibold text-base">{merchantName}</p>
+          <h1 className="font-semibold text-base">{merchantName}</h1>
           <p className="text-muted-foreground text-sm">
             Order updates, returns and replacements. Ask in your own words.
           </p>
@@ -221,7 +221,7 @@ export function ChatTranscript({
         {sending ? <ThinkingShimmer className="px-1 text-sm">Working on it</ThinkingShimmer> : null}
       </MessageScroller>
 
-      <div className="border-t bg-background">
+      <footer className="border-t bg-background">
         <div className="mx-auto w-full max-w-[720px] px-4 py-4">
           <PromptInput
             placeholder={online ? 'Tell us what happened' : 'You appear to be offline'}
@@ -231,9 +231,9 @@ export function ChatTranscript({
             aria-label="Message"
           />
         </div>
-      </div>
+      </footer>
 
       <AnimatedToastStack toasts={toasts} onDismiss={dismissToast} position="bottom-right" fixed />
-    </div>
+    </main>
   );
 }

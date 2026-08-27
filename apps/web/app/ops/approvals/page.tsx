@@ -88,7 +88,7 @@ export default async function ApprovalsPage({
   };
 
   return (
-    <main className="flex flex-col gap-6 p-8">
+    <div className="flex flex-col gap-6 p-8">
       <header className="space-y-1">
         <h1 className="font-semibold text-xl tracking-tight">Approvals</h1>
         <p className="text-muted-foreground text-sm">
@@ -149,7 +149,7 @@ export default async function ApprovalsPage({
       ) : (
         <ApprovalQueue items={items} />
       )}
-    </main>
+    </div>
   );
 }
 

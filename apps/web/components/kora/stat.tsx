@@ -5,10 +5,10 @@ export type StatTone = 'default' | 'ok' | 'warn' | 'danger' | 'info';
 
 const TONE_CLASS: Record<StatTone, string> = {
   default: 'text-foreground',
-  ok: 'text-success',
-  warn: 'text-warning',
-  danger: 'text-destructive',
-  info: 'text-info',
+  ok: 'text-success-strong',
+  warn: 'text-warning-strong',
+  danger: 'text-destructive-strong',
+  info: 'text-info-strong',
 };
 
 const LABEL = 'font-medium text-muted-foreground text-xs uppercase tracking-[0.06em]';

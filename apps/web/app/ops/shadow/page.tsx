@@ -32,7 +32,7 @@ export default async function ShadowPage() {
   );
 
   return (
-    <main className="flex flex-col gap-8 p-8">
+    <div className="flex flex-col gap-8 p-8">
       <header className="space-y-1">
         <h1 className="font-semibold text-xl tracking-tight">Shadow mode</h1>
         <p className="text-muted-foreground text-sm">
@@ -143,6 +143,6 @@ export default async function ShadowPage() {
           </div>
         )}
       </section>
-    </main>
+    </div>
   );
 }

@@ -36,7 +36,7 @@ export default async function OverviewPage() {
   const [metrics, runs] = await Promise.all([loadMetrics(), loadRecentRuns(RECENT_RUNS)]);
 
   return (
-    <main className="flex flex-col gap-8 p-8">
+    <div className="flex flex-col gap-8 p-8">
       <header className="space-y-1">
         <h1 className="font-semibold text-xl tracking-tight">Overview</h1>
         <p className="text-muted-foreground text-sm">
@@ -130,6 +130,6 @@ export default async function OverviewPage() {
           </>
         )}
       </section>
-    </main>
+    </div>
   );
 }

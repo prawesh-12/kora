@@ -65,6 +65,11 @@
   --color-info: var(--info);
   --color-success-foreground: var(--success-foreground);
   --color-success: var(--success);
+  --color-success-strong: var(--success-strong);
+  --color-warning-strong: var(--warning-strong);
+  --color-info-strong: var(--info-strong);
+  --color-destructive-strong: var(--destructive-strong);
+  --color-muted-strong: var(--muted-strong);
   --color-destructive-foreground: var(--destructive-foreground);
 }
 
@@ -110,6 +115,14 @@
   --warning-foreground: var(--color-amber-50);
   --invert: var(--color-zinc-900);
   --invert-foreground: var(--color-zinc-50);
+  /* Text on a tint of its own hue. The 600 shades carry a solid fill, but on
+     their own 10% tint they land near 3:1, so every status word uses the
+     darker step and only fills and borders use the 600. */
+  --success-strong: var(--color-green-800);
+  --warning-strong: var(--color-amber-800);
+  --info-strong: var(--color-blue-800);
+  --destructive-strong: var(--color-red-800);
+  --muted-strong: var(--color-zinc-600);
 }
 
 .dark {
@@ -153,6 +166,11 @@
   --warning-foreground: var(--color-amber-950);
   --invert: var(--color-zinc-700);
   --invert-foreground: var(--color-zinc-50);
+  --success-strong: var(--color-green-300);
+  --warning-strong: var(--color-amber-300);
+  --info-strong: var(--color-blue-300);
+  --destructive-strong: var(--color-red-300);
+  --muted-strong: var(--color-zinc-300);
 }
 
 @layer base {

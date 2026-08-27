@@ -25,16 +25,16 @@ import {
  * it is the one that has to be unmistakable.
  */
 const MODE: Record<string, { label: string; className: string }> = {
-  simulation: { label: 'Simulation', className: 'border-info/40 bg-info/10 text-info' },
-  shadow: { label: 'Shadow', className: 'border-info/40 bg-info/10 text-info' },
+  simulation: { label: 'Simulation', className: 'border-info/40 bg-info/10 text-info-strong' },
+  shadow: { label: 'Shadow', className: 'border-info/40 bg-info/10 text-info-strong' },
   human_approval: {
     label: 'Human approval',
-    className: 'border-warning/40 bg-warning/10 text-warning',
+    className: 'border-warning/40 bg-warning/10 text-warning-strong',
   },
-  limited: { label: 'Limited', className: 'border-warning/40 bg-warning/10 text-warning' },
+  limited: { label: 'Limited', className: 'border-warning/40 bg-warning/10 text-warning-strong' },
   full: {
     label: 'Autonomous',
-    className: 'border-destructive/50 bg-destructive/10 font-semibold text-destructive',
+    className: 'border-destructive/50 bg-destructive/10 font-semibold text-destructive-strong',
   },
 };
 
@@ -89,7 +89,7 @@ export function OpsShell({
           <div className="flex min-w-0 items-center gap-2 px-2">
             <span
               aria-hidden
-              className="flex size-6 shrink-0 items-center justify-center rounded-full bg-muted font-medium text-[10px] text-muted-foreground uppercase"
+              className="flex size-6 shrink-0 items-center justify-center rounded-full bg-muted font-medium text-[10px] text-muted-strong uppercase"
             >
               {operatorEmail.slice(0, 2)}
             </span>
