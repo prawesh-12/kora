@@ -16,6 +16,8 @@ export type BreakerVerdict =
 
 export interface GatedBreaker extends Breaker {
   gate(key: string, kind: 'read' | 'write'): Promise<BreakerVerdict>;
+  /** Every breaker currently open, with how long it has been. For alerting and /api/status. */
+  listOpen(): Promise<Array<{ key: string; openForMs: number }>>;
   close(): Promise<void>;
 }
 
@@ -159,6 +161,26 @@ export function createBreaker(opts: BreakerOptions = {}): GatedBreaker {
     return current === 'open' ? { pass: false, reason: 'open' } : { pass: true, state: current };
   }
 
+  /**
+   * Reads the `:since` markers rather than the `:open` flags. A breaker that has
+   * re-opened keeps its original marker, so this reports how long the dependency
+   * has actually been down, not how long since the last probe failed.
+   */
+  async function listOpen(): Promise<Array<{ key: string; openForMs: number }>> {
+    const r = redis();
+    const openKeys = await r.keys('kora:cb:*:open');
+    const nowMs = Date.now();
+    const out: Array<{ key: string; openForMs: number }> = [];
+
+    for (const full of openKeys) {
+      const key = full.slice('kora:cb:'.length, -':open'.length);
+      const since = Number(await r.get(sinceKey(key)));
+      out.push({ key, openForMs: Number.isFinite(since) && since > 0 ? nowMs - since : 0 });
+    }
+
+    return out.sort((a, b) => b.openForMs - a.openForMs);
+  }
+
   async function close(): Promise<void> {
     if (!client) return;
     const c = client;
@@ -166,7 +188,7 @@ export function createBreaker(opts: BreakerOptions = {}): GatedBreaker {
     await c.quit().catch(() => c.disconnect());
   }
 
-  return { state, recordSuccess, recordFailure, gate, close };
+  return { state, recordSuccess, recordFailure, gate, listOpen, close };
 }
 
 let shared: GatedBreaker | null = null;

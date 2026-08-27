@@ -71,7 +71,7 @@ export function makeJudgeCaller(tenantId: string, runId?: string) {
     await withTenant(tenantId)
       .llmCalls.create({
         runId: runId ?? null,
-        purpose: 'classifier',
+        purpose: 'judge',
         model: modelId,
         provider: 'judge',
         inputTokens: usage.inputTokens,

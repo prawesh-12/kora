@@ -30,6 +30,7 @@
     "@kora/db": "workspace:*",
     "@kora/evaluation": "workspace:*",
     "@kora/tools": "workspace:*",
+    "@kora/worker": "workspace:*",
     "@types/node": "^24.10.1",
     "dotenv": "^17.4.2",
     "dotenv-cli": "^11.0.0",

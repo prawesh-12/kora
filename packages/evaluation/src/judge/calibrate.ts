@@ -10,6 +10,16 @@ import { type Rubric, loadRubric } from './rubric.js';
 const MIN_GOLD_SET = 20;
 const AGREEMENT_GATE = 0.8;
 
+/**
+ * Kappa is gated, but only once there are enough labels for it to mean anything.
+ *
+ * Kappa on twenty-five samples swings wildly with one disagreement, so gating
+ * there would disable criteria at random. Below this the number is reported and
+ * not acted on, which is the honest position rather than a false gate.
+ */
+const MIN_KAPPA_SAMPLE = 100;
+const KAPPA_GATE = 0.6;
+
 export const goldTraceSchema = z.object({
   id: z.string().min(1),
   note: z.string().default(''),
@@ -101,10 +111,33 @@ export async function calibrate(args: {
 }
 
 export function calibrationPasses(results: CriterionAgreement[]): boolean {
-  return results.length > 0 && results.every((r) => r.agreement >= AGREEMENT_GATE);
+  return (
+    results.length > 0 &&
+    results.every((r) => r.agreement >= AGREEMENT_GATE) &&
+    criteriaBelowKappa(results).length === 0
+  );
 }
 
+/**
+ * Criteria the judge does not agree with a person on well enough to keep.
+ *
+ * A criterion below the gate is disabled, not shipped with a warning. A warning
+ * on a criterion nobody trusts is a criterion nobody trusts, still scoring runs.
+ */
+export function criteriaBelowKappa(results: CriterionAgreement[]): CriterionAgreement[] {
+  return results.filter(
+    (r) => r.n >= MIN_KAPPA_SAMPLE && !Number.isNaN(r.kappa) && r.kappa < KAPPA_GATE,
+  );
+}
+
+export function kappaIsGated(results: CriterionAgreement[]): boolean {
+  return results.some((r) => r.n >= MIN_KAPPA_SAMPLE);
+}
+
+export const KAPPA_SETTINGS = { gate: KAPPA_GATE, minSample: MIN_KAPPA_SAMPLE };
+
 export function renderCalibration(results: CriterionAgreement[]): string {
+  const failing = criteriaBelowKappa(results);
   const rows = results.map((r) => [
     r.criterionId,
     `${(r.agreement * 100).toFixed(0)}%`,
@@ -124,8 +157,19 @@ export function renderCalibration(results: CriterionAgreement[]): string {
     line(widths.map((w) => '-'.repeat(w))),
     ...rows.map(line),
     '',
-    `gate: agreement at or above ${AGREEMENT_GATE * 100}% per criterion. Kappa is reported, not gated:`,
-    'at this sample size it is too noisy to make a decision on.',
+    `gate: agreement at or above ${AGREEMENT_GATE * 100}% per criterion.`,
+    kappaIsGated(results)
+      ? `kappa at or above ${KAPPA_GATE} per criterion, on at least ${MIN_KAPPA_SAMPLE} labels.`
+      : `kappa is reported but not gated: no criterion has the ${MIN_KAPPA_SAMPLE} labels that would make it mean anything.`,
+    ...(failing.length === 0
+      ? []
+      : [
+          '',
+          'Disable these criteria and publish the rubric as a new version:',
+          ...failing.map(
+            (r) => `  ${r.criterionId}  kappa ${r.kappa.toFixed(2)} over ${r.n} labels`,
+          ),
+        ]),
   ].join('\n');
 }
 

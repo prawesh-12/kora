@@ -59,4 +59,7 @@ export const REPEATABLE: Array<{ name: string; queue: QueueName; pattern: string
   { name: 'replay-pending-events', queue: 'maintenance', pattern: '*/5 * * * *' },
   { name: 'purge-retention', queue: 'maintenance', pattern: '0 3 * * *' },
   { name: 'shadow-compare', queue: 'maintenance', pattern: '0 2 * * *' },
+  // Every minute: the goal is knowing within a minute, so a slower cadence
+  // would make the alerting a report rather than an alert.
+  { name: 'evaluate-alerts', queue: 'maintenance', pattern: '* * * * *' },
 ];

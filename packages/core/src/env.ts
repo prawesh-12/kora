@@ -39,6 +39,7 @@ const serverSchema = z.object({
   KORA_RUN_DEADLINE_MS: z.coerce.number().int().positive().default(45000),
   KORA_CONFIDENCE_THRESHOLD: z.coerce.number().min(0).max(1).default(0.7),
   KORA_APPROVAL_TTL_MINUTES: z.coerce.number().int().positive().default(60),
+  KORA_ALERT_WEBHOOK_URL: z.string().url().optional(),
   KORA_APPROVAL_WEBHOOK_URL: z.string().url().optional(),
   /** Encrypts business API credentials at rest. Rotatable without a redeploy. */
   KORA_SECRET_KEY: z.string().min(16).optional(),

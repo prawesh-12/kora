@@ -221,6 +221,38 @@ async function main(): Promise<number> {
         return 0;
       }
 
+      case 'alerts:test': {
+        const { evaluateAlerts, renderAlerts } = await import('@kora/evaluation');
+        const { breaker } = await import('@kora/tools');
+        const { createConnection, createQueues } = await import('@kora/worker');
+        const connection = createConnection();
+        const queues = createQueues(connection);
+
+        try {
+          const results = await evaluateAlerts({
+            tenantId: serverEnv().KORA_TENANT_ID,
+            probes: {
+              async failedJobCounts() {
+                const counts: Record<string, number> = {};
+                for (const [name, queue] of Object.entries(queues)) {
+                  counts[name] = (await queue.getJobCounts('failed')).failed ?? 0;
+                }
+                return counts;
+              },
+              openBreakers: () => breaker().listOpen(),
+            },
+          });
+
+          console.log(renderAlerts(results));
+          // Exits non-zero when something pages, so this doubles as a smoke check.
+          return results.some((r) => r.firing && r.severity === 'page') ? 1 : 0;
+        } finally {
+          await Promise.all(Object.values(queues).map((q) => q.close()));
+          await connection.quit().catch(() => connection.disconnect());
+          await breaker().close();
+        }
+      }
+
       case 'judge:calibrate': {
         const { calibrate, calibrationPasses, renderCalibration } = await import(
           '@kora/evaluation'
@@ -278,7 +310,7 @@ async function main(): Promise<number> {
 
       default:
         console.error(
-          'usage: pnpm kora <ingest|migrate|seed|idempotency:cleanup|smoke:model|scenarios|bench|chaos|replay|agent:publish|agent:versions|agent:promote|agent:rollback|judge:goldset|judge:calibrate|approvals:expire|security:isolation>',
+          'usage: pnpm kora <ingest|migrate|seed|idempotency:cleanup|smoke:model|scenarios|bench|chaos|replay|agent:publish|agent:versions|agent:promote|agent:rollback|judge:goldset|judge:calibrate|alerts:test|approvals:expire|security:isolation>',
         );
         return 1;
     }

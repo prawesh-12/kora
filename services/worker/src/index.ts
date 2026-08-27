@@ -9,6 +9,7 @@ import { cleanupIdempotencyJob } from './jobs/cleanup-idempotency.js';
 import { expireApprovalsJob } from './jobs/expire-approvals.js';
 import { ingestDocumentJob } from './jobs/ingest-document.js';
 import { purgeRetentionJob } from './jobs/purge-retention.js';
+import { evaluateAlertsJob } from './jobs/evaluate-alerts.js';
 import { shadowCompareJob } from './jobs/shadow-compare.js';
 import { replayPendingEventsJob } from './jobs/replay-pending-events.js';
 import {
@@ -42,6 +43,8 @@ export async function startWorker() {
           return purgeRetentionJob();
         case 'shadow-compare':
           return shadowCompareJob();
+        case 'evaluate-alerts':
+          return evaluateAlertsJob(queues);
         default:
           return;
       }
@@ -106,3 +109,5 @@ if (isMain(import.meta.url)) {
     });
   }
 }
+
+export { createConnection, createQueues, REPEATABLE } from './queues.js';

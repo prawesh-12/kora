@@ -26,6 +26,9 @@ importers:
       '@kora/tools':
         specifier: workspace:*
         version: link:packages/tools
+      '@kora/worker':
+        specifier: workspace:*
+        version: link:services/worker
       '@types/node':
         specifier: ^24.10.1
         version: 24.13.3

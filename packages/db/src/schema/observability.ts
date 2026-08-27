@@ -6,7 +6,7 @@ export const llmCalls = pgTable(
     id: text('id').primaryKey(),
     tenantId: text('tenant_id').notNull(),
     runId: text('run_id'),
-    purpose: text('purpose').$type<'agent' | 'classifier' | 'embedding'>().notNull(),
+    purpose: text('purpose').$type<'agent' | 'classifier' | 'embedding' | 'judge'>().notNull(),
     model: text('model').notNull(),
     provider: text('provider').notNull(),
     inputTokens: integer('input_tokens').notNull().default(0),
