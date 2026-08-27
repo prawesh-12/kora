@@ -168,8 +168,19 @@ export function createBreaker(opts: BreakerOptions = {}): GatedBreaker {
    */
   async function listOpen(): Promise<Array<{ key: string; openForMs: number }>> {
     const r = redis();
-    const openKeys = await r.keys('kora:cb:*:open');
-    const nowMs = Date.now();
+
+    // SCAN, not KEYS. This runs once a minute from the alert rules and on every
+    // status page load, and KEYS blocks the whole server for the length of the
+    // keyspace.
+    const openKeys: string[] = [];
+    let cursor = '0';
+    do {
+      const [next, batch] = await r.scan(cursor, 'MATCH', 'kora:cb:*:open', 'COUNT', 200);
+      cursor = next;
+      openKeys.push(...batch);
+    } while (cursor !== '0');
+
+    const nowMs = now().getTime();
     const out: Array<{ key: string; openForMs: number }> = [];
 
     for (const full of openKeys) {

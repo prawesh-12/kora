@@ -185,3 +185,45 @@ describe('redis down', () => {
 });
 
 afterAll(closeBreaker);
+
+describe('listing open breakers', () => {
+  it('reports how long each has been open, and nothing when all are closed', async () => {
+    const local = createBreaker({ failureThreshold: 2, windowMs: 60_000, openMs: 30_000 });
+    const key = `tool:${TENANT}:list_probe_${randomUUID().slice(0, 8)}`;
+
+    try {
+      expect((await local.listOpen()).some((b) => b.key === key)).toBe(false);
+
+      await local.recordFailure(key);
+      await local.recordFailure(key);
+
+      const open = await local.listOpen();
+      const found = open.find((b) => b.key === key);
+      expect(found, 'an open breaker was not listed').toBeDefined();
+      expect(found?.openForMs).toBeGreaterThanOrEqual(0);
+
+      await local.recordSuccess(key);
+      expect((await local.listOpen()).some((b) => b.key === key)).toBe(false);
+    } finally {
+      await local.close();
+    }
+  });
+
+  it('measures from when the dependency went down, not from the last probe', async () => {
+    const local = createBreaker({ failureThreshold: 1, windowMs: 60_000, openMs: 20 });
+    const key = `tool:${TENANT}:since_probe_${randomUUID().slice(0, 8)}`;
+
+    try {
+      await local.recordFailure(key);
+      await sleep(60);
+      // A failed probe re-opens the breaker but must not reset how long it has
+      // been down, or a flapping dependency never looks stuck.
+      await local.recordFailure(key);
+
+      const found = (await local.listOpen()).find((b) => b.key === key);
+      expect(found?.openForMs).toBeGreaterThanOrEqual(50);
+    } finally {
+      await local.close();
+    }
+  });
+});

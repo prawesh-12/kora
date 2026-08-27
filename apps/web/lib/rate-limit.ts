@@ -6,7 +6,7 @@ import { ApiError } from '@/lib/api/errors';
 
 export type RouteClass = 'chat' | 'ops' | 'auth';
 
-const LIMITS: Record<RouteClass, { limit: number; windowMs: number }> = {
+export const LIMITS: Record<RouteClass, { limit: number; windowMs: number }> = {
   chat: { limit: 30, windowMs: 60_000 },
   ops: { limit: 300, windowMs: 60_000 },
   auth: { limit: 10, windowMs: 60_000 },
