@@ -24,7 +24,6 @@ afterAll(async () => {
   await closeDb();
 });
 
-
 async function allCalls() {
   return sql()<
     { status: string; model: string; input_tokens: number; cost_usd_micros: string | null }[]
@@ -38,7 +37,11 @@ describe('callModel', () => {
       tenantId: TENANT,
       timeoutMs: 5000,
       fn: (model, signal) =>
-        generateText({ model, prompt: 'my coffee machine from order 9832 arrived broken', abortSignal: signal }),
+        generateText({
+          model,
+          prompt: 'my coffee machine from order 9832 arrived broken',
+          abortSignal: signal,
+        }),
     });
 
     expect(result.ok).toBe(true);
@@ -50,12 +53,17 @@ describe('callModel', () => {
   });
 
   it('retries a timeout once and writes a row per attempt', async () => {
-    const slow = createMockLanguageModel({ modelId: 'mock-classifier', planners: [], latencyMs: 400 });
+    const slow = createMockLanguageModel({
+      modelId: 'mock-classifier',
+      planners: [],
+      latencyMs: 400,
+    });
     const result = await callModel({
       purpose: 'classifier',
       tenantId: TENANT,
       timeoutMs: 50,
-      fn: (_model, signal) => generateText({ model: slow as never, prompt: 'hello', abortSignal: signal }),
+      fn: (_model, signal) =>
+        generateText({ model: slow as never, prompt: 'hello', abortSignal: signal }),
     });
 
     expect(result.ok).toBe(false);
@@ -105,7 +113,9 @@ describe('callModel', () => {
 
   it('records a null cost for an unpriced model without throwing', () => {
     expect(costUsdMicros('model-nobody-priced', { inputTokens: 100, outputTokens: 10 })).toBeNull();
-    expect(costUsdMicros('mock-agent', { inputTokens: 1_000_000, outputTokens: 0 })).toBe(3_000_000);
+    expect(costUsdMicros('mock-agent', { inputTokens: 1_000_000, outputTokens: 0 })).toBe(
+      3_000_000,
+    );
   });
 });
 

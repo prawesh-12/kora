@@ -1,0 +1,84 @@
+import { join } from 'node:path';
+import { config } from 'dotenv';
+
+config({ path: join(import.meta.dirname, '../.env'), quiet: true });
+
+const [command, ...rest] = process.argv.slice(2);
+
+async function main(): Promise<number> {
+  const { logger, serverEnv } = await import('@kora/core');
+  const { closeDb } = await import('@kora/db');
+  const log = logger();
+
+  try {
+    switch (command) {
+      case 'ingest': {
+        const { ingestDirectory } = await import('@kora/ai');
+        const dir = rest[0] ?? 'config/knowledge';
+        const results = await ingestDirectory({
+          tenantId: serverEnv().KORA_TENANT_ID,
+          dir: join(process.cwd(), dir),
+        });
+        const ingested = results.filter((r) => !r.skipped).length;
+        log.info({ ingested, skipped: results.length - ingested }, 'ingest complete');
+        return 0;
+      }
+
+      case 'migrate': {
+        const { runMigrations } = await import('@kora/db');
+        await runMigrations();
+        log.info('migrations applied');
+        return 0;
+      }
+
+      case 'seed': {
+        const { seed } = await import('@kora/db');
+        log.info(await seed(), 'seed complete');
+        return 0;
+      }
+
+      case 'idempotency:cleanup': {
+        const { cleanupExpired } = await import('@kora/tools');
+        log.info({ deleted: await cleanupExpired() }, 'idempotency cleanup complete');
+        return 0;
+      }
+
+      case 'smoke:model': {
+        const { callModel } = await import('@kora/ai');
+        const { generateText } = await import('ai');
+        const result = await callModel({
+          purpose: 'classifier',
+          tenantId: serverEnv().KORA_TENANT_ID,
+          timeoutMs: 15_000,
+          fn: (model, signal) =>
+            generateText({
+              model,
+              prompt: 'My coffee machine from order 9832 arrived broken.',
+              abortSignal: signal,
+            }),
+        });
+        if (!result.ok) {
+          log.error({ code: result.error.code }, 'smoke call failed');
+          return 1;
+        }
+        log.info({ text: result.value.text.slice(0, 200) }, 'smoke call ok');
+        return 0;
+      }
+
+      case 'scenarios': {
+        const { runScenarios } = await import('@kora/evaluation');
+        return runScenarios(rest);
+      }
+
+      default:
+        console.error(
+          'usage: pnpm kora <ingest|migrate|seed|idempotency:cleanup|smoke:model|scenarios>',
+        );
+        return 1;
+    }
+  } finally {
+    await closeDb().catch(() => {});
+  }
+}
+
+process.exitCode = await main();

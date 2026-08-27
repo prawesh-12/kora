@@ -17,10 +17,15 @@
     "infra:up": "bash infra/scripts/up.sh",
     "infra:down": "bash infra/scripts/down.sh",
     "infra:reset": "bash infra/scripts/reset.sh",
-    "kora": "tsx scripts/kora.ts"
+    "kora": "tsx scripts/kora.mts"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.0",
+    "@kora/ai": "workspace:*",
+    "@kora/core": "workspace:*",
+    "@kora/db": "workspace:*",
+    "@kora/evaluation": "workspace:*",
+    "@kora/tools": "workspace:*",
     "@types/node": "^24.10.1",
     "dotenv": "^17.4.2",
     "tsx": "^4.20.6",

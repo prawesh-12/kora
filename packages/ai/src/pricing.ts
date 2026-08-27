@@ -14,7 +14,9 @@ const warned = new Set<string>();
 
 function prices(): Record<string, ModelPrice> {
   if (!table) {
-    const raw = JSON.parse(readFileSync(PRICING_PATH, 'utf8')) as { models: Record<string, ModelPrice> };
+    const raw = JSON.parse(readFileSync(PRICING_PATH, 'utf8')) as {
+      models: Record<string, ModelPrice>;
+    };
     table = raw.models;
   }
   return table;

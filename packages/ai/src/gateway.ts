@@ -34,8 +34,10 @@ export function normaliseUsage(usage: unknown): CallUsage {
     inputTokens?: { total?: number; cacheRead?: number; cacheWrite?: number } | number;
     outputTokens?: { total?: number } | number;
   };
-  const input = typeof u.inputTokens === 'number' ? { total: u.inputTokens } : (u.inputTokens ?? {});
-  const output = typeof u.outputTokens === 'number' ? { total: u.outputTokens } : (u.outputTokens ?? {});
+  const input =
+    typeof u.inputTokens === 'number' ? { total: u.inputTokens } : (u.inputTokens ?? {});
+  const output =
+    typeof u.outputTokens === 'number' ? { total: u.outputTokens } : (u.outputTokens ?? {});
   return {
     inputTokens: input.total ?? 0,
     outputTokens: output.total ?? 0,
@@ -49,11 +51,16 @@ function classify(error: unknown): { code: string; retryable: boolean } {
   const status = e?.statusCode ?? e?.status;
   const message = String(e?.message ?? '');
 
-  if (e?.name === 'AbortError' || e?.name === 'TimeoutError' || /abort|timed? ?out/i.test(message)) {
+  if (
+    e?.name === 'AbortError' ||
+    e?.name === 'TimeoutError' ||
+    /abort|timed? ?out/i.test(message)
+  ) {
     return { code: 'MODEL_TIMEOUT', retryable: true };
   }
   if (status === 429) return { code: 'MODEL_RATE_LIMITED', retryable: true };
-  if (typeof status === 'number' && status >= 500) return { code: 'MODEL_UNAVAILABLE', retryable: true };
+  if (typeof status === 'number' && status >= 500)
+    return { code: 'MODEL_UNAVAILABLE', retryable: true };
   if (typeof status === 'number' && status >= 400) {
     return { code: 'MODEL_REQUEST_INVALID', retryable: false };
   }
@@ -112,7 +119,10 @@ export async function callModel<T>(args: CallModelArgs<T>): Promise<Result<T, Mo
   for (let attempt = 0; attempt < 2; attempt++) {
     const startedAt = Date.now();
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(new Error('model call timed out')), args.timeoutMs);
+    const timer = setTimeout(
+      () => controller.abort(new Error('model call timed out')),
+      args.timeoutMs,
+    );
 
     try {
       const result = await args.fn(model, controller.signal);

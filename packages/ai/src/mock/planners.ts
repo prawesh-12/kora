@@ -187,7 +187,9 @@ export const agentPlanner: MockPlanner = (ctx): MockTurn | undefined => {
   const policy = findToolResult<{ decision?: string; reason?: string }>(ctx, 'check_policy');
 
   if (policy?.decision === 'deny') {
-    return { text: `I am not able to arrange a replacement for order ${found.id}. ${policy.reason}.` };
+    return {
+      text: `I am not able to arrange a replacement for order ${found.id}. ${policy.reason}.`,
+    };
   }
 
   if (!called(ctx, 'create_replacement') && has('create_replacement')) {

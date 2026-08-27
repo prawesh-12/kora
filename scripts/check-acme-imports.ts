@@ -14,7 +14,16 @@ const CLIENT_DIR = join('packages', 'tools', 'src', 'clients');
 const ACME_IMPORT = /from\s+['"][^'"]*clients\/acme(\.js)?['"]/;
 const ACME_BASE_URL = /ACME_BASE_URL/;
 
-const SKIP = new Set(['node_modules', '.next', 'dist', '.turbo', '.git', 'coverage', 'test', 'e2e']);
+const SKIP = new Set([
+  'node_modules',
+  '.next',
+  'dist',
+  '.turbo',
+  '.git',
+  'coverage',
+  'test',
+  'e2e',
+]);
 
 function* sourceFiles(dir: string): Generator<string> {
   for (const entry of readdirSync(dir)) {

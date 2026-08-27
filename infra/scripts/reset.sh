@@ -15,6 +15,6 @@ if [ -f services/mock-commerce/src/migrate.ts ]; then
   pnpm --filter @kora/mock-commerce exec tsx src/seed.ts
 fi
 if [ -d config/knowledge ] && [ -f scripts/kora.ts ]; then
-  pnpm exec tsx scripts/kora.ts ingest config/knowledge || true
+  pnpm exec tsx scripts/kora.mts ingest config/knowledge || true
 fi
 echo "infra: reset complete"
