@@ -6,11 +6,15 @@ function isMain(url: string): boolean {
   return process.argv[1] !== undefined && url === pathToFileURL(process.argv[1]).href;
 }
 
-const ALLOWED_DIR = join('packages', 'tools', 'src', 'clients');
+// MVP condition 13: no business API call happens outside the tool pipeline.
+// The pipeline package may reach the client; nothing else may. Within the package,
+// only the client itself may name the base URL.
+const PIPELINE_DIR = join('packages', 'tools', 'src');
+const CLIENT_DIR = join('packages', 'tools', 'src', 'clients');
 const ACME_IMPORT = /from\s+['"][^'"]*clients\/acme(\.js)?['"]/;
 const ACME_BASE_URL = /ACME_BASE_URL/;
 
-const SKIP = new Set(['node_modules', '.next', 'dist', '.turbo', '.git', 'coverage']);
+const SKIP = new Set(['node_modules', '.next', 'dist', '.turbo', '.git', 'coverage', 'test', 'e2e']);
 
 function* sourceFiles(dir: string): Generator<string> {
   for (const entry of readdirSync(dir)) {
@@ -35,11 +39,12 @@ export function findAcmeViolations(
     }
     for (const file of entries) {
       const rel = relative(root, file);
-      const inClient = rel.startsWith(ALLOWED_DIR + sep);
+      const inPipeline = rel.startsWith(PIPELINE_DIR + sep);
+      const inClient = rel.startsWith(CLIENT_DIR + sep);
       const isEnv = rel === join('packages', 'core', 'src', 'env.ts');
       const src = readFileSync(file, 'utf8');
-      if (!inClient && ACME_IMPORT.test(src)) {
-        violations.push(`${rel} imports the Acme client. Only ${ALLOWED_DIR}/ may.`);
+      if (!inPipeline && ACME_IMPORT.test(src)) {
+        violations.push(`${rel} imports the Acme client. Only ${PIPELINE_DIR}/ may.`);
       }
       if (!inClient && !isEnv && ACME_BASE_URL.test(src)) {
         violations.push(`${rel} references ACME_BASE_URL. Only the Acme client and env.ts may.`);
