@@ -66,10 +66,8 @@ Everything else is in `docs/`.
 |---|---|
 | Set it up properly | `docs/QUICKSTART.md` |
 | Understand how it fits together | `docs/00-overview/README.md` |
-| Know what works and what does not | `docs/00-overview/m2-acceptance.md` |
+| Know what works and what does not | `docs/00-overview/status.md` |
 | Know why something was built that way | `docs/decisions.md` |
 | Fix it when it breaks | `docs/runbook.md` |
 | Ship it | `docs/10-deployment/README.md` |
 
-`docs/` is not committed to this repository. If you cloned this and the folder is
-missing, ask whoever gave you the code for it.

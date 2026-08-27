@@ -649,26 +649,29 @@ Never hide incomplete work by updating documentation to make it appear complete.
 
 ---
 
-## 20. `docs/` and `extras/` Must Not Be Committed
-
-The following directories are working/documentation areas for the development process:
+## 20. `docs/` is Committed, `extras/` is Not
 
 ```text
-docs/
-extras/
+docs/      committed. The project's documentation.
+extras/    ignored. Working notes and plans.
 ```
 
-They must not be committed to Git.
+`docs/` is the shipped documentation. Write it as documentation for someone using
+and running the system, not as a record of how it was built.
 
-Ensure they are covered by the repository's ignore rules.
+That means:
 
-If they are not already ignored, add the appropriate entries to `.gitignore`.
+* no milestone or plan step numbers
+* no references to `extras/`, briefs, or checkpoints
+* no narration of what was discovered, when, or how long it took
+* explain why something is the way it is, not the order it was found in
 
-Do not delete them.
+A decision record explains a trade-off. It is not a changelog of the debugging
+session that produced it.
 
-Do not stop maintaining them simply because they are ignored by Git.
-
-They are still important for the development process and project continuity.
+`extras/` stays ignored. It holds the implementation plan and working notes, and
+it must not be deleted or stop being maintained: it is what makes the project
+recoverable if development stops unexpectedly.
 
 ---
 
