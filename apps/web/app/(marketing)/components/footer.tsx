@@ -18,7 +18,7 @@ const COLUMNS = [
   {
     heading: 'Console',
     links: [
-      ['Operator console', '/ops'],
+      ['Operator console', '/console'],
       ['Approval queue', '/ops/approvals'],
       ['Evaluations', '/ops/evaluations'],
       ['Customer chat', '/chat'],

@@ -6,7 +6,7 @@ import { Pill, Wordmark } from './primitives';
  * appears in both, and there is no link here that does not resolve.
  */
 const PRODUCT = [
-  { label: 'Operator console', href: '/ops' },
+  { label: 'Operator console', href: '/console' },
   { label: 'Approvals', href: '/ops/approvals' },
   { label: 'Evaluations', href: '/ops/evaluations' },
 ];

@@ -22,6 +22,10 @@ const mono = JetBrains_Mono({
   subsets: ['latin'],
   variable: '--font-jetbrains-mono',
   display: 'swap',
+  // Nothing above the fold on any route is set in mono: it carries ids, codes
+  // and JSON further down. Preloading it competes with the display face for the
+  // window that decides largest contentful paint.
+  preload: false,
 });
 
 export const metadata: Metadata = {

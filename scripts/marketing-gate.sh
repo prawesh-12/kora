@@ -1,14 +1,17 @@
 #!/usr/bin/env bash
 set -uo pipefail
+# The route, plus the marketing-only components that live outside it. The
+# design rules are about the markup, not about which folder it sits in.
 DIR="apps/web/app/(marketing)"
+DIRS=("$DIR" "apps/web/components/marketing")
 fail() { echo "GATE FAILED: $1"; exit 1; }
 
-grep -rnE 'bg-gradient-to|from-[a-z]+-[0-9]|via-|shadow-(sm|md|lg|xl|2xl)|drop-shadow|backdrop-blur|rounded-(lg|xl|2xl|3xl)|bg-clip-text|animate-(pulse|bounce|ping)' "$DIR" \
+grep -rnE 'bg-gradient-to|from-[a-z]+-[0-9]|via-|shadow-(sm|md|lg|xl|2xl)|drop-shadow|backdrop-blur|rounded-(lg|xl|2xl|3xl)|bg-clip-text|animate-(pulse|bounce|ping)' "${DIRS[@]}" \
   && fail "banned css class present"
 
-grep -rn 'text-center' "$DIR" && fail "centered content, this design is left-aligned"
+grep -rn 'text-center' "${DIRS[@]}" && fail "centered content, this design is left-aligned"
 
-grep -rniE 'empower|unlock|transform your|supercharge|seamless|effortless|elevate|revolutioniz|cutting-edge|game-chang|leverage|harness|streamline|next-generation|best-in-class|ready to get started' "$DIR" \
+grep -rniE 'empower|unlock|transform your|supercharge|seamless|effortless|elevate|revolutioniz|cutting-edge|game-chang|leverage|harness|streamline|next-generation|best-in-class|ready to get started' "${DIRS[@]}" \
   && fail "banned marketing copy"
 
 grep -rn 'box-decoration-break' "$DIR" || fail "highlight headline not implemented"

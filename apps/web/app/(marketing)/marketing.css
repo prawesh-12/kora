@@ -204,12 +204,7 @@
   display: inline;
   box-decoration-break: clone;
   -webkit-box-decoration-break: clone;
-  /*
-   * Vertical padding is not decoration here. At line-height 0.98 the inline box
-   * is shorter than the glyphs it wraps, and caps break the top edge of the
-   * block. 0.14em clears the ascenders at every step of the scale.
-   */
-  padding: 0.14em 0.22em;
+  padding: var(--hl-pad-y) 0.22em;
 }
 .hl--light {
   background: var(--paper-warm);
@@ -265,6 +260,9 @@
   text-decoration: none;
   white-space: nowrap;
   cursor: pointer;
+  /* A button centres its text by default and an anchor does not. One class,
+     one rendering, whichever element it lands on. */
+  text-align: inherit;
   transition: transform var(--dur-fast) ease;
 }
 .pill:hover {
@@ -363,6 +361,29 @@
 }
 
 /*
+ * The line box comes from the highlight spans, not from the heading.
+ *
+ * A highlight block is as tall as the font's own box plus its padding: Inter
+ * Tight's box is (70 + 17) / 72 = 1.2083em, so with 0.1em of padding each side
+ * the block is 1.4083em. The heading's line advance is 0.98em. Left alone, the
+ * second block paints over the bottom third of the first and cuts the letters
+ * through the middle, which is not a padding problem and does not get better
+ * with more of it.
+ *
+ * Giving the spans their own line-height opens the line box to fit the block.
+ * The heading still computes to a line-height of 0.98, and it stays one block,
+ * which is what keeps it a single largest-contentful-paint candidate: split
+ * across two wrappers, each line competes separately and the hero lead wins.
+ */
+.hero-h1 {
+  --hl-pad-y: 0.1em;
+  --hl-line: 1.4083em;
+}
+.hero-h1 .hl {
+  line-height: var(--hl-line);
+}
+
+/*
  * The badge breaks out of the block by 24px, so 48px of it lands on top of the
  * block. Line one is indented by exactly that much: without it the mark covers
  * the first characters of the headline.
@@ -374,7 +395,7 @@
 .hero-badge {
   position: absolute;
   left: calc(var(--hero-badge-out) * -1);
-  top: calc(var(--t-hero) * var(--t-hero-lh) / 2);
+  top: calc(var(--hl-line) / 2);
   transform: translateY(-50%);
   z-index: 1;
   width: var(--hero-badge);
@@ -759,7 +780,8 @@
   position: relative;
   min-height: 720px;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
+  padding-block: 88px;
 }
 .product-band__bg {
   position: absolute;
@@ -780,7 +802,7 @@
 .trace {
   width: 1100px;
   max-width: 100%;
-  margin: -48px 0 0;
+  margin: 0;
 }
 .trace__card {
   background: var(--paper);
@@ -814,8 +836,9 @@
   font-family: var(--font-mono);
   font-size: 13px;
   margin: 10px 0 0;
+  /* Full ink. At 0.72 this failed contrast on the amber and signal grounds the
+     verdict banner takes; 13px mono is already quiet enough. */
   color: var(--ink);
-  opacity: 0.72;
 }
 
 .trace__steps {
@@ -1551,4 +1574,567 @@
 }
 .replay__regressions {
   margin-bottom: 16px;
+}
+
+/* ============================================== timed sequences ========= */
+
+/*
+ * Beats are CSS animations with per-element delays, so a playing sequence costs
+ * the main thread nothing and its fragments stay server-rendered.
+ *
+ * The resting state is empty, not composed. Composed would mean the server's
+ * first paint shows the ending: a green RESOLVED banner over a timeline that
+ * has not run yet, which gives the whole sequence away before it starts. With
+ * reduced motion the finished frame is what renders, and it never animates.
+ */
+
+.seq__frame {
+  position: relative;
+}
+
+.seq__frame .seq-step {
+  opacity: 0;
+  transform: translateY(6px);
+}
+.seq__frame--run .seq-step {
+  animation: seq-in 220ms ease-out var(--at) both;
+}
+/*
+ * Opacity switches almost instantly and the movement carries the reveal.
+ *
+ * A text node held at a fraction of full opacity is text below its contrast
+ * ratio for as long as the fade lasts, and an audit that samples during one
+ * reports it. Sliding in at full opacity has no such frame, and reads the same.
+ */
+@keyframes seq-in {
+  0% {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  1% {
+    opacity: 1;
+    transform: translateY(6px);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Bars grow from their own origin rather than fading. */
+.seq__frame .seq-grow {
+  transform: scaleX(0);
+}
+.seq__frame--run .seq-grow {
+  animation: seq-grow 460ms cubic-bezier(0.2, 0.7, 0.3, 1) var(--at) both;
+}
+@keyframes seq-grow {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(var(--to, 1));
+  }
+}
+
+.seq__frame .seq-fade {
+  opacity: 0;
+}
+.seq__frame--run .seq-fade {
+  animation: seq-fade 200ms ease var(--at) both;
+}
+@keyframes seq-fade {
+  0% {
+    opacity: 0;
+  }
+  1%,
+  100% {
+    opacity: 1;
+  }
+}
+
+/* ---------------------------------------- the verdict banner's three states */
+
+/*
+ * Every verdict occupies one grid cell, so the card never changes height as the
+ * run progresses and the change reads as a crossfade rather than a jump. The
+ * banner is the payoff, so it stays neutral and wordless until the rule fires.
+ */
+.verdict {
+  display: grid;
+  background: var(--paper-warm);
+}
+.verdict__layer {
+  grid-area: 1 / 1;
+  padding: 24px 32px;
+  opacity: 0;
+}
+.verdict__layer--neutral {
+  padding-block: 30px;
+}
+
+/*
+ * Held at 2.7s and resolved at 5.4s of a 7s cycle: 38.57% and 77.14%, with a
+ * 200ms crossfade, which is 2.86% of the cycle.
+ */
+.seq__frame--run .verdict {
+  animation: verdict-resolve var(--cycle) linear infinite both;
+}
+@keyframes verdict-resolve {
+  0%,
+  38.57% {
+    background-color: #f1efeb;
+  }
+  41.43%,
+  77.14% {
+    background-color: #ffc400;
+  }
+  80%,
+  100% {
+    background-color: #6fa82b;
+  }
+}
+.seq__frame--run .verdict__layer--held {
+  animation: verdict-held var(--cycle) linear infinite both;
+}
+@keyframes verdict-held {
+  0%,
+  39.5% {
+    opacity: 0;
+  }
+  39.6%,
+  78% {
+    opacity: 1;
+  }
+  78.1%,
+  100% {
+    opacity: 0;
+  }
+}
+.seq__frame--run .verdict__layer--resolved {
+  animation: verdict-resolved var(--cycle) linear infinite both;
+}
+@keyframes verdict-resolved {
+  0%,
+  78% {
+    opacity: 0;
+  }
+  78.1%,
+  100% {
+    opacity: 1;
+  }
+}
+
+/* The run that broke: neutral to rust at 2.2s of a 4.4s cycle. */
+.seq__frame--run .verdict--fail {
+  animation: verdict-fail var(--cycle) linear infinite both;
+}
+@keyframes verdict-fail {
+  0%,
+  47.7% {
+    background-color: #f1efeb;
+  }
+  50%,
+  100% {
+    background-color: #f05a22;
+  }
+}
+.seq__frame--run .verdict__layer--failed {
+  animation: verdict-failed var(--cycle) linear infinite both;
+}
+@keyframes verdict-failed {
+  0%,
+  48.8% {
+    opacity: 0;
+  }
+  48.9%,
+  100% {
+    opacity: 1;
+  }
+}
+
+/* ================================================ the console tour ======= */
+
+.console__lead {
+  margin: 32px 0 0;
+  max-width: 46ch;
+}
+
+.scene__grid > * {
+  min-width: 0;
+}
+.scene__grid {
+  display: grid;
+  grid-template-columns: 38% 62%;
+  column-gap: var(--gap-panel);
+  align-items: start;
+}
+/* Scene three is a table, and a table in 62% of a column is a squint. */
+.scene__grid--wide {
+  grid-template-columns: 1fr;
+  row-gap: 48px;
+}
+.scene__grid--wide .scene__prose {
+  max-width: 62ch;
+}
+.scene__title {
+  margin: 20px 0 0;
+}
+.scene__body {
+  margin: 20px 0 0;
+  max-width: 46ch;
+}
+
+/* One console surface: a flat panel, same as every other fragment. */
+.con {
+  background: var(--paper-warm);
+  padding: 32px;
+}
+.con__label {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  color: var(--ink-muted);
+}
+.con__hero {
+  background: var(--signal);
+  padding: 24px 28px;
+}
+.con__hero .con__label,
+.con__hero .con__meta {
+  color: var(--ink);
+}
+.con__hero-value {
+  margin: 8px 0 0;
+  font-size: 56px;
+  line-height: 1;
+  font-weight: var(--w-black);
+  letter-spacing: var(--track-tight);
+  color: var(--ink);
+}
+.con__meta {
+  margin: 10px 0 0;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--ink-muted);
+}
+.con__tiles {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1px;
+  margin-top: 1px;
+}
+.con__tile {
+  position: relative;
+  background: var(--paper);
+  padding: 24px 28px;
+}
+.con__tile-value {
+  margin: 8px 0 0;
+  font-size: 32px;
+  line-height: 1;
+  font-weight: var(--w-black);
+  letter-spacing: var(--track-tight);
+}
+.con__tile-value--alarm {
+  color: var(--rust);
+}
+/*
+ * The mark is a flat rule on the edge. An inset box-shadow would draw the same
+ * thing and would be the only shadow on either page, and a border would move
+ * the tile 3px when it appears.
+ */
+.con__mark {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: var(--rust);
+}
+
+/* ------------------------------------------------- failures by root cause */
+
+.fail {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.fail__row {
+  display: grid;
+  grid-template-columns: 52px 210px 1fr 150px;
+  align-items: center;
+  gap: 16px;
+  padding: 7px 8px;
+  margin-inline: -8px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  transition: opacity 240ms ease;
+}
+.fail__row--picked {
+  background: var(--paper);
+}
+.fail__count {
+  text-align: right;
+}
+.fail__code {
+  white-space: nowrap;
+}
+.fail__track {
+  height: 10px;
+  background: var(--border);
+}
+.fail__bar {
+  display: block;
+  height: 100%;
+  transform-origin: left center;
+  transform: scaleX(var(--to, 1));
+}
+/*
+ * Severity, from FAILURE_SEVERITY. Critical is the only thing that gets a
+ * colour: the system did what it was not allowed to, or said something untrue.
+ */
+.fail__bar--critical {
+  background: var(--rust);
+}
+.fail__bar--normal {
+  background: var(--ink);
+}
+.fail__bar--low {
+  background: var(--ink-muted);
+}
+.fail__why {
+  color: var(--ink-muted);
+  opacity: 0;
+  transform: translateY(6px);
+  transition:
+    opacity 240ms ease-out,
+    transform 240ms ease-out;
+}
+.fail__why--in {
+  opacity: 1;
+  transform: none;
+}
+
+/* --------------------------------------------------------- the drill path */
+
+.drill {
+  position: relative;
+  display: grid;
+}
+.drill__before,
+.drill__after {
+  grid-area: 1 / 1;
+  transition: opacity 260ms ease;
+}
+.drill__before {
+  opacity: 0;
+  pointer-events: none;
+  position: relative;
+  display: grid;
+  grid-template-columns: 52px 210px 1fr;
+  align-items: center;
+  gap: 16px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  align-self: start;
+}
+.seq__frame .drill__before {
+  opacity: 1;
+  pointer-events: auto;
+}
+.seq__frame--run .drill__before {
+  animation: drill-out var(--cycle) linear infinite both;
+}
+@keyframes drill-out {
+  0%,
+  38.8% {
+    opacity: 1;
+  }
+  44.4%,
+  100% {
+    opacity: 0;
+    pointer-events: none;
+  }
+}
+.drill__full {
+  transform: scaleX(1);
+}
+.drill__cursor {
+  opacity: 0;
+  position: absolute;
+  left: 44%;
+  top: 6px;
+  transition:
+    transform 620ms cubic-bezier(0.3, 0.8, 0.3, 1),
+    opacity 240ms ease-out;
+}
+.seq__frame .drill__cursor {
+  opacity: 0;
+}
+.seq__frame--run .drill__cursor {
+  animation: drill-cursor var(--cycle) linear infinite both;
+}
+@keyframes drill-cursor {
+  0%,
+  8.3% {
+    opacity: 0;
+    transform: none;
+  }
+  16.6% {
+    opacity: 1;
+    transform: none;
+  }
+  27.7%,
+  38.8% {
+    opacity: 1;
+    transform: translate(18px, 10px) scale(0.86);
+  }
+  44.4%,
+  100% {
+    opacity: 0;
+    transform: translate(18px, 10px) scale(0.86);
+  }
+}
+.seq__frame .drill__after {
+  opacity: 0;
+}
+.seq__frame--run .drill__after {
+  animation: drill-in var(--cycle) linear infinite both;
+}
+@keyframes drill-in {
+  0%,
+  38.8% {
+    opacity: 0;
+  }
+  44.4%,
+  100% {
+    opacity: 1;
+  }
+}
+.drill__filters {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.drill__chip {
+  background: var(--ink);
+  color: var(--paper);
+  border-radius: var(--radius-pill);
+  padding: 8px 16px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+.drill__count {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--ink-muted);
+}
+
+.rows {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+  text-align: left;
+}
+.rows th {
+  font-weight: var(--w-medium);
+  color: var(--ink-muted);
+  font-size: 12px;
+  padding: 0 12px 10px 0;
+  border-bottom: var(--hairline) solid var(--border);
+}
+.rows td {
+  padding: 10px 12px 10px 0;
+  border-bottom: var(--hairline) solid var(--border);
+}
+.rows__mono {
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+.rows__state,
+.rows__verdict {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: var(--radius-pill);
+  font-size: 12px;
+  background: var(--amber);
+  color: var(--ink);
+}
+.rows__verdict {
+  background: var(--rust);
+  color: var(--paper);
+  font-family: var(--font-mono);
+}
+
+@media (max-width: 1279px) {
+  .scene__grid {
+    grid-template-columns: 1fr;
+    row-gap: 40px;
+  }
+  .scene__prose {
+    max-width: 62ch;
+  }
+}
+@media (max-width: 767px) {
+  .con {
+    padding: 20px;
+  }
+  .con__tiles {
+    grid-template-columns: 1fr;
+  }
+  .fail__row {
+    grid-template-columns: 44px 1fr;
+    row-gap: 6px;
+  }
+  .fail__track,
+  .fail__why {
+    grid-column: 1 / -1;
+  }
+  .drill {
+    overflow-x: auto;
+  }
+  .rows {
+    min-width: 560px;
+  }
+  .drill__before {
+    grid-template-columns: 44px 1fr;
+  }
+  .drill__before .fail__track {
+    grid-column: 1 / -1;
+  }
+}
+
+/* ------------------------------------------------------- reduced motion */
+
+/*
+ * The finished frame, rendered once. Nothing here animates and nothing loops.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .seq__frame .seq-step {
+    opacity: 1;
+    transform: none;
+  }
+  .seq__frame .seq-grow {
+    transform: scaleX(var(--to, 1));
+  }
+  .seq__frame .seq-fade {
+    opacity: 1;
+  }
+  .seq__frame .verdict {
+    background: var(--signal);
+  }
+  .seq__frame .verdict--fail {
+    background: var(--rust);
+  }
+  .seq__frame .verdict__layer--resolved,
+  .seq__frame .verdict__layer--failed {
+    opacity: 1;
+  }
+  .seq__frame .drill__before {
+    opacity: 0;
+  }
+  .seq__frame .drill__after {
+    opacity: 1;
+  }
 }

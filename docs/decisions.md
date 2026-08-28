@@ -906,3 +906,132 @@ layout into the routes that use them, and let the marketing layout declare its
 own two. That removes the trade-off entirely and is worth doing when the product
 routes next get attention. It was not done here because it touches three layouts
 outside the marketing route for a gain the single-line change already delivers.
+
+## The product shots are looping HTML, not video
+
+**Context.** The landing page needed a moving proof shot of a trace, and the
+console tour needed four. The obvious answer is a screen recording.
+
+**Decision.** Both are timed reveals of the HTML fragments the pages already
+have. `apps/web/components/marketing/Sequence.tsx` runs them.
+
+**Why.** A capture of the operator console today would ship the interface that
+is still being fixed. Beyond that, a video file would be the only raster asset
+on a page whose whole visual system is flat HTML: it is sharp at exactly one
+size, it costs largest-contentful-paint budget, and it goes stale the moment a
+label changes. A sequence built from the fragments cannot drift from them.
+
+**How it works.** Every beat is a CSS animation with its own `animation-delay`,
+set from an inline `--at` custom property. `Sequence` owns one timer per cycle
+and nothing else: no per-frame state, no work on the main thread while it plays.
+The reset is a hard cut, because dropping a class, forcing a reflow and putting
+it back returns every element to its first frame together.
+
+That design is also what keeps the fragments server-rendered. Driving beats from
+React state was tried first and measured: it turns every fragment into a client
+component and puts their hydration in front of the hero's paint, worth 0.4s of
+LCP on the landing page.
+
+The resting state is empty rather than composed. Composed means the server's
+first paint shows the ending, a green RESOLVED banner over a timeline that has
+not run yet, which gives the sequence away before it starts. The cost is that
+with JavaScript disabled the figures stay empty; the surrounding prose and the
+caption still carry the argument, and showing the ending first is worse.
+
+**Trade-offs.** No controls. There is no play, pause, replay or progress bar, so
+the whole surface is the recording and there is nothing to mistake for product
+chrome. The loop pauses when it leaves the viewport and restarts from the top on
+return, so no timer ever runs off-screen.
+
+## The hero headline blocks were cutting their own glyphs
+
+**Context.** The reported fault was that capitals in line one were clipped by
+the top of the highlight block, and the fix applied twice was more vertical
+padding.
+
+**Decision.** Each line of the headline is a block of its own, separated by the
+difference between the block height and the line advance.
+
+**Why.** The padding was not the problem, and adding more made it worse. A
+highlight block is as tall as the font's own box plus its padding, about 1.49em
+at 72px. The line advance at `line-height: 0.98` is 0.98em. Two lines in one
+flow put the second block 0.98em below the first while the first is 1.49em
+tall, so the second painted over the bottom third of the first and cut the
+letters through the middle. Measuring the line box said everything was fine,
+which is why it was reported fixed twice; the glyph ink told a different story.
+
+The gap is derived from the type, not typed in: block height minus advance. The
+`<h1>` still computes to 72px on a line-height of 0.98.
+
+**Trade-offs.** The headline is two block elements rather than a `<br>`, which
+is what makes the badge positionable against line one rather than the whole
+heading.
+
+## The band no longer lifts into the hero
+
+**Context.** The trace figure sat on a negative offset so it overlapped the
+white section above it, and the overlap kept landing the verdict banner on the
+hero's call to action.
+
+**Decision.** The band starts below the hero. No lift.
+
+**Why.** Two attempts to keep a safe overlap both measured clear at the widths
+tested and were still covering the button in practice. The overlap is
+decorative and the button is not. Clearance is now 184px at every width from
+375 to 1920, at every scroll position where both are on screen.
+
+## Numbers on the console tour are seeded, not measured
+
+**Context.** The four console scenes show rates and counts.
+
+**Decision.** Every identifier is the code's own: failure codes from
+`FAILURE_CODES`, their colour from `FAILURE_SEVERITY`, metric names from the
+`Metrics` interface, `get_order / upstream_4xx` exactly as
+`packages/db/src/queries/metrics.ts` builds it, and tools from the registry. The
+counts and rates behind them are figures from a seeded development database.
+
+**Why.** They are sample values inside a depicted interface, the same kind of
+thing as `REP-0001`, and none is presented as a measurement of how KORA
+performs. The run durations in particular read as tens of milliseconds because
+the seed runs against a mock agent, not a model.
+
+**Trade-offs.** A reader could take 30.4% as a claim. It is captioned as a
+console, not as a result, and no number from these scenes appears as a headline
+statistic anywhere on either page.
+
+Severity maps onto the existing palette rather than adding a colour: critical is
+`--rust`, normal is `--ink`, low is `--ink-muted`. Green still means verified and
+amber still means held for a person.
+
+## The root layout preloads neither product font
+
+**Context.** The landing page has to score 95 on Lighthouse performance with the
+hero headline as its largest contentful paint. Sitting at 94 to 97 across runs,
+it straddled the threshold.
+
+**Decision.** `Inter` and `JetBrains_Mono` in `apps/web/app/layout.tsx` are both
+loaded with `preload: false`.
+
+**Why.** The root layout puts three font families on every route: those two, plus
+Inter Tight from the marketing layout below it. `next/font` preloads a family on
+every route its loader runs on, and the root layout runs everywhere, so the
+landing page was preloading around 130KB across three files before painting a
+headline that needs one of them.
+
+It never uses Inter at all; its display face is Inter Tight. Nothing on any route
+is set in mono above the fold either: JetBrains Mono carries ids, codes and JSON
+further down the page. Both were competing with Inter Tight for the window that
+decides the paint.
+
+With neither preloaded the landing page holds 97 across runs and the console
+tour 96, and the landing page fetches two font files rather than three.
+
+**Trade-offs.** Product routes still declare, load and apply both faces; they
+fetch them when the stylesheet is parsed rather than from a link in the head.
+Both set `display: swap`, so text paints immediately in the fallback either way
+and the swap lands slightly later. Measured on `/login`, where the body font
+still resolves to Inter and the file still loads.
+
+The larger fix is per-route fonts: move both out of the root layout into the
+routes that use them, and let the marketing layout declare its own. That removes
+the trade-off and is worth doing when the product routes next get attention.
