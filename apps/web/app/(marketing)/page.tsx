@@ -1,12 +1,12 @@
 import { CONTACT, Nav } from './components/nav';
 import { Footer } from './components/footer';
 import { Reveal } from './components/reveal';
+import { SystemMap } from './components/system-map';
 import { TraceFragment } from './components/trace';
 import {
   ActGlyph,
   BrokenLogGlyph,
   BubbleGlyph,
-  ChevronGlyph,
   DuplicateGlyph,
   EmptyResultGlyph,
   EvaluateGlyph,
@@ -19,12 +19,8 @@ import {
   ChecksFragment,
   TraceResponseBlock,
   PipelineFragment,
-  PolicyCheckCell,
   ReplayFragment,
   RouteRows,
-  ScoreCell,
-  SignalChipsCell,
-  VerifiedCell,
 } from './components/fragments';
 import { Dots, Eyebrow, IconTile, Mark, Pill, SectionHeading } from './components/primitives';
 
@@ -48,25 +44,6 @@ const PROBLEMS = [
     glyph: <BrokenLogGlyph />,
     claim: 'A run failed and the log says 500.',
     reality: 'Which of the eleven steps broke is anyone’s guess.',
-  },
-];
-
-const STEPS = [
-  {
-    title: 'Understand the request.',
-    body: 'Intent detection with a confidence score. Below the threshold it goes to a person instead of guessing.',
-  },
-  {
-    title: 'Check the policy in code.',
-    body: 'A deterministic rule engine decides. Facts come from the order record, never from what the model or the customer claims.',
-  },
-  {
-    title: 'Act through one gate.',
-    body: 'Every write is validated, permission-checked, deduplicated and timed out. There is no second path to your business API.',
-  },
-  {
-    title: 'Read it back.',
-    body: 'The action is not finished until the business system confirms it. When it cannot, the agent stops talking and gets a person.',
   },
 ];
 
@@ -102,6 +79,13 @@ const PILLARS = [
 ];
 
 const CTA_STEP_FILL = ['var(--cobalt)', 'var(--amber)', 'var(--signal)', 'var(--signal)'];
+
+/** Each of these names something the run below actually records. */
+const CLAIMS = [
+  { title: 'The rule is a file, not a prompt.', artefact: 'acme_damaged_order 1.0.0' },
+  { title: 'Every write goes through one gate.', artefact: 'validated · permitted · idempotent' },
+  { title: 'Done means the order system agreed.', artefact: 'write_verified MET' },
+];
 
 const SCHEMA = {
   '@context': 'https://schema.org',
@@ -158,6 +142,14 @@ export default function MarketingPage() {
               </Pill>
             </div>
           </div>
+          <div className="mk-container hero__floor">
+            {CLAIMS.map((claim) => (
+              <dl className="hero__claim" key={claim.artefact}>
+                <dt>{claim.title}</dt>
+                <dd>{claim.artefact}</dd>
+              </dl>
+            ))}
+          </div>
         </section>
 
         {/* 3.4 */}
@@ -196,30 +188,10 @@ export default function MarketingPage() {
             <div className="mk-container">
               <Eyebrow>How it works</Eyebrow>
               <SectionHeading>From request to verified outcome</SectionHeading>
-              <div className="how">
-                <div className="panel how__panel">
-                  {STEPS.map((step, i) => (
-                    <details className="acc" name="how-it-works" key={step.title} open={i === 0}>
-                      <summary className="acc__summary">
-                        <span className="t-accordion acc__title">{step.title}</span>
-                        <ChevronGlyph />
-                      </summary>
-                      <div className="acc__body">
-                        <p className="t-body acc__text">{step.body}</p>
-                      </div>
-                    </details>
-                  ))}
-                </div>
-                <div className="how__grid">
-                  <PolicyCheckCell />
-                  <SignalChipsCell />
-                  <ScoreCell />
-                  <VerifiedCell />
-                </div>
-              </div>
             </div>
           </section>
         </Reveal>
+        <SystemMap />
 
         {/* 3.7 */}
         <Reveal>

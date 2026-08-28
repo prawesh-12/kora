@@ -1035,3 +1035,106 @@ still resolves to Inter and the file still loads.
 The larger fix is per-route fonts: move both out of the root layout into the
 routes that use them, and let the marketing layout declare its own. That removes
 the trade-off and is worth doing when the product routes next get attention.
+
+## The hero and the trace band are each one screen
+
+**Context.** The landing page opened with a short hero and the plum band already
+creeping into the first viewport, so neither read as a whole thing.
+
+**Decision.** The hero is `calc(100dvh - 124px)`, the height of the viewport less
+the two navigation tiers, which are sticky but still in flow. The band that
+carries the trace is `100dvh`. The space the taller hero opens up is filled by a
+row of three claims along its floor, each naming something the run below it
+actually records: the policy file and version, the gates a write passes, and the
+check that has to be MET before the run counts as resolved.
+
+**Why.** The band arriving halfway up the first screen made the trace look like a
+footnote to the headline rather than the proof of it. Giving each its own screen
+lets the headline make the claim and the band demonstrate it.
+
+**Trade-offs.** Below 768 the hero drops back to its content height. A phone
+viewport minus 124px of navigation is not enough room for a 42px headline, a
+lead, a button and three claims without setting everything too small to read.
+
+The slack above the headline is fixed padding rather than an auto margin. Auto
+margins were tried and cost three points of Lighthouse performance: they make the
+heading's position depend on layout that settles when the font loads, so the
+element moves and its largest contentful paint is recorded again, later. Median
+LCP went from 2.57s to 2.96s across five runs each. The composition is balanced
+by choosing the padding instead.
+
+## The trace loop runs at 4.6s
+
+**Context.** The sequence ran a 7s cycle, which is a long time to watch a figure
+repeat itself on a page someone is scrolling past.
+
+**Decision.** 4.6s, with every beat tightened and the amber hold kept at 1.0s.
+
+**Why.** The hold is the argument: everything before it is the agent proposing,
+everything after is a person deciding. Compressing it would save a third of a
+second and lose the point of the sequence. The rest had slack in it.
+
+## The system map replaces the accordion and the colour grid
+
+**Context.** "How it works" was an accordion of four steps beside a two-by-two
+grid of coloured panels. Both described the same run, and neither showed it as
+one thing.
+
+**Decision.** A single diagram on a full-bleed `--ink` band: inputs, the rule
+engine, the gate, the checks, and the return path back to the rule engine. The
+accordion's four bodies became the map's column captions. The eyebrow and the
+headline stayed.
+
+**Why.** The argument is that one run passes through one gate and comes back
+measurable. An accordion hides three quarters of that behind a click, and a grid
+of four coloured squares asserts it without showing it.
+
+**What the map is allowed to say.** Everything on it is read out of the
+repository:
+
+The thirteen stages in the Act column are the numbered steps of `runTool` in
+`packages/tools/src/pipeline.ts`, in the order it runs them: resolve version,
+validate input, permission check, policy check, limited-mode caps, approval
+gate, deployment mode gate, circuit breaker, idempotency claim, execute,
+validate output, verify, settle idempotency. The brief guessed seven.
+
+The four tabs are four files in `scenarios/`, by id: H1
+`damaged_order_within_policy`, H2 `damaged_order_above_approval_threshold`, N2
+`return_window_expired`, N7 `verification_failure`. Each tab's policy decision,
+outcome and asserted checks come from that file's `expect` block.
+
+The Prove column reports `9 run`, the length of `CHECKS`, against the number of
+checks the open scenario actually asserts. No rate, no percentage: the page has
+no measured performance to report and does not invent one.
+
+The return path claims `replay · promote` because `replay()` in
+`packages/evaluation/src/bench/replay-driver.ts`, `pnpm kora replay`,
+`pnpm kora agent:promote` and `pnpm kora agent:rollback` all exist, along with
+`POST /api/agent-versions/rollback`. The worker's `replay-pending-events` job is
+not part of this loop: it is an outbox catch-up for events whose enqueue failed,
+so it is not claimed here.
+
+**Two departures from the brief.**
+
+There is no `--danger` in the palette, and none was added. Failure is `--rust`,
+the colour "6 regressions" already uses.
+
+`Denied by policy` is not drawn as a failure. The brief assigns it the danger
+colour, but N2's own expectation is `state: RESOLVED` with `policy_compliance`
+and `outcome_achieved` both MET: the rule engine said no and the agent told the
+customer why, which is the system working. It takes the neutral stroke, and
+`write_verified` reads `—` rather than a value, because no write was proposed.
+Colouring a correct refusal red would be the same mistake the page is arguing
+against.
+
+**Restructures at 1280, not 1024.** Below 1280 the four columns become four
+steps top to bottom with the return path as a dashed rule down the left edge.
+The brief says 1024, but the container there is 960px wide and the horizontal
+diagram's labels would land under 11px. Restructuring one breakpoint earlier is
+the same instruction applied honestly.
+
+**Motion.** One 8px dot on an `offset-path`, six seconds, linear, continuous, no
+controls. It pauses when the band leaves the viewport. On `Held for a person` it
+stops for a second at the rule engine while the approval gate turns amber.
+Nothing else moves. Under reduced motion the dot is removed and every node
+renders at rest.

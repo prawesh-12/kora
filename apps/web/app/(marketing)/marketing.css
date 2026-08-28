@@ -634,11 +634,43 @@
 
 /* ------------------------------------------------------------ 3.2 hero */
 
+/*
+ * One screen, exactly. The two nav tiers are sticky but still in flow, so the
+ * hero is the viewport minus their 124px. Anything left over after the headline
+ * and the lead goes to the floor row rather than to empty white.
+ */
 .hero {
   position: relative;
-  padding-top: 96px;
-  padding-bottom: 96px;
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100dvh - 124px);
+  padding-top: 112px;
+  padding-bottom: 56px;
   overflow: hidden;
+}
+
+.hero__floor {
+  margin-top: auto;
+  padding-top: 72px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--gap-panel);
+  border-top: var(--hairline) solid var(--border);
+}
+.hero__claim {
+  margin: 0;
+}
+.hero__claim dt {
+  font-size: var(--t-eyebrow);
+  line-height: var(--t-eyebrow-lh);
+  font-weight: var(--w-medium);
+}
+.hero__claim dd {
+  margin: 10px 0 0;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink-muted);
 }
 
 .hero__grid {
@@ -675,6 +707,14 @@
   .hero__grid {
     grid-template-columns: 1fr;
     row-gap: 40px;
+  }
+  .hero {
+    min-height: 0;
+  }
+  .hero__floor {
+    grid-template-columns: 1fr;
+    gap: 28px;
+    padding-top: 48px;
   }
   .hero__right {
     padding-top: 0;
@@ -778,7 +818,7 @@
 
 .product-band {
   position: relative;
-  min-height: 720px;
+  min-height: 100dvh;
   display: flex;
   align-items: center;
   padding-block: 88px;
@@ -1597,7 +1637,7 @@
   transform: translateY(6px);
 }
 .seq__frame--run .seq-step {
-  animation: seq-in 220ms ease-out var(--at) both;
+  animation: seq-in 180ms ease-out var(--at) both;
 }
 /*
  * Opacity switches almost instantly and the movement carries the reveal.
@@ -1682,14 +1722,14 @@
 }
 @keyframes verdict-resolve {
   0%,
-  38.57% {
+  40.2% {
     background-color: #f1efeb;
   }
-  41.43%,
-  77.14% {
+  44.6%,
+  83.7% {
     background-color: #ffc400;
   }
-  80%,
+  88.1%,
   100% {
     background-color: #6fa82b;
   }
@@ -1699,14 +1739,14 @@
 }
 @keyframes verdict-held {
   0%,
-  39.5% {
+  40.2% {
     opacity: 0;
   }
-  39.6%,
-  78% {
+  40.3%,
+  83.7% {
     opacity: 1;
   }
-  78.1%,
+  83.8%,
   100% {
     opacity: 0;
   }
@@ -1716,10 +1756,10 @@
 }
 @keyframes verdict-resolved {
   0%,
-  78% {
+  83.7% {
     opacity: 0;
   }
-  78.1%,
+  83.8%,
   100% {
     opacity: 1;
   }
@@ -2136,5 +2176,387 @@
   }
   .seq__frame .drill__after {
     opacity: 1;
+  }
+}
+
+/* ================================================ the system map ======== */
+
+/*
+ * One run drawn end to end, on a full-bleed ink band. Same treatment as the
+ * plum band: radius 0, no border, no glow. Every structural stroke is one
+ * pixel of white at 16%; the only colours are the signal ones, and they mean
+ * what they mean everywhere else on the page.
+ */
+.map {
+  --hair: rgb(255 255 255 / 0.16);
+  --wash: rgb(255 255 255 / 0.5);
+  --lit: rgb(255 255 255 / 1);
+  --dim: rgb(255 255 255 / 0.28);
+  --run: 6s;
+
+  position: relative;
+  background: var(--ink);
+  color: var(--paper);
+  padding-block: 96px;
+  overflow: hidden;
+}
+
+/* The page's own texture, turned right down. No second grid pattern. */
+.map::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(var(--paper) 1.6px, transparent 1.6px);
+  background-size: 11px 11px;
+  opacity: 0.04;
+  pointer-events: none;
+}
+.map > .mk-container {
+  position: relative;
+}
+
+.map__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding-bottom: 20px;
+  border-bottom: var(--hairline) solid var(--hair);
+}
+.map__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  border: var(--hairline) solid var(--hair);
+  border-radius: var(--radius-pill);
+  padding: 8px 18px;
+  font-size: var(--t-meta);
+  letter-spacing: 0.08em;
+}
+.map__badge-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--signal);
+}
+.map__head-note {
+  font-size: var(--t-meta);
+  letter-spacing: 0.08em;
+  color: var(--wash);
+}
+
+.map__tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 32px;
+}
+.map__tab {
+  border: var(--hairline) solid rgb(255 255 255 / 0.7);
+  background: none;
+  color: var(--paper);
+  border-radius: var(--radius-pill);
+  padding: 9px 20px;
+  font-family: inherit;
+  font-size: var(--t-meta);
+  line-height: 1;
+  cursor: pointer;
+  text-align: inherit;
+  transition: transform var(--dur-fast) ease;
+}
+.map__tab:hover {
+  transform: translateY(-1px);
+}
+.map__tab--on {
+  background: var(--signal);
+  border-color: var(--signal);
+  color: var(--ink);
+}
+.marketing .map__tab:focus-visible {
+  outline: 3px solid var(--signal);
+  outline-offset: 3px;
+}
+
+.map__stage-wrap {
+  margin-top: 32px;
+}
+.map__svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+/* ------------------------------------------------------- map primitives */
+
+.map__colhead,
+.map__label {
+  font-family: var(--font-display);
+  font-size: 13px;
+  letter-spacing: 0.1em;
+  fill: var(--wash);
+}
+.map__mono {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  fill: var(--paper);
+}
+.map__mono--dim {
+  fill: var(--wash);
+}
+.map__value {
+  font-family: var(--font-mono);
+  font-size: 20px;
+  fill: var(--paper);
+}
+.map__node rect,
+.map__box rect {
+  fill: none;
+  stroke: var(--hair);
+  stroke-width: 1;
+}
+.map__link,
+.map__rule {
+  stroke: var(--hair);
+  stroke-width: 1;
+}
+.map__link {
+  stroke-dasharray: 4 5;
+}
+.map__arrow {
+  fill: var(--hair);
+}
+.map__return {
+  fill: none;
+  stroke: var(--hair);
+  stroke-width: 1;
+  stroke-dasharray: 4 5;
+}
+.map__caption-in {
+  font-family: var(--font-display);
+  font-size: 13px;
+  fill: var(--wash);
+}
+
+/* The rule engine is the differentiator, so it is the one node with colour. */
+.map__policy rect {
+  stroke: var(--signal);
+}
+/* The approval gate is the node that changes when a person is in the loop. */
+.map__approval rect {
+  fill: var(--amber);
+}
+.map__approval .map__mono {
+  fill: var(--amber);
+}
+
+.map__stage rect {
+  fill: var(--wash);
+}
+.map__stage--dim rect {
+  fill: var(--dim);
+}
+.map__stage--dim .map__mono {
+  fill: var(--dim);
+}
+
+/* Outcome takes the run's own colour, and only those three exist. */
+.map[data-tone="signal"] .map__value--tone {
+  fill: var(--signal);
+}
+.map[data-tone="rust"] .map__value--tone {
+  fill: var(--rust);
+}
+.map[data-tone="neutral"] .map__value--tone {
+  fill: var(--paper);
+}
+
+/* --------------------------------------------------------------- the dot */
+
+.map__dot {
+  fill: var(--signal);
+  offset-distance: 0%;
+  offset-rotate: 0deg;
+}
+.map[data-running="yes"] .map__dot {
+  animation: map-dot var(--run) linear infinite;
+}
+@keyframes map-dot {
+  from {
+    offset-distance: 0%;
+  }
+  to {
+    offset-distance: 100%;
+  }
+}
+/*
+ * Held pauses a second at the rule engine while the approval gate arrives.
+ * 16.4% of the run is where the dot reaches the policy node; the pause is the
+ * next 16.7%, which is one second of six.
+ */
+.map[data-held="yes"] .map__dot {
+  animation-name: map-dot-held;
+}
+@keyframes map-dot-held {
+  0% {
+    offset-distance: 0%;
+  }
+  16.4% {
+    offset-distance: 16.4%;
+  }
+  33.1% {
+    offset-distance: 16.4%;
+  }
+  100% {
+    offset-distance: 100%;
+  }
+}
+.map[data-held="yes"][data-running="yes"] .map__approval {
+  animation: map-approval var(--run) linear infinite;
+}
+@keyframes map-approval {
+  0%,
+  18% {
+    opacity: 0.25;
+  }
+  27%,
+  100% {
+    opacity: 1;
+  }
+}
+
+/* 200ms crossfade between scenarios, nothing slides. */
+.map__stage,
+.map__value,
+.map__approval,
+.map__mono {
+  transition: opacity 200ms ease;
+}
+
+/* ------------------------------------------------------------- captions */
+
+.map__captions {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--gap-panel);
+  margin-top: 56px;
+}
+.map__caption {
+  border-top: var(--hairline) solid var(--hair);
+  padding-top: 20px;
+}
+.map__caption-head {
+  margin: 0;
+  font-size: var(--t-eyebrow);
+  font-weight: var(--w-medium);
+}
+.map__caption-body {
+  margin: 12px 0 0;
+  font-size: var(--t-meta);
+  line-height: 1.55;
+  color: var(--wash);
+}
+
+/* ------------------------------------------------- below 1280, restructure */
+
+.map__stack {
+  display: none;
+}
+
+@media (max-width: 1279px) {
+  .map__svg {
+    display: none;
+  }
+  /*
+   * The four columns become four steps top to bottom. The horizontal diagram is
+   * not shrunk to fit: at this width its labels would be under 11px.
+   */
+  .map__stack {
+    display: block;
+    list-style: none;
+    margin: 0;
+    padding: 0 0 0 28px;
+    position: relative;
+  }
+  .map__stack::before {
+    content: "";
+    position: absolute;
+    left: 3px;
+    top: 6px;
+    bottom: 6px;
+    border-left: var(--hairline) dashed var(--hair);
+  }
+  .map__stack::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+    background: var(--signal);
+    animation: map-fall var(--run) linear infinite;
+  }
+  .map__stack li {
+    padding-block: 18px;
+    border-top: var(--hairline) solid var(--hair);
+  }
+  .map__stack li:first-child {
+    border-top: 0;
+  }
+  .map__stack .map__mono {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    line-height: 1.6;
+    margin: 8px 0 0;
+    color: var(--paper);
+  }
+  .map__stack .map__label {
+    margin: 0;
+    font-size: 12px;
+    letter-spacing: 0.1em;
+    color: var(--wash);
+  }
+  .map__stack-return .map__mono {
+    color: var(--wash);
+  }
+  .map__captions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@keyframes map-fall {
+  from {
+    top: 6px;
+  }
+  to {
+    top: calc(100% - 14px);
+  }
+}
+
+@media (max-width: 767px) {
+  .map {
+    padding-block: 72px;
+  }
+  .map__captions {
+    grid-template-columns: 1fr;
+  }
+  .map__head {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+}
+
+/* Nothing moves, and every node renders at rest. */
+@media (prefers-reduced-motion: reduce) {
+  .map__dot {
+    display: none;
+  }
+  .map .map__approval,
+  .map__stack::after {
+    animation: none;
+  }
+  .map .map__approval {
+    opacity: 1;
+  }
+  .map__stack::after {
+    display: none;
   }
 }
