@@ -4,64 +4,40 @@ import { useEffect, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 
 /**
- * One run of the agent, drawn end to end, with the return path that makes it a
- * cycle rather than a pipeline.
+ * One run of the agent at hero scale: what goes in, what decides, what it does,
+ * and what proves it, with the return path that makes it a cycle.
  *
- * Everything named here is read from the repository:
- *  - the thirteen gate stages are the numbered steps in packages/tools/src/pipeline.ts
- *  - the four tabs are real files in scenarios/, by id
- *  - nine checks is the length of CHECKS in packages/evaluation/src/checks
- *  - the return path claims replay and promote because `replay()`,
- *    `pnpm kora replay`, `agent:promote` and `agent:rollback` all exist
+ * Deliberately three items a column. The full thirteen-stage gate lives in the
+ * Act pillar further down the page, where there is room for it; here the three
+ * stages that carry the argument are enough, and a wall of rows in a 500px
+ * panel is not a diagram.
+ *
+ * Everything named is read from the repository: the stages are steps 4, 10 and
+ * 12 of `runTool` in packages/tools/src/pipeline.ts, the four tabs are files in
+ * scenarios/ by id, and nine is the length of CHECKS in packages/evaluation.
  */
 
-/** The numbered stages of `runTool`, in the order the pipeline runs them. */
-const PIPELINE = [
-  'resolve version',
-  'validate input',
-  'permission check',
-  'policy check',
-  'limited-mode caps',
-  'approval gate',
-  'deployment mode gate',
-  'circuit breaker',
-  'idempotency claim',
-  'execute',
-  'validate output',
-  'verify',
-  'settle idempotency',
-];
-
-/** Where each scenario stops, as an index into PIPELINE. */
-const POLICY_STAGE = 3;
-const VERIFY_STAGE = 11;
+/** Steps 4, 10 and 12 of the tool pipeline. */
+const ACT = ['policy check', 'execute', 'verify'];
+const POLICY_STEP = 0;
+const VERIFY_STEP = 2;
 
 type Scenario = {
   id: string;
   tab: string;
   file: string;
   decision: string;
-  rule: string | null;
   reaches: number;
   held: boolean;
   outcome: string;
-  verified: boolean;
-  asserted: number;
-  writeVerified: string;
+  checks: string;
   tone: 'signal' | 'neutral' | 'rust';
   path: string;
 };
 
-/**
- * The full route: inputs, into the rule engine, down the gate, out to the
- * checks, then back round the return curve.
- */
-const FULL =
-  'M 230 232 H 415 V 436 H 715 V 480 H 1050 V 566 Q 1050 590 1026 590 H 439 Q 415 590 415 566 V 232';
-/** Denied stops where the rule engine stopped it. */
-const TO_POLICY = 'M 230 232 H 415 V 436';
-/** A failed read-back reaches the checks and goes no further. */
-const TO_PROVE = 'M 230 232 H 415 V 436 H 715 V 480 H 1050';
+const FULL = 'M 102 96 H 193 V 207 H 500 V 330 Q 500 350 480 350 H 148 Q 128 350 128 330 V 96';
+const TO_POLICY = 'M 102 96 H 193 V 207';
+const TO_PROVE = 'M 102 96 H 193 V 207 H 500';
 
 const SCENARIOS: Scenario[] = [
   {
@@ -69,13 +45,10 @@ const SCENARIOS: Scenario[] = [
     tab: 'Resolved',
     file: 'damaged_order_within_policy',
     decision: 'allow',
-    rule: 'standard_replacement',
-    reaches: PIPELINE.length,
+    reaches: ACT.length,
     held: false,
     outcome: 'RESOLVED',
-    verified: true,
-    asserted: 7,
-    writeVerified: 'MET',
+    checks: '9 checks',
     tone: 'signal',
     path: FULL,
   },
@@ -84,13 +57,10 @@ const SCENARIOS: Scenario[] = [
     tab: 'Held for a person',
     file: 'damaged_order_above_approval_threshold',
     decision: 'require_approval',
-    rule: 'high_value_needs_approval',
-    reaches: PIPELINE.length,
+    reaches: ACT.length,
     held: true,
     outcome: 'RESOLVED',
-    verified: true,
-    asserted: 3,
-    writeVerified: 'MET',
+    checks: '9 checks',
     tone: 'signal',
     path: FULL,
   },
@@ -99,13 +69,10 @@ const SCENARIOS: Scenario[] = [
     tab: 'Denied by policy',
     file: 'return_window_expired',
     decision: 'deny',
-    rule: 'outside_return_window',
-    reaches: POLICY_STAGE + 1,
+    reaches: POLICY_STEP + 1,
     held: false,
     outcome: 'RESOLVED',
-    verified: false,
-    asserted: 3,
-    writeVerified: '—',
+    checks: '9 checks',
     tone: 'neutral',
     path: TO_POLICY,
   },
@@ -114,69 +81,25 @@ const SCENARIOS: Scenario[] = [
     tab: 'Read-back failed',
     file: 'verification_failure',
     decision: 'allow',
-    rule: 'standard_replacement',
-    reaches: VERIFY_STAGE + 1,
+    reaches: VERIFY_STEP + 1,
     held: false,
     outcome: 'NEEDS_HUMAN',
-    verified: false,
-    asserted: 2,
-    writeVerified: 'UNMET',
+    checks: '9 checks',
     tone: 'rust',
     path: TO_PROVE,
   },
 ];
 
-const INPUTS = [
-  { label: 'customer message', x: 8, y: 96 },
-  { label: 'order record', x: 26, y: 170 },
-  { label: 'policy file', x: 0, y: 244 },
-  { label: 'knowledge docs', x: 20, y: 318 },
-];
-
-const CAPTIONS = [
-  {
-    head: 'Inputs',
-    body: 'The request, the order record, and a rule file the agent does not get to argue with.',
-  },
-  {
-    head: 'Decide',
-    body: 'Intent detection with a confidence score. Below the threshold it goes to a person instead of guessing.',
-  },
-  {
-    head: 'Act',
-    body: 'Every write is validated, permission-checked, deduplicated and timed out. There is no second path to your business API.',
-  },
-  {
-    head: 'Prove',
-    body: 'The action is not finished until the business system confirms it. When it cannot, the agent stops talking and gets a person.',
-  },
-];
-
-function Row({ y, label, lit, held }: { y: number; label: string; lit: boolean; held?: boolean }) {
-  const cls = ['map__stage', !lit && 'map__stage--dim', held && 'map__approval']
-    .filter(Boolean)
-    .join(' ');
-  return (
-    <g className={cls}>
-      <rect x={616} y={y - 5} width={7} height={7} />
-      <text x={634} y={y} className="map__mono">
-        {label}
-        {held ? ' · a person' : ''}
-      </text>
-    </g>
-  );
-}
-
 export function SystemMap() {
   const [active, setActive] = useState(0);
   const [auto, setAuto] = useState(true);
-  const bandRef = useRef<HTMLDivElement>(null);
   const [inView, setInView] = useState(false);
+  const panelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const el = bandRef.current;
+    const el = panelRef.current;
     if (!el) return;
-    const io = new IntersectionObserver(([e]) => setInView(e.isIntersecting), { threshold: 0.15 });
+    const io = new IntersectionObserver(([e]) => setInView(e.isIntersecting), { threshold: 0.2 });
     io.observe(el);
     return () => io.disconnect();
   }, []);
@@ -192,205 +115,185 @@ export function SystemMap() {
   return (
     <div
       className="map"
-      ref={bandRef}
+      ref={panelRef}
       data-tone={s.tone}
       data-held={s.held ? 'yes' : 'no'}
       data-running={inView ? 'yes' : 'no'}
     >
-      <div className="mk-container">
-        <div className="map__head">
-          <span className="map__badge">
-            <span className="map__badge-dot" aria-hidden="true" />
-            KORA · ONE RUN, END TO END
-          </span>
-          <span className="map__head-note">DETERMINISTIC BY DESIGN</span>
-        </div>
+      <div className="map__head">
+        <span className="map__badge">
+          <span className="map__badge-dot" aria-hidden="true" />
+          KORA · ONE RUN
+        </span>
+        <span className="map__head-note">DETERMINISTIC BY DESIGN</span>
+      </div>
 
-        <div className="map__tabs" role="tablist" aria-label="Run scenarios">
-          {SCENARIOS.map((sc, i) => (
-            <button
-              key={sc.id}
-              type="button"
-              role="tab"
-              id={`map-tab-${sc.id}`}
-              aria-selected={i === active}
-              aria-controls="map-stage"
-              className={`map__tab${i === active ? ' map__tab--on' : ''}`}
-              onClick={() => {
-                setActive(i);
-                setAuto(false);
-              }}
-            >
-              {sc.tab}
-              <span className="sr-only">
-                {' '}
-                — scenario {sc.id}, {sc.file}
-              </span>
-            </button>
-          ))}
-        </div>
+      <div className="map__tabs" role="tablist" aria-label="Run scenarios">
+        {SCENARIOS.map((sc, i) => (
+          <button
+            key={sc.id}
+            type="button"
+            role="tab"
+            id={`map-tab-${sc.id}`}
+            aria-selected={i === active}
+            aria-controls="map-stage"
+            className={`map__tab${i === active ? ' map__tab--on' : ''}`}
+            onClick={() => {
+              setActive(i);
+              setAuto(false);
+            }}
+          >
+            {sc.tab}
+          </button>
+        ))}
+      </div>
 
-        <div
-          className="map__stage-wrap"
-          id="map-stage"
-          role="tabpanel"
-          aria-labelledby={`map-tab-${s.id}`}
-        >
-          <svg className="map__svg" viewBox="0 0 1216 640" xmlns="http://www.w3.org/2000/svg">
-            <title>
-              {`Scenario ${s.id}, ${s.file}: policy ${s.decision}, outcome ${s.outcome}`}
-            </title>
+      {/* Replaces the SVG <title>, which browsers render as a tooltip over the diagram. */}
+      {/* Where the policy identity lives: the node is too narrow to hold it. */}
+      <p className="map__scenario">
+        {s.id} · acme_damaged_order 1.0.0 · {s.decision}
+      </p>
 
-            {['INPUTS', 'DECIDE', 'ACT', 'PROVE'].map((h, i) => (
-              <text key={h} x={[0, 300, 600, 900][i]} y={22} className="map__colhead">
-                {h}
-              </text>
-            ))}
-
-            {/* dashed connectors between the columns */}
-            {[
-              [232, 232, 298],
-              [436, 532, 598],
-              [480, 832, 898],
-            ].map(([y, x1, x2]) => (
-              <g key={`${x1}-${y}`}>
-                <line x1={x1} y1={y} x2={x2 - 8} y2={y} className="map__link" />
-                <path
-                  d={`M ${x2 - 8} ${y - 4} L ${x2} ${y} L ${x2 - 8} ${y + 4} Z`}
-                  className="map__arrow"
-                />
-              </g>
-            ))}
-
-            {INPUTS.map((t) => (
-              <g key={t.label} className="map__node">
-                <rect x={t.x} y={t.y} width={200} height={42} rx={4} />
-                <text x={t.x + 16} y={t.y + 26} className="map__mono">
-                  {t.label}
-                </text>
-              </g>
-            ))}
-
-            <g className="map__node map__box">
-              <rect x={300} y={56} width={230} height={468} rx={4} />
-            </g>
-            <g className="map__node">
-              <rect x={316} y={92} width={198} height={40} rx={4} />
-              <text x={332} y={117} className="map__mono">
-                intent
-              </text>
-            </g>
-            <g className="map__node">
-              <rect x={316} y={144} width={198} height={40} rx={4} />
-              <text x={332} y={169} className="map__mono">
-                retrieval
-              </text>
-            </g>
-            {/* The only node in this column carrying a signal colour. */}
-            <g className="map__node map__policy">
-              <rect x={316} y={380} width={198} height={112} rx={4} />
-              <text x={332} y={410} className="map__label">
-                POLICY ENGINE
-              </text>
-              <text x={332} y={440} className="map__mono">
-                acme_damaged_order
-              </text>
-              <text x={332} y={464} className="map__mono map__mono--dim">
-                1.0.0 · {s.decision}
-              </text>
-            </g>
-            <text x={300} y={556} className="map__caption-in">
-              a compiled rule file, not a prompt
+      <div id="map-stage" role="tabpanel" aria-labelledby={`map-tab-${s.id}`}>
+        {/* biome-ignore lint/a11y/noSvgWithoutTitle: a <title> renders as a tooltip
+            across the diagram; the scenario line above names the run, and the
+            stacked list below is the text equivalent. */}
+        <svg className="map__svg" viewBox="0 0 560 400" xmlns="http://www.w3.org/2000/svg">
+          {['INPUTS', 'DECIDE', 'ACT', 'PROVE'].map((h, i) => (
+            <text key={h} x={[0, 128, 286, 444][i]} y={16} className="map__colhead">
+              {h}
             </text>
+          ))}
 
-            <g className="map__node map__box">
-              <rect x={600} y={56} width={230} height={468} rx={4} />
-            </g>
-            {PIPELINE.map((label, i) => (
-              <Row
-                key={label}
-                y={96 + i * 32}
-                label={label}
-                lit={i < s.reaches}
-                held={s.held && label === 'approval gate'}
+          {[
+            [96, 102, 126],
+            [207, 260, 284],
+            [207, 418, 442],
+          ].map(([y, x1, x2]) => (
+            <g key={`${x1}-${y}`}>
+              <line x1={x1} y1={y} x2={x2 - 6} y2={y} className="map__link" />
+              <path
+                d={`M ${x2 - 6} ${y - 3.5} L ${x2} ${y} L ${x2 - 6} ${y + 3.5} Z`}
+                className="map__arrow"
               />
-            ))}
+            </g>
+          ))}
 
-            <line x1={900} y1={268} x2={1216} y2={268} className="map__rule" />
-            {[
-              ['CHECKS', `9 run · ${s.asserted} asserted`],
-              ['WRITE_VERIFIED', s.writeVerified],
-              ['OUTCOME', s.outcome],
-            ].map(([label, value], i) => (
-              <g key={label}>
-                <text x={900} y={300 + i * 80} className="map__label">
+          {[
+            { label: 'message', x: 0, y: 62 },
+            { label: 'order', x: 10, y: 110 },
+          ].map((t) => (
+            <g key={t.label} className="map__node">
+              <rect x={t.x} y={t.y} width={92} height={30} rx={4} />
+              <text x={t.x + 12} y={t.y + 20} className="map__mono">
+                {t.label}
+              </text>
+            </g>
+          ))}
+
+          <g className="map__node map__box">
+            <rect x={128} y={50} width={130} height={240} rx={4} />
+          </g>
+          <g className="map__node">
+            <rect x={140} y={64} width={106} height={30} rx={4} />
+            <text x={152} y={84} className="map__mono">
+              intent
+            </text>
+          </g>
+          {/* The one node in this column with a colour, because it is the difference. */}
+          <g className="map__node map__policy">
+            <rect x={140} y={180} width={106} height={54} rx={4} />
+            <text x={150} y={203} className="map__label">
+              POLICY ENGINE
+            </text>
+            <text x={150} y={222} className="map__mono map__mono--sm map__mono--dim">
+              1.0.0
+            </text>
+          </g>
+          <text x={128} y={312} className="map__caption-in">
+            a rule file, not a prompt
+          </text>
+
+          <g className="map__node map__box">
+            <rect x={286} y={50} width={130} height={240} rx={4} />
+          </g>
+          {ACT.map((label, i) => {
+            const y = 96 + i * 44;
+            const held = s.held && label === 'policy check';
+            const cls = ['map__stage', i >= s.reaches && 'map__stage--dim', held && 'map__approval']
+              .filter(Boolean)
+              .join(' ');
+            return (
+              <g className={cls} key={label}>
+                <rect x={298} y={y - 5} width={6} height={6} />
+                <text x={312} y={y} className="map__mono">
                   {label}
                 </text>
-                <text
-                  x={900}
-                  y={332 + i * 80}
-                  className={`map__value${label === 'OUTCOME' ? ' map__value--tone' : ''}`}
-                >
-                  {value}
-                </text>
               </g>
-            ))}
-
-            {/* the return path: what makes this a cycle */}
-            <path
-              d="M 1050 524 V 566 Q 1050 590 1026 590 H 439 Q 415 590 415 566 V 524"
-              className="map__return"
-            />
-            <text x={676} y={614} className="map__mono map__mono--dim">
-              replay · promote
+            );
+          })}
+          {s.held && (
+            <text x={298} y={228} className="map__mono map__mono--sm map__approval-note">
+              held · a person
             </text>
+          )}
 
-            <circle
-              r={4}
-              className="map__dot"
-              style={{ offsetPath: `path("${s.path}")` } as CSSProperties}
-            />
-          </svg>
+          <line x1={444} y1={50} x2={560} y2={50} className="map__rule" />
+          <text x={444} y={92} className="map__label">
+            CHECKS
+          </text>
+          <text x={444} y={114} className="map__mono map__mono--sm">
+            {s.checks}
+          </text>
+          <text x={444} y={180} className="map__label">
+            OUTCOME
+          </text>
+          <text x={444} y={207} className="map__value map__value--tone">
+            {s.outcome}
+          </text>
 
-          {/* Below 1280 the flow runs top to bottom instead of being shrunk. */}
-          <ol className="map__stack">
-            <li>
-              <p className="map__label">INPUTS</p>
-              <p className="map__mono">{INPUTS.map((i) => i.label).join(' · ')}</p>
-            </li>
-            <li>
-              <p className="map__label">DECIDE</p>
-              <p className="map__mono">
-                intent · retrieval · acme_damaged_order 1.0.0 · {s.decision}
-              </p>
-            </li>
-            <li>
-              <p className="map__label">ACT</p>
-              <p className="map__mono">
-                {PIPELINE.slice(0, s.reaches).join(' · ')}
-                {s.reaches < PIPELINE.length ? ' · stopped' : ''}
-              </p>
-            </li>
-            <li>
-              <p className="map__label">PROVE</p>
-              <p className="map__mono">
-                9 run · {s.asserted} asserted · write_verified {s.writeVerified} · {s.outcome}
-              </p>
-            </li>
-            <li className="map__stack-return">
-              <p className="map__mono map__mono--dim">replay · promote</p>
-            </li>
-          </ol>
-        </div>
+          <path
+            d="M 500 290 V 330 Q 500 350 480 350 H 148 Q 128 350 128 330 V 290"
+            className="map__return"
+          />
+          <text x={262} y={376} className="map__mono map__mono--sm map__mono--dim">
+            replay · promote
+          </text>
 
-        <div className="map__captions">
-          {CAPTIONS.map((c) => (
-            <div className="map__caption" key={c.head}>
-              <p className="map__caption-head">{c.head}</p>
-              <p className="map__caption-body">{c.body}</p>
-            </div>
-          ))}
-        </div>
+          <circle
+            r={4}
+            className="map__dot"
+            style={{ offsetPath: `path("${s.path}")` } as CSSProperties}
+          />
+        </svg>
+
+        {/* The text equivalent, and the layout below 1024. */}
+        <ol className="map__stack">
+          <li>
+            <span className="map__label">INPUTS</span>
+            <span className="map__mono">message · order</span>
+          </li>
+          <li>
+            <span className="map__label">DECIDE</span>
+            <span className="map__mono">intent · acme_damaged_order 1.0.0 · {s.decision}</span>
+          </li>
+          <li>
+            <span className="map__label">ACT</span>
+            <span className="map__mono">
+              {ACT.slice(0, s.reaches).join(' · ')}
+              {s.reaches < ACT.length ? ' · stopped' : ''}
+            </span>
+          </li>
+          <li>
+            <span className="map__label">PROVE</span>
+            <span className="map__mono">
+              {s.checks} · {s.outcome}
+            </span>
+          </li>
+          <li className="map__stack-return">
+            <span className="map__mono map__mono--dim">replay · promote</span>
+          </li>
+        </ol>
       </div>
     </div>
   );

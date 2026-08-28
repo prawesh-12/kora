@@ -80,13 +80,6 @@ const PILLARS = [
 
 const CTA_STEP_FILL = ['var(--cobalt)', 'var(--amber)', 'var(--signal)', 'var(--signal)'];
 
-/** Each of these names something the run below actually records. */
-const CLAIMS = [
-  { title: 'The rule is a file, not a prompt.', artefact: 'acme_damaged_order 1.0.0' },
-  { title: 'Every write goes through one gate.', artefact: 'validated · permitted · idempotent' },
-  { title: 'Done means the order system agreed.', artefact: 'write_verified MET' },
-];
-
 const SCHEMA = {
   '@context': 'https://schema.org',
   '@graph': [
@@ -130,8 +123,6 @@ export default function MarketingPage() {
                 <br />
                 <span className="hl hl--dark">proves it worked</span>
               </h1>
-            </div>
-            <div className="hero__right">
               <p className="t-lead hero__lead">
                 KORA resolves customer requests end to end, then reads your business system back to
                 confirm the refund landed. Policy runs in code, not a prompt. Every run is scored
@@ -141,14 +132,9 @@ export default function MarketingPage() {
                 See a real trace
               </Pill>
             </div>
-          </div>
-          <div className="mk-container hero__floor">
-            {CLAIMS.map((claim) => (
-              <dl className="hero__claim" key={claim.artefact}>
-                <dt>{claim.title}</dt>
-                <dd>{claim.artefact}</dd>
-              </dl>
-            ))}
+            <div className="hero__right">
+              <SystemMap />
+            </div>
           </div>
         </section>
 
@@ -182,20 +168,9 @@ export default function MarketingPage() {
           </section>
         </Reveal>
 
-        {/* 3.6 */}
-        <Reveal>
-          <section className="mk-section" id="how-it-works">
-            <div className="mk-container">
-              <Eyebrow>How it works</Eyebrow>
-              <SectionHeading>From request to verified outcome</SectionHeading>
-            </div>
-          </section>
-        </Reveal>
-        <SystemMap />
-
         {/* 3.7 */}
         <Reveal>
-          <section className="mk-section" id="pillars">
+          <section className="mk-section" id="how-it-works">
             <div className="mk-container">
               <Eyebrow>How we do it</Eyebrow>
               <SectionHeading>Four things that make an answer trustworthy</SectionHeading>

@@ -1074,6 +1074,54 @@ repeat itself on a page someone is scrolling past.
 everything after is a person deciding. Compressing it would save a third of a
 second and lose the point of the sequence. The rest had slack in it.
 
+## The system map is hero furniture, cut to a quarter
+
+**Context.** The map first shipped as its own full-bleed section mid-page,
+carrying thirteen pipeline stages, four input tiles, three decide nodes and a
+four-metric Prove column.
+
+**Decision.** It lives in the hero's right column as an `--ink` panel, radius 4,
+no band padding and no heading of its own. The body paragraph and the call to
+action moved under the headline in the left column. The panel shows four columns
+of at most three items: message and order; intent and the rule engine; policy
+check, execute and verify; the check count and the outcome.
+
+**Why.** Mid-page it was a second argument competing with the trace band. In the
+hero it is the argument, next to the sentence that makes it. And at 494px wide
+it cannot carry a wall of thirteen rows: the full gate stays in the Act pillar
+further down, where there is room for it.
+
+**What moved and why.** Three things could not fit at panel scale and are not
+gone, only relocated.
+
+The policy identity is on the mono line under the tabs rather than inside the
+rule engine node. `acme_damaged_order` is eighteen characters; the node is 106
+units wide, which puts it under six pixels rendered. The line under the tabs is
+the full width of the panel and reads at twelve.
+
+That line also replaces the SVG's `<title>`. A `<title>` is what a browser
+renders as a hover tooltip, and at this size the tooltip covered the Act column.
+The line names the scenario, the policy and the decision, and changes with the
+tab.
+
+The per-scenario asserted-check count went with it. The panel says `9 checks`,
+which is the length of `CHECKS` and true of every run; which subset a scenario
+asserts is detail for a page with room for it.
+
+**The four column captions are gone.** They were the old accordion's bodies, and
+there is no room for four paragraphs beside a 560px panel. The same material is
+in the four pillars further down, which is where a reader who wants it will be.
+
+**Restructures at 1280, not 1024.** The brief says below 1024 the map moves under
+the call to action. At 1025 the hero's right column is 384px, which would put the
+diagram's labels near six pixels, so it stacks at the same step the type scale
+already uses. Restructured, not shrunk.
+
+**A stale copy of the old band CSS was overriding the panel.** Worth recording
+because it cost an hour: moving the map into the hero left the full-bleed version
+of its stylesheet in the file, 383 lines further down, where source order made it
+win. The symptom was font sizes that would not change no matter what was edited.
+
 ## The system map replaces the accordion and the colour grid
 
 **Context.** "How it works" was an accordion of four steps beside a two-by-two

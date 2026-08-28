@@ -644,81 +644,46 @@
   display: flex;
   flex-direction: column;
   min-height: calc(100dvh - 124px);
-  padding-top: 112px;
-  padding-bottom: 56px;
+  padding-top: 60px;
+  padding-bottom: 60px;
   overflow: hidden;
-}
-
-.hero__floor {
-  margin-top: auto;
-  padding-top: 72px;
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--gap-panel);
-  border-top: var(--hairline) solid var(--border);
-}
-.hero__claim {
-  margin: 0;
-}
-.hero__claim dt {
-  font-size: var(--t-eyebrow);
-  line-height: var(--t-eyebrow-lh);
-  font-weight: var(--w-medium);
-}
-.hero__claim dd {
-  margin: 10px 0 0;
-  font-family: var(--font-mono);
-  font-size: 13px;
-  line-height: 1.5;
-  color: var(--ink-muted);
 }
 
 .hero__grid {
   position: relative;
+  flex: 1;
   display: grid;
   grid-template-columns: 52% 40%;
   column-gap: 8%;
-  align-items: start;
+  align-items: stretch;
 }
 
-/*
- * The right column sits on the optical baseline of headline line one, not on
- * the top of the column. Both baselines are derived from the type they are set
- * in, so the offset holds at every step of the scale.
- *
- * baseline from line-box top = size * (line-height / 2 + (ascender - descender) / 2)
- * Inter Tight: ascender 0.969em, descender 0.241em.
- */
+/* Both columns start at the top of the headline block. */
 .hero__right {
-  --font-baseline-bias: 0.364;
-  padding-top: calc(
-    var(--t-hero) *
-    (var(--t-hero-lh) / 2 + var(--font-baseline-bias)) -
-    var(--t-lead) *
-    (var(--t-lead-lh) / 2 + var(--font-baseline-bias))
-  );
+  display: flex;
 }
 
 .hero__lead {
-  margin: 0 0 40px;
+  margin: 40px 0;
+  max-width: 46ch;
 }
 
-@media (max-width: 767px) {
-  .hero__grid {
-    grid-template-columns: 1fr;
-    row-gap: 40px;
-  }
+/*
+ * The map drops under the call to action and takes the full width at the same
+ * step the type scale uses. A 40% column is 384px wide at 1025, which would put
+ * the diagram's labels near six pixels. Restructured, not shrunk.
+ */
+@media (max-width: 1279px) {
   .hero {
     min-height: 0;
   }
-  .hero__floor {
+  .hero__grid {
     grid-template-columns: 1fr;
-    gap: 28px;
-    padding-top: 48px;
+    row-gap: 48px;
   }
-  .hero__right {
-    padding-top: 0;
-  }
+}
+
+@media (max-width: 767px) {
   .hero .dots {
     display: none;
   }
@@ -2151,6 +2116,15 @@
  * The finished frame, rendered once. Nothing here animates and nothing loops.
  */
 @media (prefers-reduced-motion: reduce) {
+  .map__dot,
+  .map__stack::after {
+    display: none;
+    animation: none;
+  }
+  .map__approval-note {
+    animation: none;
+    opacity: 1;
+  }
   .seq__frame .seq-step {
     opacity: 1;
     transform: none;
@@ -2182,22 +2156,27 @@
 /* ================================================ the system map ======== */
 
 /*
- * One run drawn end to end, on a full-bleed ink band. Same treatment as the
- * plum band: radius 0, no border, no glow. Every structural stroke is one
- * pixel of white at 16%; the only colours are the signal ones, and they mean
- * what they mean everywhere else on the page.
+ * One run at hero scale. Not a section: an --ink panel sitting in the hero's
+ * right column, radius 4, no band padding and no heading of its own. The type
+ * is one step down from the page's, because the panel is 500px wide, and the
+ * gate is three stages rather than thirteen. The full pipeline is in the Act
+ * pillar further down, where there is room for it.
  */
 .map {
   --hair: rgb(255 255 255 / 0.16);
   --wash: rgb(255 255 255 / 0.5);
-  --lit: rgb(255 255 255 / 1);
-  --dim: rgb(255 255 255 / 0.28);
+  --dim: rgb(255 255 255 / 0.26);
   --run: 6s;
 
   position: relative;
+  flex: 1;
+  min-height: 560px;
+  display: flex;
+  flex-direction: column;
   background: var(--ink);
   color: var(--paper);
-  padding-block: 96px;
+  border-radius: var(--radius-card);
+  padding: 28px;
   overflow: hidden;
 }
 
@@ -2211,7 +2190,7 @@
   opacity: 0.04;
   pointer-events: none;
 }
-.map > .mk-container {
+.map > * {
   position: relative;
 }
 
@@ -2219,28 +2198,28 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 24px;
-  padding-bottom: 20px;
+  gap: 16px;
+  padding-bottom: 16px;
   border-bottom: var(--hairline) solid var(--hair);
 }
 .map__badge {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   border: var(--hairline) solid var(--hair);
   border-radius: var(--radius-pill);
-  padding: 8px 18px;
-  font-size: var(--t-meta);
+  padding: 6px 14px;
+  font-size: 12px;
   letter-spacing: 0.08em;
 }
 .map__badge-dot {
-  width: 8px;
-  height: 8px;
+  width: 7px;
+  height: 7px;
   border-radius: 999px;
   background: var(--signal);
 }
 .map__head-note {
-  font-size: var(--t-meta);
+  font-size: 11px;
   letter-spacing: 0.08em;
   color: var(--wash);
 }
@@ -2248,17 +2227,17 @@
 .map__tabs {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
-  margin-top: 32px;
+  gap: 8px;
+  margin-top: 20px;
 }
 .map__tab {
   border: var(--hairline) solid rgb(255 255 255 / 0.7);
   background: none;
   color: var(--paper);
   border-radius: var(--radius-pill);
-  padding: 9px 20px;
+  padding: 7px 14px;
   font-family: inherit;
-  font-size: var(--t-meta);
+  font-size: 12px;
   line-height: 1;
   cursor: pointer;
   text-align: inherit;
@@ -2277,35 +2256,43 @@
   outline-offset: 3px;
 }
 
-.map__stage-wrap {
-  margin-top: 32px;
+/* What the SVG <title> used to say, without covering the diagram to say it. */
+.map__scenario {
+  margin: 14px 0 0;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--wash);
 }
+
 .map__svg {
   display: block;
   width: 100%;
   height: auto;
+  margin-block: auto;
 }
-
-/* ------------------------------------------------------- map primitives */
 
 .map__colhead,
 .map__label {
   font-family: var(--font-display);
-  font-size: 13px;
-  letter-spacing: 0.1em;
+  font-size: 9px;
+  letter-spacing: 0.12em;
   fill: var(--wash);
 }
 .map__mono {
   font-family: var(--font-mono);
-  font-size: 14px;
+  font-size: 11px;
   fill: var(--paper);
+}
+.map__mono--sm {
+  font-size: 9.5px;
 }
 .map__mono--dim {
   fill: var(--wash);
 }
 .map__value {
   font-family: var(--font-mono);
-  font-size: 20px;
+  /* NEEDS_HUMAN is the longest outcome and has to sit inside the column. */
+  font-size: 10px;
   fill: var(--paper);
 }
 .map__node rect,
@@ -2320,7 +2307,7 @@
   stroke-width: 1;
 }
 .map__link {
-  stroke-dasharray: 4 5;
+  stroke-dasharray: 3 4;
 }
 .map__arrow {
   fill: var(--hair);
@@ -2329,11 +2316,11 @@
   fill: none;
   stroke: var(--hair);
   stroke-width: 1;
-  stroke-dasharray: 4 5;
+  stroke-dasharray: 3 4;
 }
 .map__caption-in {
   font-family: var(--font-display);
-  font-size: 13px;
+  font-size: 9.5px;
   fill: var(--wash);
 }
 
@@ -2341,14 +2328,6 @@
 .map__policy rect {
   stroke: var(--signal);
 }
-/* The approval gate is the node that changes when a person is in the loop. */
-.map__approval rect {
-  fill: var(--amber);
-}
-.map__approval .map__mono {
-  fill: var(--amber);
-}
-
 .map__stage rect {
   fill: var(--wash);
 }
@@ -2357,6 +2336,15 @@
 }
 .map__stage--dim .map__mono {
   fill: var(--dim);
+}
+.map__approval rect {
+  fill: var(--amber);
+}
+.map__approval .map__mono {
+  fill: var(--amber);
+}
+.map__approval-note {
+  fill: var(--amber);
 }
 
 /* Outcome takes the run's own colour, and only those three exist. */
@@ -2369,8 +2357,6 @@
 .map[data-tone="neutral"] .map__value--tone {
   fill: var(--paper);
 }
-
-/* --------------------------------------------------------------- the dot */
 
 .map__dot {
   fill: var(--signal);
@@ -2389,9 +2375,9 @@
   }
 }
 /*
- * Held pauses a second at the rule engine while the approval gate arrives.
- * 16.4% of the run is where the dot reaches the policy node; the pause is the
- * next 16.7%, which is one second of six.
+ * Held pauses a second at the rule engine while the approval marker arrives.
+ * 16.4% of the run is where the dot reaches it; the pause is the next 16.7%,
+ * which is one second of six.
  */
 .map[data-held="yes"] .map__dot {
   animation-name: map-dot-held;
@@ -2410,13 +2396,13 @@
     offset-distance: 100%;
   }
 }
-.map[data-held="yes"][data-running="yes"] .map__approval {
+.map[data-held="yes"][data-running="yes"] .map__approval-note {
   animation: map-approval var(--run) linear infinite;
 }
 @keyframes map-approval {
   0%,
   18% {
-    opacity: 0.25;
+    opacity: 0;
   }
   27%,
   100% {
@@ -2427,62 +2413,40 @@
 /* 200ms crossfade between scenarios, nothing slides. */
 .map__stage,
 .map__value,
-.map__approval,
 .map__mono {
   transition: opacity 200ms ease;
 }
 
-/* ------------------------------------------------------------- captions */
-
-.map__captions {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: var(--gap-panel);
-  margin-top: 56px;
-}
-.map__caption {
-  border-top: var(--hairline) solid var(--hair);
-  padding-top: 20px;
-}
-.map__caption-head {
-  margin: 0;
-  font-size: var(--t-eyebrow);
-  font-weight: var(--w-medium);
-}
-.map__caption-body {
-  margin: 12px 0 0;
-  font-size: var(--t-meta);
-  line-height: 1.55;
-  color: var(--wash);
-}
-
-/* ------------------------------------------------- below 1280, restructure */
+/* ------------------------------------------------ below 1024, restructure */
 
 .map__stack {
   display: none;
 }
 
 @media (max-width: 1279px) {
+  .map {
+    min-height: 0;
+  }
   .map__svg {
     display: none;
   }
   /*
-   * The four columns become four steps top to bottom. The horizontal diagram is
-   * not shrunk to fit: at this width its labels would be under 11px.
+   * Four groups top to bottom with the return path as a dashed rule down the
+   * left. The diagram is not shrunk to fit: its labels are already 9px.
    */
   .map__stack {
     display: block;
     list-style: none;
-    margin: 0;
-    padding: 0 0 0 28px;
+    margin: 16px 0 0;
+    padding: 0 0 0 26px;
     position: relative;
   }
   .map__stack::before {
     content: "";
     position: absolute;
     left: 3px;
-    top: 6px;
-    bottom: 6px;
+    top: 8px;
+    bottom: 8px;
     border-left: var(--hairline) dashed var(--hair);
   }
   .map__stack::after {
@@ -2496,7 +2460,9 @@
     animation: map-fall var(--run) linear infinite;
   }
   .map__stack li {
-    padding-block: 18px;
+    display: grid;
+    gap: 4px;
+    padding-block: 14px;
     border-top: var(--hairline) solid var(--hair);
   }
   .map__stack li:first-child {
@@ -2504,59 +2470,67 @@
   }
   .map__stack .map__mono {
     font-family: var(--font-mono);
-    font-size: 13px;
-    line-height: 1.6;
-    margin: 8px 0 0;
+    font-size: 12px;
+    line-height: 1.55;
     color: var(--paper);
   }
   .map__stack .map__label {
-    margin: 0;
-    font-size: 12px;
-    letter-spacing: 0.1em;
+    font-size: 10px;
+    letter-spacing: 0.12em;
     color: var(--wash);
   }
   .map__stack-return .map__mono {
     color: var(--wash);
   }
-  .map__captions {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
 }
 @keyframes map-fall {
   from {
-    top: 6px;
+    top: 8px;
   }
   to {
-    top: calc(100% - 14px);
+    top: calc(100% - 16px);
   }
 }
 
-@media (max-width: 767px) {
-  .map {
-    padding-block: 72px;
-  }
-  .map__captions {
-    grid-template-columns: 1fr;
-  }
-  .map__head {
-    flex-wrap: wrap;
-    gap: 12px;
-  }
-}
+/* ------------------------------------------------------- reduced motion */
 
-/* Nothing moves, and every node renders at rest. */
+/*
+ * The finished frame, rendered once. Nothing here animates and nothing loops.
+ */
 @media (prefers-reduced-motion: reduce) {
-  .map__dot {
-    display: none;
-  }
-  .map .map__approval,
+  .map__dot,
   .map__stack::after {
+    display: none;
     animation: none;
   }
-  .map .map__approval {
+  .map__approval-note {
+    animation: none;
     opacity: 1;
   }
-  .map__stack::after {
-    display: none;
+  .seq__frame .seq-step {
+    opacity: 1;
+    transform: none;
+  }
+  .seq__frame .seq-grow {
+    transform: scaleX(var(--to, 1));
+  }
+  .seq__frame .seq-fade {
+    opacity: 1;
+  }
+  .seq__frame .verdict {
+    background: var(--signal);
+  }
+  .seq__frame .verdict--fail {
+    background: var(--rust);
+  }
+  .seq__frame .verdict__layer--resolved,
+  .seq__frame .verdict__layer--failed {
+    opacity: 1;
+  }
+  .seq__frame .drill__before {
+    opacity: 0;
+  }
+  .seq__frame .drill__after {
+    opacity: 1;
   }
 }
