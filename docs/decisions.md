@@ -658,3 +658,132 @@ in a self-replay that should have been empty.
 **Trade-offs.** A conversation whose only interesting behaviour is the resume is
 excluded rather than approximated. The turn that raised the approval is still
 compared, and it is the turn that made the decision worth measuring.
+
+## The marketing route is hand-built, not assembled from the registry
+
+**Context.** The rest of `apps/web` is built from shadcn, ReUI and beUI components,
+and `scripts/ui-gate.sh` enforces that: a hand-written table or a native `<select>`
+fails the build. The marketing landing page at `apps/web/app/(marketing)` does not
+follow that rule.
+
+**Decision.** Every element on the marketing route is written by hand. No registry
+component is used, and no icon library. The route carries its own stylesheet,
+`marketing.css`, with its own tokens, and shares nothing with the product theme.
+
+**Why.** The three effects the page is built around are a headline whose lines sit
+in solid blocks that hug the text, full-bleed bands cut on a diagonal, and a
+halftone dot grid. None of these exists in shadcn, ReUI, beUI or Beautiful UI. They
+were searched for by name and by shape: highlight headline, marked text, mark
+element, diagonal section, angled divider, clip-path band, skew section, dot grid,
+halftone, marquee, offset card. The registries cover application furniture, which
+is the product app's problem, not this page's.
+
+Forcing a registry component into the layout would also import the product theme's
+radii, shadows and hover states, and the page specification bans all three.
+
+**Trade-offs.** The route cannot inherit registry fixes or accessibility work. It is
+held to its own gate instead, `scripts/marketing-gate.sh`, wired into `pnpm lint`,
+which fails on the class names and copy that the design forbids and asserts the
+page keeps exactly one `<h1>` and a real `box-decoration-break`. The component rule
+in the UI brief still applies to everything outside `(marketing)`.
+
+## What the landing page is allowed to claim
+
+**Context.** The page argues that KORA verifies its own work. Anything on it that
+turns out to be decoration undercuts the argument more than a missing section would.
+
+**Decision.** Four sections named in the design brief are not on the page.
+
+The logo marquee and its trust strip are gone: KORA has no customers, and a wall of
+logos is either false or borrowed. No stand-in was substituted, so the marquee
+technique is not built at all.
+
+There is no statistics band. Numbers that appear in product fragments are sample
+values inside a depicted interface, the same kind of thing as `REP-2931`, and none
+of them is presented as a measurement of KORA.
+
+Second-tier navigation carries `Security` and `Pricing` in the brief. Neither has a
+section on the page, and an anchor to a section that does not exist is a dead link,
+so both were dropped rather than pointed at nothing. The footer is three columns of
+real destinations for the same reason, and its newsletter block is a description and
+a contact link because a subscribe form here would post nowhere.
+
+**Why.** The page's only real claim is that KORA reads the business system back. A
+reader who catches one invented number stops believing the rest.
+
+**Trade-offs.** The page is shorter and has less social proof than the reference it
+was drawn from. That is the correct trade before there are customers to name.
+
+## The evaluator runs nine checks, so the page says nine
+
+**Context.** The brief describes the Evaluate pillar as seven deterministic checks
+and asks for a seven-row illustration.
+
+**Decision.** The page says nine and lists all nine by their real identifiers, in
+the order `CHECKS` declares them in `packages/evaluation/src/checks/index.ts`.
+
+**Why.** There are nine. On a page whose subject is not overstating what happened,
+shipping a count that disagrees with the code is the one mistake that costs the most.
+
+**Trade-offs.** The illustration is two rows taller than the brief's composition.
+
+## The trace figure is rebuilt in HTML, not captured
+
+**Context.** The product band is specified as a screenshot of the trace screen,
+because that screen carries the argument: the verdict, the rule that produced it,
+and the read-back.
+
+**Decision.** The figure is HTML and CSS, not an image. It shows the verdict banner
+first, the policy check nested inside the `create_replacement` card it applies to,
+and the read-back row that closed the run.
+
+**Why.** The shipped trace screen does not present it in that order yet. A capture
+taken today would show the verdict in a third column and durations that read `0ms`,
+which argues against the page rather than for it.
+
+**TODO.** Replace this with a real 2x capture once the trace screen redesign lands.
+The figure lives in `apps/web/app/(marketing)/components/trace.tsx` and swapping it
+for a `next/image` is a single-component change.
+
+**Trade-offs.** It is a drawing of the product, so it can drift from the product. The
+TODO above is the guard, and the check identifiers and route paths it shows are read
+from the real ones.
+
+## Two palette values moved to clear WCAG AA
+
+**Context.** The page has to score 100 on accessibility, and the palette was fixed
+by the brief.
+
+**Decision.** `--ink-muted` moved from `#6e6e73` to `#6a6a6f`. Text on `--signal`
+and on `--rust` is `--ink`, not white.
+
+**Why.** `#6e6e73` on `--paper-warm` measures 4.41:1, under the 4.5:1 floor, and it
+is the colour of the whole second navigation tier and every footer heading. The new
+value clears 4.5 on warm, cream and white and is four steps darker, which is not a
+visible change. White on `--signal` measures 2.87:1 and white on `--rust` 3.39:1;
+both are well under. `--ink` on the same grounds measures 6.81:1 and 5.76:1, so the
+fix needed no new colour. The palette still has exactly the eleven values it had.
+
+**Trade-offs.** The read-back bar reads as dark text on green rather than white on
+green. `--signal` still means verified, which was the rule that mattered.
+
+## The nav and the accordion ship without JavaScript
+
+**Context.** The brief expects the accordion and the collapsing navigation to be
+client components.
+
+**Decision.** Both are CSS and HTML. The accordion is `<details name="how-it-works">`,
+whose exclusive behaviour and keyboard handling are native. The second navigation
+tier collapses on a scroll-driven animation timeline. The only client component on
+the route is the section reveal.
+
+**Why.** It keeps everything above the fold server-rendered, which is what the LCP
+requirement is really asking for, and it is less code than either would have been.
+
+**Trade-offs.** Where `animation-timeline` is unsupported the second tier stays
+visible, and where `::details-content` is unsupported the accordion opens instantly.
+Both degrade to a working page rather than a broken one.
+
+The reveal is an observer rather than a `view()` timeline because a view timeline
+runs backwards when you scroll up, and the brief asks for the fade to happen once.
+It leaves anything already on screen exactly as the server rendered it.
