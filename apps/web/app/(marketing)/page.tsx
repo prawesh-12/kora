@@ -11,13 +11,13 @@ import {
   EmptyResultGlyph,
   EvaluateGlyph,
   ImproveGlyph,
-  PlayGlyph,
+  ArrowDownGlyph,
   VerifyGlyph,
 } from './components/glyphs';
 import {
   ChatFragment,
   ChecksFragment,
-  ConfigBlock,
+  TraceResponseBlock,
   PipelineFragment,
   PolicyCheckCell,
   ReplayFragment,
@@ -75,7 +75,7 @@ const PILLARS = [
     id: 'act',
     glyph: <ActGlyph />,
     title: 'Act',
-    body: 'Every external action runs through a single pipeline: schema validation, permission check, policy check, idempotency claim, timeout, output validation. A retried request never creates a second refund.',
+    body: 'Every external action runs through one pipeline: input validation, permission check, policy check, circuit breaker, idempotency claim, timeout, output validation. There is no second path to your business API, and a retried request never creates a second replacement.',
     figure: <PipelineFragment />,
   },
   {
@@ -89,17 +89,19 @@ const PILLARS = [
     id: 'evaluate',
     glyph: <EvaluateGlyph />,
     title: 'Evaluate',
-    body: 'Every finished run is scored against your business system, not against the transcript. Nine deterministic checks run on all of it. Verified Resolution Rate is one number you can act on.',
+    body: 'Every finished run is scored against your business system, not against the transcript. Nine deterministic checks run on all of it, and a run only counts as resolved if the write is still there when we look. Verified Resolution Rate is one number you can act on.',
     figure: <ChecksFragment />,
   },
   {
     id: 'improve',
     glyph: <ImproveGlyph />,
     title: 'Improve',
-    body: 'Replay real conversations against a new configuration before it ships. See the regressions before your customers do.',
+    body: 'Replay recorded conversations against a new configuration and compare the two runs on the same traffic. Regressions are listed above the aggregate, because a version that gained four points and broke six runs is not a better version.',
     figure: <ReplayFragment />,
   },
 ];
+
+const CTA_STEP_FILL = ['var(--cobalt)', 'var(--amber)', 'var(--signal)', 'var(--signal)'];
 
 const SCHEMA = {
   '@context': 'https://schema.org',
@@ -151,8 +153,8 @@ export default function MarketingPage() {
                 confirm the refund landed. Policy runs in code, not a prompt. Every run is scored
                 against what happened.
               </p>
-              <Pill href="#trace" icon={<PlayGlyph />}>
-                Watch a 2-minute trace
+              <Pill href="#trace" icon={<ArrowDownGlyph />}>
+                See a real trace
               </Pill>
             </div>
           </div>
@@ -249,14 +251,14 @@ export default function MarketingPage() {
                 <Eyebrow>Fits in everywhere</Eyebrow>
                 <SectionHeading>Connects to the systems you already run</SectionHeading>
                 <p className="t-body integrations__body">
-                  KORA reaches your order system over MCP or a plain HTTP API. Whichever way you
-                  connect it, the same rule engine decides, the same read-back confirms, and the
-                  same trace comes out the other end.
+                  KORA talks to your order system over a plain HTTP API, and every run it does is
+                  readable back out the same way. The trace endpoint returns the intent, the rule
+                  that decided each write, and what the read-back saw.
                 </p>
                 <div className="integrations__actions">
-                  <Pill href="#trace">See all integrations</Pill>
-                  <Pill href="#how-it-works" variant="secondary">
-                    Read the docs
+                  <Pill href="/ops">Open the console</Pill>
+                  <Pill href="#trace" variant="secondary">
+                    See a trace
                   </Pill>
                 </div>
               </div>
@@ -267,7 +269,7 @@ export default function MarketingPage() {
                   <li className="tiles__tile" style={{ background: 'var(--ink)' }} />
                   <li className="tiles__tile" style={{ background: 'var(--signal)' }} />
                 </ul>
-                <ConfigBlock />
+                <TraceResponseBlock />
                 <RouteRows />
               </div>
             </div>
@@ -288,11 +290,16 @@ export default function MarketingPage() {
                 <Pill href={CONTACT}>Talk to us</Pill>
               </div>
             </div>
-            <svg className="cta__shape" viewBox="0 0 420 320" aria-hidden="true">
-              <g transform="rotate(15 210 160)">
-                <rect x="40" y="40" width="300" height="90" fill="var(--rust)" />
-                <rect x="80" y="115" width="300" height="90" fill="var(--cobalt)" />
-                <rect x="30" y="190" width="300" height="90" fill="var(--rust)" />
+            <svg className="cta__shape" viewBox="0 0 440 340" aria-hidden="true">
+              <g transform="rotate(-12 220 170)">
+                {[0, 1, 2, 3].map((i) => (
+                  <g key={i} transform={`translate(${70 + i * 14} ${34 + i * 72})`}>
+                    <rect width="300" height="60" rx="4" fill="var(--paper)" />
+                    <rect x="18" y="18" width="24" height="24" fill={CTA_STEP_FILL[i]} />
+                    <rect x="58" y="20" width="132" height="8" fill="var(--border)" />
+                    <rect x="58" y="36" width="86" height="8" fill="var(--border)" />
+                  </g>
+                ))}
               </g>
             </svg>
           </div>

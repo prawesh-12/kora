@@ -174,8 +174,20 @@
   padding-inline: var(--gutter);
 }
 
+/*
+ * Section padding is a leading rule, not a pair of cushions. Two adjacent
+ * sections that both pad top and bottom put 240px between them, which is what
+ * opened the hole under the problem cards.
+ */
 .mk-section {
-  padding-block: var(--section-y);
+  padding-block-start: var(--section-y);
+}
+/*
+ * Named rather than :last-of-type, because each section is wrapped for its
+ * reveal and every one of them is therefore the last of its type.
+ */
+#integrations {
+  padding-block-end: var(--section-y);
 }
 
 /* --------------------------------------------------------- focus rings */
@@ -192,7 +204,12 @@
   display: inline;
   box-decoration-break: clone;
   -webkit-box-decoration-break: clone;
-  padding: 0.06em 0.22em;
+  /*
+   * Vertical padding is not decoration here. At line-height 0.98 the inline box
+   * is shorter than the glyphs it wraps, and caps break the top edge of the
+   * block. 0.14em clears the ascenders at every step of the scale.
+   */
+  padding: 0.14em 0.22em;
 }
 .hl--light {
   background: var(--paper-warm);
@@ -228,7 +245,7 @@
   position: absolute;
   inset: 0;
   background: var(--rust);
-  clip-path: polygon(58% 0, 100% 0, 100% 22%, 72% 14%);
+  clip-path: polygon(70% 1.5%, 100% 0, 100% 15%, 73.5% 13.7%);
 }
 
 /* ---------------------------------------------------------- primitives */
@@ -376,10 +393,17 @@
 
 /* ----------------------------------------------------- 2.5 offset card */
 
+/*
+ * The rust slab sits on the container's left edge and the card is inset from
+ * it, which is the only way the 34px peek is visible on both sides. Insetting
+ * the slab instead pushed it off the viewport and put 2px of scroll on the
+ * page at 768.
+ */
 .offset-card {
   position: relative;
   width: 760px;
-  max-width: 100%;
+  max-width: calc(100% - 68px);
+  margin-inline: 34px;
 }
 .offset-card::before {
   content: "";
@@ -397,6 +421,10 @@
 }
 
 @media (max-width: 767px) {
+  .offset-card {
+    max-width: calc(100% - 32px);
+    margin-inline: 16px;
+  }
   .offset-card::before {
     left: -16px;
     right: -16px;
@@ -464,9 +492,16 @@
   animation-range: 200px 240px;
 }
 
+/*
+ * Ending on visibility as well as height takes the tier out of the layout for
+ * good. A height that lands on a fraction of a pixel still paints its warm
+ * ground as a hairline under the first tier, and it also stops the collapsed
+ * links from taking focus.
+ */
 @keyframes nav-collapse {
   to {
     height: 0;
+    visibility: hidden;
   }
 }
 
@@ -735,10 +770,17 @@
 }
 
 /* Lifted out of the band so it overlaps the white section above it. */
+/*
+ * The lift is capped so the card clears the hero's call to action. At -120px it
+ * cut the button in half, which is a worse trade than a shallower overlap.
+ *
+ * The width is held back from the container so the plum reads as a backdrop on
+ * the right rather than a sliver down the left.
+ */
 .trace {
-  width: 1180px;
+  width: 1100px;
   max-width: 100%;
-  margin: -120px 0 0;
+  margin: -48px 0 0;
 }
 .trace__card {
   background: var(--paper);
@@ -964,10 +1006,11 @@
 
 .how__grid {
   display: grid;
-  grid-template-columns: repeat(2, 382px);
-  grid-auto-rows: 382px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0;
-  justify-content: end;
+}
+.how__grid .cell {
+  aspect-ratio: 1 / 1;
 }
 .cell {
   padding: 40px;
@@ -988,7 +1031,12 @@
 }
 .cell--centre-piece {
   align-items: center;
-  padding: 0;
+  padding: 24px;
+}
+.cell--centre-piece svg {
+  width: 100%;
+  height: auto;
+  max-width: 200px;
 }
 .cell__action {
   margin: 0;
@@ -1050,15 +1098,6 @@
   .how {
     grid-template-columns: 1fr;
     row-gap: var(--gap-panel);
-  }
-  .how__grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    grid-auto-rows: auto;
-    aspect-ratio: 1 / 1;
-    justify-content: stretch;
-  }
-  .how__grid .cell {
-    aspect-ratio: 1 / 1;
   }
 }
 @media (max-width: 767px) {
@@ -1414,7 +1453,7 @@
 }
 .footer__columns {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: var(--gap-panel);
 }
 .footer__heading {
@@ -1501,4 +1540,15 @@
   .trace__facts > div {
     gap: 12px;
   }
+}
+
+/* New fragment parts */
+
+.trace__kind {
+  display: inline-block;
+  width: 76px;
+  color: var(--ink-muted);
+}
+.replay__regressions {
+  margin-bottom: 16px;
 }

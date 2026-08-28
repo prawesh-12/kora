@@ -787,3 +787,122 @@ Both degrade to a working page rather than a broken one.
 The reveal is an observer rather than a `view()` timeline because a view timeline
 runs backwards when you scroll up, and the brief asks for the fade to happen once.
 It leaves anything already on screen exactly as the server rendered it.
+
+## What the landing page had to stop claiming
+
+**Context.** The page argues that KORA checks its own work against the business
+system. A claim on it that does not survive the same check is the one thing that
+cannot be there. A pass over the page against `packages/`, `config/`,
+`services/` and `apps/web/app/api/` found several.
+
+**Removed, and why.**
+
+*A `/v1/` API.* The page showed four `/v1/` routes. No such prefix exists. The
+real routes are under `/api`, and one of the four, `/v1/conversations/{id}/messages`,
+had no counterpart at all: messages are posted to `/api/chat/{conversationId}`.
+All four rows now name routes that exist, with the methods their handlers export.
+
+*An MCP server.* The page opened with an `mcpServers` configuration block. There
+is no MCP server anywhere in this repository. The block is gone, and the code
+panel shows a trimmed response from `GET /api/conversations/{id}/trace` instead,
+with the field names and enum values that endpoint really returns.
+
+*A two-minute trace video.* There is no video. The button reads "See a real
+trace" and moves to the trace figure further down the page, which is a thing
+that exists.
+
+*`Docs` and `Company` in the top navigation.* Neither had a destination. The top
+tier now lists three routes in the app and nothing else, and `Evaluation` appears
+there rather than in both tiers.
+
+*A policy decision that the policy engine would not make.* The trace figure
+showed `amountMinor 349900` being held by `high_value_needs_approval`. That rule
+fires at `gte: 500000`, so the real engine would have matched `standard_replacement`
+and allowed it. The figure now runs on seeded order 9833 at `899900`, which is a
+case that rule genuinely holds.
+
+*Invented identifiers.* `ORD-8841` is not an order id format; seeded orders are
+bare numbers like `9832`. `REP-2931` is not a replacement id; they are
+`REP-` and four padded digits. `classify_intent` and `reply_to_customer` are not
+registered tools; the step kinds are `RunStepKind` values and the tools are the
+ones in `packages/tools/src/tools`. `within_window` and `under_threshold` are not
+rules in the policy file. All replaced with the real ones.
+
+*A replay comparison that did not match the report.* The Improve panel had `v3`,
+`v4` columns and metric names of its own. `ReplayReport.aggregate` is keyed
+`verifiedResolution`, `policyCompliance`, `escalationRate`, `meanLatencyMs` and
+`meanCostUsdMicros`, and `renderReplay` prints `metric`, `from`, `against`,
+`delta`, with regressions above the table so a reviewer cannot read the headline
+and stop. The panel now does the same.
+
+**Kept, because it checked out.** Nine deterministic checks: `CHECKS` declares
+exactly nine, and the page lists all nine by their real ids. Replay itself is
+built, so the Improve pillar stays.
+
+**Trade-offs.** The page now depends on details of the code and will need
+revisiting when they move. That is the right direction for the dependency to
+run on a page about verification.
+
+## Layout corrections the transcription introduced
+
+**Context.** Several measurements were carried over from the reference design
+without checking what they do in this page's own grid.
+
+**Decision and why.**
+
+The trace figure was lifted 120px into the section above it, which put it
+through the hero's own call to action. The lift is 48px, which is what it takes
+for the button to clear it. The figure was also 1180px in a 1376px container, so
+the band it sits on read as a stripe down one side rather than a backdrop; it is
+1100px now and the plum shows properly to its right.
+
+The highlight blocks used 0.06em of vertical padding. At `line-height: 0.98` the
+inline box is shorter than the glyphs, so capitals broke the top edge of the
+block. 0.14em clears the ascenders at 72px, 56px and 42px.
+
+The two-by-two grid asked for cells of 382px inside a column that is 52% of the
+container. At 1440 that is 764px of cells in 716px of column, which is what
+collapsed the grid into three ragged columns. The cells size to the column and
+hold their square with `aspect-ratio`.
+
+Sections padded both top and bottom, so every boundary between two of them was
+240px. Padding is a leading rule now, applied to the top only, with the last
+section closing the run. The one caveat is that each section is wrapped for its
+reveal, which makes every one of them `:last-of-type`; the closing rule is named
+rather than positional for that reason.
+
+The rust slab behind the final card was inset from the card, which pushed it off
+the left of the viewport and put two pixels of horizontal scroll on the page at
+768. The slab sits on the container edge and the card is inset from it, which is
+also the only arrangement where the peek is visible on both sides.
+
+## The root layout stops preloading a font the landing page never uses
+
+**Context.** The marketing route scored 93 on Lighthouse performance against a
+95 floor, entirely on a 3.2s largest contentful paint. First paint was 1.1s, so
+the gap was fonts, not code.
+
+**Decision.** `Inter` in `apps/web/app/layout.tsx` is loaded with
+`preload: false`.
+
+**Why.** The root layout puts three font families on every route in the
+application: Inter and JetBrains Mono from itself, and Inter Tight from the
+marketing layout below it. `next/font` preloads a family on every route where
+its loader runs, and the root layout runs everywhere, so the landing page was
+preloading roughly 130KB of fonts across three files. It never uses Inter at
+all: its display face is Inter Tight and its mono is JetBrains Mono.
+
+Dropping that one preload takes performance to 97 and LCP to 2.4s. The landing
+page now fetches two font files rather than three, and Inter is not among them.
+
+**Trade-offs.** Product routes still declare, load and apply Inter, but they
+fetch it when the stylesheet is parsed rather than from a link in the head. They
+already set `display: swap`, so text paints immediately in the fallback either
+way; the swap lands slightly later than it did. That was measured on `/login`,
+where the body font still resolves to Inter and the file still loads.
+
+The larger fix is per-route fonts: move Inter and JetBrains Mono out of the root
+layout into the routes that use them, and let the marketing layout declare its
+own two. That removes the trade-off entirely and is worth doing when the product
+routes next get attention. It was not done here because it touches three layouts
+outside the marketing route for a gain the single-line change already delivers.

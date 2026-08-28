@@ -15,6 +15,7 @@ const sans = Inter({
   subsets: ['latin'],
   variable: '--font-inter',
   display: 'swap',
+  preload: false,
 });
 
 const mono = JetBrains_Mono({

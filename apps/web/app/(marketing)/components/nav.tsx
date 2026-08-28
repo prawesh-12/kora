@@ -1,25 +1,20 @@
-import { ArrowUpRightGlyph, CaretGlyph } from './glyphs';
+import { ArrowUpRightGlyph } from './glyphs';
 import { Pill, Wordmark } from './primitives';
 
 /**
- * KORA is one product. These name the three surfaces it actually has rather
- * than inventing a product line for each slot.
+ * Top tier points at the app, second tier at sections on this page. Nothing
+ * appears in both, and there is no link here that does not resolve.
  */
 const PRODUCT = [
-  { label: 'Agent', active: true },
-  { label: 'Operator console', active: false },
-  { label: 'Evaluation', active: false },
+  { label: 'Operator console', href: '/ops' },
+  { label: 'Approvals', href: '/ops/approvals' },
+  { label: 'Evaluations', href: '/ops/evaluations' },
 ];
 
-/**
- * Every second-tier item is an anchor to a section that exists on this page.
- * Security and Pricing are not here because those sections are not.
- */
 const SECTIONS = [
   { label: 'Why we made this', href: '#why' },
   { label: 'How it works', href: '#how-it-works' },
   { label: 'Verification', href: '#verify' },
-  { label: 'Evaluation', href: '#evaluate' },
   { label: 'Integrations', href: '#integrations' },
 ];
 
@@ -34,33 +29,15 @@ export function Nav() {
             <Wordmark />
           </a>
           <ul className="nav__product">
-            {PRODUCT.map((item) => {
-              const cls = `t-nav nav__link${item.active ? ' nav__link--active' : ''}`;
-              const current = item.active ? 'page' : undefined;
-              return (
-                <li key={item.label}>
-                  {/* biome-ignore lint/a11y/useValidAnchor: no destination exists yet */}
-                  <a className={cls} href="#" aria-current={current}>
-                    {item.label}
-                  </a>
-                </li>
-              );
-            })}
+            {PRODUCT.map((item) => (
+              <li key={item.href}>
+                <a className="t-nav nav__link" href={item.href}>
+                  {item.label}
+                </a>
+              </li>
+            ))}
           </ul>
           <ul className="nav__utility">
-            <li>
-              {/* biome-ignore lint/a11y/useValidAnchor: no destination exists for these yet */}
-              <a className="t-nav nav__link" href="#">
-                Docs
-              </a>
-            </li>
-            <li>
-              {/* biome-ignore lint/a11y/useValidAnchor: no destination exists for these yet */}
-              <a className="t-nav nav__link nav__link--caret" href="#">
-                Company
-                <CaretGlyph />
-              </a>
-            </li>
             <li>
               <Pill href={CONTACT}>Talk to us</Pill>
             </li>

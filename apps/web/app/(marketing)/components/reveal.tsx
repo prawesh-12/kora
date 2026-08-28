@@ -5,10 +5,15 @@ import type { ReactNode } from 'react';
 
 /**
  * Fade a section up 16px the first time it comes into view. Once, never again,
- * never in reverse, which is why this is an observer and not a view() timeline.
+ * never in reverse, which is why this is not a `view()` timeline.
+ *
+ * A scroll listener rather than an IntersectionObserver: the observer delivers
+ * asynchronously, so a fast scroll or an anchor jump can carry a section past
+ * the viewport between two deliveries and the entry that arrives reports it as
+ * not intersecting. This reads the position directly and cannot miss.
  *
  * Anything already on screen when the page settles is left exactly as the
- * server rendered it: arming it would hide content that is already readable.
+ * server rendered it. Arming it would hide content that is already readable.
  */
 export function Reveal({ children }: { children: ReactNode }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -20,19 +25,19 @@ export function Reveal({ children }: { children: ReactNode }) {
     if (el.getBoundingClientRect().top < window.innerHeight) return;
 
     el.classList.add('reveal--armed');
-    const reveal = () => {
+
+    const check = () => {
+      if (el.getBoundingClientRect().top > window.innerHeight * 0.88) return;
       el.classList.add('reveal--in');
-      io.disconnect();
+      window.removeEventListener('scroll', check);
+      window.removeEventListener('resize', check);
     };
-    const io = new IntersectionObserver((entries) => {
-      if (entries.some((e) => e.isIntersecting)) reveal();
-    });
-    io.observe(el);
-    // A section that is never observed as intersecting still has to be readable.
-    const bail = window.setTimeout(reveal, 4000);
+
+    window.addEventListener('scroll', check, { passive: true });
+    window.addEventListener('resize', check, { passive: true });
     return () => {
-      window.clearTimeout(bail);
-      io.disconnect();
+      window.removeEventListener('scroll', check);
+      window.removeEventListener('resize', check);
     };
   }, []);
 

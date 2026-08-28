@@ -7,11 +7,11 @@ import { Mark, Pill } from './primitives';
  */
 const COLUMNS = [
   {
-    heading: 'Product',
+    heading: 'This page',
     links: [
+      ['Why we made this', '#why'],
       ['How it works', '#how-it-works'],
       ['Verification', '#verify'],
-      ['Evaluation', '#evaluate'],
       ['Integrations', '#integrations'],
     ],
   },
@@ -23,10 +23,6 @@ const COLUMNS = [
       ['Evaluations', '/ops/evaluations'],
       ['Customer chat', '/chat'],
     ],
-  },
-  {
-    heading: 'Contact',
-    links: [['Talk to us', CONTACT]],
   },
 ] as const;
 

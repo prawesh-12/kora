@@ -38,10 +38,10 @@ function Svg({
 
 /* -- controls ---------------------------------------------------------- */
 
-export function PlayGlyph() {
+export function ArrowDownGlyph() {
   return (
     <svg className="pill__icon" viewBox="0 0 20 20" aria-hidden="true" focusable="false">
-      <path d="M5 3 L17 10 L5 17 Z" fill="currentColor" />
+      <path d="M10 3 V16 M4 10.5 L10 16.5 L16 10.5" {...stroke} />
     </svg>
   );
 }
@@ -117,44 +117,40 @@ export function BrokenLogGlyph() {
 
 /* -- 3.7 pillars, 40px stroked outline --------------------------------- */
 
-/** One pipeline, three gates. */
+/** Act. One funnel, one way through. */
 export function ActGlyph() {
   return (
     <Svg size={40}>
-      <path d="M20 5 V35" {...stroke} />
-      <rect x="12" y="5" width="16" height="8" {...stroke} />
-      <rect x="12" y="16" width="16" height="8" {...stroke} />
-      <rect x="12" y="27" width="16" height="8" {...stroke} />
+      <path d="M5 7 H35 L23 21 V34 L17 30 V21 Z" {...stroke} />
     </Svg>
   );
 }
 
-/** Read the entity back, compare it. */
+/** Verify. A check that has to survive the brackets around it. */
 export function VerifyGlyph() {
   return (
     <Svg size={40}>
-      <circle cx="20" cy="20" r="15" {...stroke} />
-      <path d="M12 20 L18 26 L28 14" {...stroke} />
+      <path d="M14 6 H6 V34 H14 M26 6 H34 V34 H26" {...stroke} />
+      <path d="M13 20 L18 25 L27 14" {...stroke} />
     </Svg>
   );
 }
 
-/** Deterministic checks, scored against the business system. */
+/** Evaluate. Measured against something, and the mark it earned. */
 export function EvaluateGlyph() {
   return (
     <Svg size={40}>
-      <path d="M5 6 H35 M5 6 V34 M5 34 H35" {...stroke} />
-      <path d="M12 13 H28 M12 20 H28 M12 27 H22" {...stroke} />
+      <path d="M4 30 H36 M10 30 V24 M17 30 V24 M24 30 V24 M31 30 V24" {...stroke} />
+      <path d="M11 12 L16 17 L27 6" {...stroke} />
     </Svg>
   );
 }
 
-/** Two versions, one delta. */
+/** Improve. Two runs of the same thing, offset by the difference. */
 export function ImproveGlyph() {
   return (
     <Svg size={40}>
-      <path d="M7 35 V22 H14 V35 Z M26 35 V10 H33 V35 Z" {...stroke} />
-      <path d="M18 22 L22 18 L22 26 Z" fill="currentColor" stroke="none" />
+      <path d="M6 34 V19 H17 V34 Z M23 27 V6 H34 V27 Z" {...stroke} />
     </Svg>
   );
 }
