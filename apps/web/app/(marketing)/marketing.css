@@ -344,7 +344,8 @@
   font-size: 13px;
 }
 .gates__n {
-  color: var(--muted-foreground);
+  /* 11px on the vellum rows, so it needs the stronger muted step to clear AA. */
+  color: var(--muted-strong);
   font-size: 11px;
   min-width: 16px;
 }

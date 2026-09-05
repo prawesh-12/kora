@@ -49,15 +49,12 @@ export default async function OverviewPage() {
       </header>
 
       <HeroStat
-        context={`${metrics.runs.evaluated.toLocaleString()} evaluated \u00b7 ${metrics.runs.pending.toLocaleString()} pending`}
+        context={`${metrics.runs.evaluated.toLocaleString()} evaluated, ${metrics.runs.pending.toLocaleString()} pending`}
         label="Verified resolution rate"
         tone={metrics.verifiedResolutionRate === null ? 'default' : 'ok'}
         value={formatRate(metrics.verifiedResolutionRate)}
         {...(metrics.verifiedResolutionRate !== null
-          ? {
-              countTo: metrics.verifiedResolutionRate * 100,
-              formatCount: (n: number) => `${n.toFixed(1)}%`,
-            }
+          ? { countTo: metrics.verifiedResolutionRate * 100 }
           : {})}
       />
 

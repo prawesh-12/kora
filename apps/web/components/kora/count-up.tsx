@@ -2,8 +2,13 @@
 
 import { useEffect, useRef, useState } from 'react';
 
-/** Counts from 0 to `to` once over 600ms. Static text under reduced motion. */
-export function CountUp({ to, format }: { to: number; format: (n: number) => string }) {
+/**
+ * Counts from 0 to `to` once over 600ms. Static text under reduced motion.
+ *
+ * Formats here rather than taking a formatter: this is a client component, and a
+ * function prop cannot cross the boundary from the server components that use it.
+ */
+export function CountUp({ to }: { to: number }) {
   const [value, setValue] = useState(0);
   const started = useRef(false);
 
@@ -25,5 +30,5 @@ export function CountUp({ to, format }: { to: number; format: (n: number) => str
     return () => cancelAnimationFrame(frame);
   }, [to]);
 
-  return <>{format(value)}</>;
+  return <>{`${value.toFixed(1)}%`}</>;
 }

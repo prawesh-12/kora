@@ -77,7 +77,9 @@ export function ProofCard({
       data-testid={`proof-card-${status}`}
     >
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h3 className="font-semibold text-base">{title}</h3>
+        {/* Not a heading: the card renders under headings of several levels, and the
+            section already carries the title as its accessible name. */}
+        <p className="font-semibold text-base">{title}</p>
         {amountMinor !== null ? <Money amountMinor={amountMinor} currency={currency} /> : null}
       </div>
 

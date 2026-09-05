@@ -77,7 +77,6 @@ export function HeroStat({
   context,
   aside,
   countTo,
-  formatCount,
 }: {
   label: string;
   value: string;
@@ -88,7 +87,6 @@ export function HeroStat({
   aside?: ReactNode;
   /** When set, the value counts up once on load (600ms, static under reduced motion). */
   countTo?: number;
-  formatCount?: (n: number) => string;
 }) {
   return (
     <div className="flex h-[112px] flex-col justify-center gap-1 rounded-[10px] border px-5 py-4">
@@ -96,7 +94,7 @@ export function HeroStat({
       <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
         <span className={cn('font-semibold text-4xl tabular-nums', TONE_CLASS[tone])}>
           {countTo !== undefined ? (
-            <CountUp format={formatCount ?? ((n) => `${n.toFixed(1)}%`)} to={countTo} />
+            <CountUp to={countTo} />
           ) : (
             value
           )}
