@@ -1,0 +1,19 @@
+key: plan_changes
+version: "1.0.0"
+description: Money-ops plan change rules
+currency: INR
+default: require_approval
+
+rules:
+  - id: plan_large_credit
+    when:
+      action: { eq: change_plan }
+      prorationCreditMinor: { gte: 200000 }
+    decision: require_approval
+    reason: Large proration credit needs a person
+
+  - id: plan_allow
+    when:
+      action: { eq: change_plan }
+    decision: allow
+    reason: Standard plan change

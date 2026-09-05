@@ -1,0 +1,19 @@
+key: cancellations
+version: "1.0.0"
+description: Money-ops cancellation rules
+currency: INR
+default: require_approval
+
+rules:
+  - id: cancel_unpaid_immediate
+    when:
+      action: { eq: cancel_subscription }
+      subscriptionStatus: { eq: unpaid }
+    decision: require_approval
+    reason: Cancelling an unpaid subscription needs review
+
+  - id: cancel_allow
+    when:
+      action: { eq: cancel_subscription }
+    decision: allow
+    reason: Standard cancellation

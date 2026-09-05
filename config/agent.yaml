@@ -3,25 +3,28 @@ maxSteps: 8
 runDeadlineMs: 45000
 confidenceThreshold: 0.7
 allowedTools:
-  - { name: get_order,          version: 1 }
+  - { name: get_subscription,   version: 1 }
   - { name: get_customer,       version: 1 }
+  - { name: get_invoice,        version: 1 }
+  - { name: preview_change,     version: 1 }
   - { name: search_knowledge,   version: 1 }
   - { name: check_policy,       version: 1 }
-  - { name: create_replacement, version: 1 }
   - { name: create_refund,      version: 1 }
-  - { name: cancel_order,       version: 1 }
+  - { name: cancel_subscription, version: 1 }
+  - { name: change_plan,        version: 1 }
   - { name: create_ticket,      version: 1 }
   - { name: escalate_to_human,  version: 1 }
 permissions:
-  - orders:read
+  - subscriptions:read
   - customers:read
+  - invoices:read
   - knowledge:read
   - policy:read
-  - orders:write
   - payments:write
+  - subscriptions:write
   - tickets:write
   - escalation:write
 policyBundle:
-  - config/policies/acme-damaged-order.yaml
-  - config/policies/acme-refunds.yaml
-  - config/policies/acme-cancellations.yaml
+  - config/policies/refunds.yaml
+  - config/policies/cancellations.yaml
+  - config/policies/plan-changes.yaml
