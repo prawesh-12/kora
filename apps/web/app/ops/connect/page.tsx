@@ -1,3 +1,5 @@
+import { serverEnv } from '@kora/core';
+import { getStripeFixtures, getStripeSecretEncrypted } from '@kora/db';
 import { CheckCircle2, Circle, CircleAlert, KeyRound } from 'lucide-react';
 import Link from 'next/link';
 import { EmptyState } from '@/components/kora/states';
@@ -7,11 +9,10 @@ export const dynamic = 'force-dynamic';
 
 /**
  * First-run Connect Stripe screen. What Kora will do, the scopes it needs in
- * plain language, one primary action, then a fixtures checklist.
+ * plain language, then the real state of the key and the fixtures.
  *
- * TODO(plan): wire the Connect action to the per-tenant encrypted key store
- * (P5 admin command owns key storage); this screen currently links on to the
- * console once the key is set.
+ * The key itself is set by the admin command, not here: a restricted key typed
+ * into a browser form is a key in a browser history.
  */
 const SCOPES = [
   {
@@ -32,12 +33,38 @@ const SCOPES = [
   },
 ];
 
-const FIXTURES = [
-  'Test clock frozen at a known time',
-  'Customers with payment methods on that clock',
-  'Subscriptions on known prices, one invoice paid',
-  'One charge old enough to fall outside the refund window',
-];
+interface FixtureManifest {
+  testClockId?: string;
+  refundWindowDays?: number;
+  customers?: Array<{ paymentMethodId?: string }>;
+  subscriptions?: Array<{ id?: string }>;
+  charges?: Array<{ createdAt?: string }>;
+}
+
+function checklist(manifest: FixtureManifest | null) {
+  const customers = manifest?.customers ?? [];
+  const charges = manifest?.charges ?? [];
+  const windowDays = manifest?.refundWindowDays ?? 0;
+  const cutoff = Date.now() - windowDays * 86_400_000;
+
+  return [
+    { label: 'Test clock frozen at a known time', done: Boolean(manifest?.testClockId) },
+    {
+      label: 'Customers with payment methods on that clock',
+      done: customers.length > 0 && customers.every((c) => Boolean(c.paymentMethodId)),
+    },
+    {
+      label: 'Subscriptions on known prices, one invoice paid',
+      done: (manifest?.subscriptions ?? []).length > 0 && charges.length > 0,
+    },
+    {
+      label: 'One charge old enough to fall outside the refund window',
+      done:
+        windowDays > 0 &&
+        charges.some((c) => c.createdAt !== undefined && Date.parse(c.createdAt) < cutoff),
+    },
+  ];
+}
 
 export default async function ConnectPage({
   searchParams,
@@ -46,6 +73,12 @@ export default async function ConnectPage({
 }) {
   const { error } = await searchParams;
   const unreachable = error === 'unreachable';
+  const tenantId = serverEnv().KORA_TENANT_ID;
+  const [keySet, manifest] = await Promise.all([
+    getStripeSecretEncrypted(tenantId).then(Boolean),
+    getStripeFixtures(tenantId) as Promise<FixtureManifest | null>,
+  ]);
+  const fixtures = checklist(manifest);
 
   return (
     <div className="mx-auto flex w-full max-w-[640px] flex-col gap-8 p-8">
@@ -85,38 +118,48 @@ export default async function ConnectPage({
 
       <div className="flex flex-wrap gap-2">
         <Button asChild>
-          <Link href="/ops">Connect Stripe</Link>
+          <Link href={keySet ? '/ops' : '/ops/connect#set-the-key'}>
+            {keySet ? 'Open the console' : 'Connect Stripe'}
+          </Link>
         </Button>
         <Button asChild variant="outline">
           <Link href="/chat">Open the customer chat</Link>
         </Button>
       </div>
-      <p className="tnum font-mono text-muted-foreground text-xs">
-        pnpm kora tenant:set-stripe-key --tenant &lt;id&gt;
-      </p>
+      <section className="space-y-2" id="set-the-key">
+        <h2 className="font-medium text-lg">Set the key</h2>
+        <p className="text-muted-foreground text-sm">
+          Run this once per tenant. The key is encrypted before it is stored and is never shown
+          again.
+        </p>
+        <p className="tnum font-mono text-xs">
+          pnpm kora stripe:set-key --tenant {tenantId} --key sk_test_…
+        </p>
+      </section>
 
       <section className="space-y-3">
         <h2 className="font-medium text-lg">Fixtures checklist</h2>
         <ul className="flex flex-col gap-2 text-sm">
-          {FIXTURES.map((fixture, index) => (
-            <li className="flex items-start gap-2" key={fixture}>
-              {index < 2 ? (
+          {fixtures.map((fixture) => (
+            <li className="flex items-start gap-2" key={fixture.label}>
+              {fixture.done ? (
                 <CheckCircle2 aria-hidden className="mt-0.5 size-4 shrink-0 text-success-strong" />
               ) : (
                 <Circle aria-hidden className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
               )}
-              <span>{fixture}</span>
+              <span>{fixture.label}</span>
             </li>
           ))}
         </ul>
       </section>
 
-      <EmptyState
-        action={{ label: 'Read the runbook', href: '/ops/versions' }}
-        description="Set the tenant key with the admin command, then run the fixtures script twice and confirm the state matches."
-        icon={KeyRound}
-        title="Key not set yet"
-      />
+      {keySet ? null : (
+        <EmptyState
+          description="Set the tenant key with the admin command above, then run pnpm kora stripe:fixtures. Running it twice leaves the same state."
+          icon={KeyRound}
+          title="Key not set yet"
+        />
+      )}
     </div>
   );
 }
