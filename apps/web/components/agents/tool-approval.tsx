@@ -134,6 +134,9 @@ export function ToolApproval({
   );
   const busy = status === "approving" || status === "running";
   const pending = status === "pending";
+  // Without a handler there is nothing to decide. A customer looking at their own
+  // approval must not be given controls that do nothing.
+  const decidable = pending && (onApprove !== undefined || onDeny !== undefined);
   const error = status === "error";
 
   useEffect(() => {
@@ -235,7 +238,7 @@ export function ToolApproval({
       </AgentDisclosure>
 
       <AnimatePresence initial={false}>
-        {pending ? (
+        {decidable ? (
           <motion.div
             initial={reduce ? { opacity: 0 } : { opacity: 0, y: 4 }}
             animate={{ opacity: 1, y: 0 }}
@@ -243,15 +246,17 @@ export function ToolApproval({
             transition={{ duration: reduce ? 0.12 : 0.22, ease: EASE_OUT }}
             className="flex flex-wrap items-center gap-2 border-t border-border/60 px-4 py-3"
           >
-            <motion.button
-              type="button"
-              onClick={onApprove}
-              whileTap={reduce ? undefined : { scale: 0.97 }}
-              transition={SPRING_PRESS}
-              className="rounded-xl bg-foreground px-3 py-1.5 text-xs font-medium text-background outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-            >
-              Allow once
-            </motion.button>
+            {onApprove ? (
+              <motion.button
+                type="button"
+                onClick={onApprove}
+                whileTap={reduce ? undefined : { scale: 0.97 }}
+                transition={SPRING_PRESS}
+                className="rounded-xl bg-foreground px-3 py-1.5 text-xs font-medium text-background outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              >
+                Allow once
+              </motion.button>
+            ) : null}
             {onAlwaysAllow ? (
               <motion.button
                 type="button"
@@ -263,13 +268,15 @@ export function ToolApproval({
                 Always allow
               </motion.button>
             ) : null}
-            <button
-              type="button"
-              onClick={onDeny}
-              className="rounded-xl px-3 py-1.5 text-xs font-medium text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              Deny
-            </button>
+            {onDeny ? (
+              <button
+                type="button"
+                onClick={onDeny}
+                className="rounded-xl px-3 py-1.5 text-xs font-medium text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                Deny
+              </button>
+            ) : null}
           </motion.div>
         ) : null}
       </AnimatePresence>
