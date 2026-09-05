@@ -1,22 +1,24 @@
 ---
-title: Kora subscription refunds and cancellations
+title: Subscription refunds
 topic: refunds
 product: all
 country: IN
 ---
 
-# Refunds
+# When a refund can go ahead
 
-Refunds are available within 30 days of the charge. The refund cannot exceed
-the amount still refundable on the charge. A refund at or above INR 5,000
-needs a colleague to review it before it can go ahead.
+Refunds are available within 30 days of the charge. A request made more than
+30 days after the charge is declined, and a colleague takes it from there.
 
-# Cancellations
+A refund can never be larger than the amount still refundable on the charge.
+If part of the payment has already been refunded, only the remainder is left.
 
-A subscription can be cancelled to stop at the end of the current period or
-immediately. Cancelling an unpaid subscription needs a colleague to review it.
+# When a person has to look first
 
-# Plan changes
+A refund at or above INR 5,000 waits for a colleague to review it. Nothing is
+sent to Stripe until they decide.
 
-A plan change moves the subscription to a new price. A large mid-cycle
-proration credit needs a colleague to review it.
+# What the customer is told
+
+A refund is only described as done once it has been read back from Stripe and
+confirmed. A refund still pending is reported as pending, never as complete.

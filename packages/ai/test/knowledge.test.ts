@@ -122,23 +122,23 @@ describe('ingest', () => {
 });
 
 describe('retrieval', () => {
-  it('finds the damaged item policy for a damaged item question', async () => {
+  it('finds the refund policy for a refund question', async () => {
     const { chunks } = await retrieve({
       tenantId: TENANT,
-      query: 'my item arrived damaged, can I get a replacement',
-      filters: { topic: 'returns' },
+      query: 'can I get my last payment back',
+      filters: { topic: 'refunds' },
     });
     expect(chunks.length).toBeGreaterThan(0);
-    expect(chunks.some((c) => c.content.includes('7 days'))).toBe(true);
+    expect(chunks.some((c) => c.content.includes('30 days'))).toBe(true);
     expect(chunks[0]?.distance).toBeLessThanOrEqual(chunks.at(-1)?.distance ?? 1);
   });
 
   it('never returns a superseded version', async () => {
     const active = await db().select().from(documents).where(eq(documents.tenantId, TENANT));
-    const target = active.find((d) => d.sourceUri === 'acme-damaged-items.md');
+    const target = active.find((d) => d.sourceUri === 'billing-refunds.md');
     await db().update(documents).set({ status: 'superseded' }).where(eq(documents.id, target!.id));
 
-    const { chunks } = await retrieve({ tenantId: TENANT, query: 'damaged item replacement' });
+    const { chunks } = await retrieve({ tenantId: TENANT, query: 'refund my last payment' });
     expect(chunks.every((c) => c.documentId !== target!.id)).toBe(true);
 
     await db().update(documents).set({ status: 'active' }).where(eq(documents.id, target!.id));
@@ -154,7 +154,7 @@ describe('retrieval', () => {
       .set({ effectiveTo: new Date(now().getTime() - 86_400_000) })
       .where(eq(documents.id, target!.id));
 
-    const { chunks } = await retrieve({ tenantId: TENANT, query: 'damaged item replacement' });
+    const { chunks } = await retrieve({ tenantId: TENANT, query: 'refund my last payment' });
     expect(chunks.every((c) => c.documentId !== target!.id)).toBe(true);
 
     await db().update(documents).set({ effectiveTo: null }).where(eq(documents.id, target!.id));
@@ -167,7 +167,7 @@ describe('retrieval', () => {
       .where(and(eq(documents.tenantId, TENANT), eq(documents.status, 'active')));
     await db().update(documents).set({ status: 'processing' }).where(eq(documents.id, target!.id));
 
-    const { chunks } = await retrieve({ tenantId: TENANT, query: 'damaged item replacement' });
+    const { chunks } = await retrieve({ tenantId: TENANT, query: 'refund my last payment' });
     expect(chunks.every((c) => c.documentId !== target!.id)).toBe(true);
 
     await db().update(documents).set({ status: 'active' }).where(eq(documents.id, target!.id));
@@ -176,14 +176,14 @@ describe('retrieval', () => {
   it('returns an empty result rather than throwing when nothing matches the filter', async () => {
     const { chunks } = await retrieve({
       tenantId: TENANT,
-      query: 'damaged item replacement',
+      query: 'refund my last payment',
       filters: { topic: 'a-topic-that-does-not-exist' },
     });
     expect(chunks).toEqual([]);
   });
 
   it('orders in a way the hnsw index can serve, unlike 1 - cosineDistance', async () => {
-    const vector = `[${mockEmbedding('damaged item replacement policy', 1536).join(',')}]`;
+    const vector = `[${mockEmbedding('subscription refund policy', 1536).join(',')}]`;
 
     // With ten rows the planner picks a sequential scan whatever the query says,
     // because it is genuinely cheaper. Turning it off asks the question that
