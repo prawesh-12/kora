@@ -214,17 +214,24 @@ describe('tool execution pipeline', () => {
     if (outcome.status === 'failed') expect(outcome.code).toBe('MALFORMED_OUTPUT');
   });
 
-  it('13. fails closed when no billing provider is wired in', async () => {
+  // The write gate only covers writes. A read for a tenant whose key cannot be
+  // resolved has to fail closed too, rather than answer from anywhere else.
+  it('13. fails a read closed when the tenant key cannot be resolved', async () => {
     resetBilling();
+    await sql()`UPDATE tenant_settings SET stripe_secret_encrypted = NULL WHERE tenant_id = ${TENANT}`;
     const { run, conversationId } = await newRun();
 
-    const outcome = await executeTool(argsFor('create_refund', REFUND, run, conversationId));
+    const outcome = await executeTool(
+      argsFor('get_subscription', { subscriptionId: SUBSCRIPTION.id }, run, conversationId),
+    );
 
     expect(outcome.status).toBe('failed');
     if (outcome.status === 'failed') {
       expect(outcome.code).toBe('CONFIG_ERROR');
       expect(outcome.retryable).toBe(false);
     }
+
+    await setTenantStripeKey(TENANT, 'sk_test_pipeline');
   });
 
   it('14. evaluates policy on the charge record, not on a fact the model supplied', async () => {
