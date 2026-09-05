@@ -17,6 +17,7 @@
     "@kora/core": "workspace:*",
     "@kora/db": "workspace:*",
     "ioredis": "^6.0.0",
+    "stripe": "22.6.1",
     "zod": "^4.4.3"
   }
 }
