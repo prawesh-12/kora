@@ -16,7 +16,12 @@ export interface RunSpec {
     checks?: Array<{ checkId: string; verdict: 'MET' | 'UNMET'; critical?: boolean }>;
   };
   toolExecution?: { toolName: string; status: string; errorCode?: string };
-  policyCheck?: { ruleId: string; decision: 'allow' | 'deny' | 'require_approval' };
+  policyCheck?: {
+    policyKey: string;
+    ruleId: string;
+    action: string;
+    decision: 'allow' | 'deny' | 'require_approval';
+  };
   escalation?: { status: 'open' | 'closed' };
 }
 
@@ -129,10 +134,10 @@ export async function seedRuns(tenantId: string, specs: RunSpec[]): Promise<Seed
         id: newId('pck'),
         tenantId,
         runId,
-        policyKey: 'acme-refunds',
+        policyKey: spec.policyCheck.policyKey,
         policyVersion: '1.0.0',
         ruleId: spec.policyCheck.ruleId,
-        action: 'create_refund',
+        action: spec.policyCheck.action,
         decision: spec.policyCheck.decision,
         reason: 'seeded',
         createdAt: spec.startedAt,

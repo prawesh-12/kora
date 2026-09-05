@@ -9,9 +9,9 @@ import type { TraceDto } from '@/lib/api/schemas';
  */
 const HELD = {
   decision: 'require_approval',
-  reason: 'Replacements at or above INR 5,000 need human approval',
-  ruleId: 'high_value_needs_approval',
-  policyKey: 'acme_damaged_order',
+  reason: 'High-value refund needs a person',
+  ruleId: 'refund_high_value',
+  policyKey: 'refunds',
   policyVersion: '1.0.0',
   missingFacts: [],
 };
@@ -59,7 +59,11 @@ describe('the trace verdict', () => {
   });
 
   it('still leads with a denial when the denial is why the run stopped', () => {
-    const denied = { ...HELD, decision: 'deny', reason: 'The 7 day window has passed' };
+    const denied = {
+      ...HELD,
+      decision: 'deny',
+      reason: 'Refunds are available within 30 days of the charge',
+    };
     const verdict = traceVerdict(trace({ finalState: 'NEEDS_HUMAN' }, [denied]));
     expect(verdict.label).toBe('Blocked');
     expect(verdict.tone).toBe('danger');

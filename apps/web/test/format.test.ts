@@ -60,7 +60,7 @@ describe('the failure detail', () => {
   it('turns the engine talking to itself into a sentence', () => {
     expect(
       humanizeFailureDetail('insufficient facts: exceedsRemaining, requestedAmountMinor'),
-    ).toBe('missing order facts');
+    ).toBe('missing billing facts');
   });
 
   it('humanizes an intent enum', () => {
@@ -68,6 +68,8 @@ describe('the failure detail', () => {
   });
 
   it('leaves a detail that already reads as one alone', () => {
-    expect(humanizeFailureDetail('get_order / upstream_4xx')).toBe('get_order / upstream_4xx');
+    expect(humanizeFailureDetail('create_refund / upstream_4xx')).toBe(
+      'create_refund / upstream_4xx',
+    );
   });
 });

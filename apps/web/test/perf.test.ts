@@ -66,7 +66,7 @@ function fixture(): RunSpec[] {
         ],
       },
       toolExecution: {
-        toolName: failing ? 'create_refund' : 'create_replacement',
+        toolName: failing ? 'create_refund' : 'cancel_subscription',
         status: failing ? 'failed' : 'ok',
         ...(failing ? { errorCode: 'UPSTREAM_TIMEOUT' } : {}),
       },

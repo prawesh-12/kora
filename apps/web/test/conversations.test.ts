@@ -18,7 +18,7 @@ function fixture(): RunSpec[] {
   return Array.from({ length: TOTAL }, (_, i) => {
     const failing = i % 5 === 0;
     return {
-      intent: failing ? 'REFUND_REQUEST' : 'REFUND_REQUEST',
+      intent: failing ? 'REFUND_REQUEST' : 'BILLING_QUESTION',
       outcome: failing ? 'failed' : 'resolved_automatically',
       finalState: failing ? 'ACTION_FAILED' : 'RESOLVED',
       durationMs: 100 + i,

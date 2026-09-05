@@ -1,6 +1,18 @@
 import { serverEnv } from '@kora/core';
 import { and, closeDb, conversations, db, eq, events, withTenant } from '@kora/db';
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import type {
+  BillingProvider,
+  CancelInput,
+  ChargeRecord,
+  InvoiceRecord,
+  PlanChangeInput,
+  RefundInput,
+  RefundRecord,
+  SubscriptionRecord,
+} from '@kora/tools';
+import { setBillingProvider, setTenantStripeKey } from '@kora/tools';
+import { join } from 'node:path';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const afterCallbacks: Array<() => unknown> = [];
 
@@ -24,11 +36,170 @@ const { POST: decideApproval } = await import('@/app/api/approvals/[id]/decision
 const { GET: getMetrics } = await import('@/app/api/metrics/route');
 const { closeRateLimiter } = await import('@/lib/rate-limit');
 
-const H1 = 'My coffee machine from order 9832 arrived broken. I want a replacement.';
+const H1 = 'Please refund my last payment for sub_recent.';
 
 const tenantId = serverEnv().KORA_TENANT_ID;
 const repos = withTenant(tenantId);
 const created: string[] = [];
+
+const KNOWLEDGE_DIR = join(import.meta.dirname, '../../../config/knowledge');
+
+const DAY = 86_400;
+const nowSec = () => Math.floor(Date.now() / 1000);
+const inr = (amountMinor: number) => ({ amountMinor, currency: 'INR' });
+
+const STANDARD = 349900;
+const HIGH = 899900;
+
+function subscription(id: string, invoiceId: string): SubscriptionRecord {
+  return {
+    id,
+    status: 'active',
+    customerId: 'cus_api',
+    items: [
+      {
+        subscriptionItemId: `si_${id}`,
+        priceId: 'price_basic',
+        productId: 'prod_basic',
+        unitAmount: inr(STANDARD),
+        quantity: 1,
+      },
+    ],
+    currentPeriodEnd: nowSec() + 30 * DAY,
+    cancelAtPeriodEnd: false,
+    canceledAt: null,
+    cancelAt: null,
+    latestInvoiceId: invoiceId,
+    collectionMethod: 'charge_automatically',
+  };
+}
+
+function invoice(id: string, subscriptionId: string, amountMinor: number): InvoiceRecord {
+  return {
+    id,
+    status: 'paid',
+    customerId: 'cus_api',
+    subscriptionId,
+    amountDue: inr(amountMinor),
+    amountPaid: inr(amountMinor),
+    amountRemaining: inr(0),
+    paymentIntentId: `pi_${id}`,
+    chargeId: `ch_${id}`,
+    created: nowSec(),
+  };
+}
+
+function charge(id: string, invoiceId: string, amountMinor: number): ChargeRecord {
+  return {
+    id,
+    amountCaptured: inr(amountMinor),
+    amountRefunded: inr(0),
+    remainingRefundable: inr(amountMinor),
+    currency: 'INR',
+    paymentIntentId: `pi_${invoiceId}`,
+    invoiceId,
+    customerId: 'cus_api',
+    created: nowSec() - 5 * DAY,
+    refunded: false,
+  };
+}
+
+function stubProvider(): BillingProvider {
+  const subs = new Map<string, SubscriptionRecord>([
+    ['sub_recent', subscription('sub_recent', 'in_recent')],
+    ['sub_high', subscription('sub_high', 'in_high')],
+  ]);
+  const invoices = new Map<string, InvoiceRecord>([
+    ['in_recent', invoice('in_recent', 'sub_recent', STANDARD)],
+    ['in_high', invoice('in_high', 'sub_high', HIGH)],
+  ]);
+  const charges = new Map<string, ChargeRecord>([
+    ['in_recent', charge('ch_recent', 'in_recent', STANDARD)],
+    ['in_high', charge('ch_high', 'in_high', HIGH)],
+  ]);
+  const refunds = new Map<string, RefundRecord>();
+  const byKey = new Map<string, RefundRecord>();
+  let n = 0;
+
+  const notFound = (what: string): Error =>
+    Object.assign(new Error(`no such ${what}`), { code: 'UPSTREAM_4XX' });
+
+  return {
+    getCustomer: async (id) => ({
+      id,
+      email: 'customer@example.test',
+      name: 'API Test Customer',
+      defaultPaymentMethodId: null,
+      currency: 'INR',
+    }),
+    getSubscription: async (id) => {
+      const sub = subs.get(id);
+      if (!sub) throw notFound(`subscription ${id}`);
+      return { ...sub, items: sub.items.map((item) => ({ ...item })) };
+    },
+    getInvoice: async (id) => {
+      const inv = invoices.get(id);
+      if (!inv) throw notFound(`invoice ${id}`);
+      return { ...inv };
+    },
+    resolveChargeForInvoice: async (invoiceId) => {
+      const ch = charges.get(invoiceId);
+      return ch ? { ...ch } : null;
+    },
+    previewChange: async () => ({
+      lines: [],
+      prorationCreditMinor: 0,
+      nextChargeMinor: 0,
+      currency: 'INR',
+    }),
+    createRefund: async (input: RefundInput, key: string) => {
+      const existing = byKey.get(key);
+      if (existing) return { ...existing };
+      n += 1;
+      const record: RefundRecord = {
+        id: `re_api_${n}`,
+        status: 'succeeded',
+        amount: inr(input.amountMinor),
+        chargeId: input.chargeId ?? null,
+        paymentIntentId: null,
+        reason: input.reason,
+        created: nowSec(),
+      };
+      refunds.set(record.id, record);
+      byKey.set(key, record);
+      return { ...record };
+    },
+    cancelSubscription: async (input: CancelInput) => {
+      const sub = subs.get(input.subscriptionId);
+      if (!sub) throw notFound('subscription');
+      const next: SubscriptionRecord =
+        input.mode === 'immediate'
+          ? { ...sub, status: 'canceled', canceledAt: nowSec() }
+          : { ...sub, cancelAtPeriodEnd: true, cancelAt: sub.currentPeriodEnd };
+      subs.set(input.subscriptionId, next);
+      return { ...next };
+    },
+    changePlan: async (input: PlanChangeInput) => {
+      const sub = subs.get(input.subscriptionId);
+      if (!sub) throw notFound('subscription');
+      const next: SubscriptionRecord = {
+        ...sub,
+        items: sub.items.map((item) =>
+          item.subscriptionItemId === input.subscriptionItemId
+            ? { ...item, priceId: input.targetPriceId }
+            : item,
+        ),
+      };
+      subs.set(input.subscriptionId, next);
+      return { ...next };
+    },
+    getRefund: async (id) => {
+      const record = refunds.get(id);
+      if (!record) throw notFound(`refund ${id}`);
+      return { ...record };
+    },
+  };
+}
 
 function post(url: string, body: unknown): Request {
   return new Request(url, {
@@ -62,26 +233,24 @@ async function signInAsOperator(): Promise<void> {
   requestHeaders = new Headers({ cookie: cookies.join('; ') });
 }
 
-async function resetOrder(orderId: string): Promise<void> {
-  const env = serverEnv();
-  const res = await fetch(`${env.ACME_BASE_URL}/admin/reset`, {
-    method: 'POST',
-    headers: {
-      authorization: `Bearer ${env.ACME_API_KEY}`,
-      'content-type': 'application/json',
-    },
-    body: JSON.stringify({ orderIds: [orderId] }),
-  });
-  expect(res.status, 'the Acme mock must be running on ACME_BASE_URL').toBe(200);
-}
-
 beforeAll(async () => {
   const { seed } = await import('@kora/db');
+  const { ingestDirectory } = await import('@kora/ai');
   await seed();
-  await resetOrder('9832');
+  // The pipeline gates money writes on the tenant having a key. The stub provider
+  // never reads it, but without a row every write stops before it runs.
+  await setTenantStripeKey(tenantId, 'sk_test_api_route');
+  // Idempotent: an unchanged file is skipped. Without knowledge the agent refuses
+  // to act on policy at all, so no money turn would ever reach a tool.
+  await ingestDirectory({ tenantId, dir: KNOWLEDGE_DIR });
+});
+
+beforeEach(() => {
+  setBillingProvider(stubProvider());
 });
 
 afterAll(async () => {
+  setBillingProvider(null);
   for (const id of created) {
     await db().delete(conversations).where(eq(conversations.id, id));
   }
@@ -126,7 +295,7 @@ describe('conversations and chat', () => {
 
     const res = await sendMessage(
       post(`http://localhost/api/chat/${conversationId}`, {
-        message: 'I would rather talk to a human about order 9832.',
+        message: 'I would rather talk to a human about this invoice.',
       }),
       { params: Promise.resolve({ conversationId }) },
     );
@@ -257,9 +426,10 @@ describe('approval decisions', () => {
     return match?.id as string;
   }
 
-  // Order 9833 is INR 8,999, over the INR 5,000 threshold, so the policy engine
-  // routes it to a person. Order 9832 is under it and resolves on its own.
-  const HIGH_VALUE = 'The espresso machine in order 9833 came smashed. Please send a replacement.';
+  // The last invoice on sub_high is INR 8,999, over the INR 5,000 threshold in the
+  // refunds policy, so `refund_high_value` routes it to a person. sub_recent is
+  // under it and resolves on its own.
+  const HIGH_VALUE = 'Please refund my last payment for sub_high.';
 
   async function runHighValue(): Promise<string> {
     const conversationId = await newConversation();
@@ -271,8 +441,7 @@ describe('approval decisions', () => {
     return conversationId;
   }
 
-  it('approving resumes the run and creates exactly one replacement', async () => {
-    await resetOrder('9833');
+  it('approving resumes the run and creates exactly one refund', async () => {
     await signInAsOperator();
 
     const conversationId = await runHighValue();
@@ -291,12 +460,10 @@ describe('approval decisions', () => {
     expect(body.approval.status).toBe('approved');
     expect(body.approval.decidedBy).not.toBe('system');
     expect(body.turn?.finalState).toBe('RESOLVED');
-    expect(body.turn?.text).toMatch(/REP-\d+/);
+    expect(body.turn?.text).toMatch(/re_api_\d+/);
 
     const executions = await repos.toolExecutions.listForRun(body.turn?.runId as string);
-    const writes = executions.filter(
-      (e) => e.toolName === 'create_replacement' && e.status === 'ok',
-    );
+    const writes = executions.filter((e) => e.toolName === 'create_refund' && e.status === 'ok');
     expect(writes).toHaveLength(1);
     expect(writes[0]?.verified).toBe(true);
 
@@ -310,7 +477,6 @@ describe('approval decisions', () => {
   });
 
   it('returns 409 when the same approval is decided twice', async () => {
-    await resetOrder('9833');
     await signInAsOperator();
 
     const conversationId = await runHighValue();
@@ -319,7 +485,7 @@ describe('approval decisions', () => {
     const first = await decideApproval(
       post(`http://localhost/api/approvals/${approvalId}/decision`, {
         decision: 'denied',
-        note: 'the returns desk handles this order',
+        note: 'the billing team is handling this refund',
       }),
       { params: Promise.resolve({ id: approvalId }) },
     );
@@ -337,7 +503,7 @@ describe('approval decisions', () => {
 
     const stored = await repos.approvals.get(approvalId);
     expect(stored?.status).toBe('denied');
-    expect(stored?.decisionNote).toBe('the returns desk handles this order');
+    expect(stored?.decisionNote).toBe('the billing team is handling this refund');
     expect(stored?.decidedBy).not.toBe('system');
     expect(stored?.decidedAt).not.toBeNull();
 

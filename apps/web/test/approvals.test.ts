@@ -56,7 +56,7 @@ async function seedApproval(spec: ApprovalSeed): Promise<{ id: string; conversat
       tenantId: spec.tenantId,
       conversationId: run.conversationId,
       role: 'customer',
-      content: 'My order arrived damaged.',
+      content: 'I want a refund for my last subscription payment.',
       parts: [],
       createdAt: spec.requestedAt ?? daysAgo(0),
     });
@@ -70,9 +70,9 @@ async function seedApproval(spec: ApprovalSeed): Promise<{ id: string; conversat
         id: policyCheckId,
         tenantId: spec.tenantId,
         runId: run.runId,
-        policyKey: 'acme-refunds',
+        policyKey: 'refunds',
         policyVersion: '1.0.0',
-        ruleId: 'high_value_needs_approval',
+        ruleId: 'refund_high_value',
         action: spec.toolName,
         decision: 'require_approval',
         reason: 'over the threshold',
@@ -91,8 +91,8 @@ async function seedApproval(spec: ApprovalSeed): Promise<{ id: string; conversat
       toolName: spec.toolName,
       proposedInput:
         spec.useFacts || spec.amountMinor === null
-          ? { orderId: '9833' }
-          : { orderId: '9833', amountMinor: spec.amountMinor, currency: 'INR' },
+          ? { subscriptionId: 'sub_high' }
+          : { subscriptionId: 'sub_high', amountMinor: spec.amountMinor, currency: 'INR' },
       reason: 'needs a person',
       status: spec.status ?? 'pending',
       requestedAt: spec.requestedAt ?? daysAgo(0),
@@ -172,8 +172,8 @@ describe('lazy expiry', () => {
   it('escalates and tells the customer a person will follow up', async () => {
     const { id, conversationId } = await seedApproval({
       tenantId: TENANT,
-      toolName: 'create_replacement',
-      amountMinor: 800000,
+      toolName: 'cancel_subscription',
+      amountMinor: null,
       expiresAt: anHourAgo(),
     });
 
@@ -236,8 +236,8 @@ describe('queue ordering and filters', () => {
   beforeAll(async () => {
     for (const [tool, amount, useFacts] of [
       ['create_refund', 120000, false],
-      ['create_replacement', 899900, true],
-      ['cancel_order', 4500, false],
+      ['create_refund', 899900, true],
+      ['change_plan', 4500, false],
     ] as const) {
       const { id } = await seedApproval({
         tenantId: TENANT,
@@ -256,7 +256,7 @@ describe('queue ordering and filters', () => {
 
     expect(amounts).toEqual([...amounts].sort((a, b) => b - a));
     expect(queue[0]?.amountMinor).toBe(899900);
-    expect(queue[0]?.ruleId).toBe('high_value_needs_approval');
+    expect(queue[0]?.ruleId).toBe('refund_high_value');
   });
 
   it('filters by tool and by value band', async () => {

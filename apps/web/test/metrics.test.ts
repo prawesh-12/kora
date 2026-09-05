@@ -49,13 +49,13 @@ function fixture(): RunSpec[] {
           { checkId: 'response_grounded', verdict: 'MET' },
         ],
       },
-      toolExecution: { toolName: 'create_replacement', status: 'ok' },
+      toolExecution: { toolName: 'create_refund', status: 'ok' },
     });
   }
 
   for (let i = 0; i < 4; i++) {
     specs.push({
-      intent: 'REFUND_REQUEST',
+      intent: 'CHANGE_PLAN',
       outcome: 'failed',
       finalState: 'ACTION_FAILED',
       durationMs: nextDuration(),
@@ -67,7 +67,7 @@ function fixture(): RunSpec[] {
         checks: [{ checkId: 'response_grounded', verdict: 'UNMET' }],
       },
       toolExecution: {
-        toolName: 'create_refund',
+        toolName: 'change_plan',
         status: 'failed',
         errorCode: 'UPSTREAM_TIMEOUT',
       },
@@ -87,7 +87,12 @@ function fixture(): RunSpec[] {
         failureCodes: ['POLICY_FAILURE'],
         checks: [{ checkId: 'policy_compliance', verdict: 'UNMET' }],
       },
-      policyCheck: { ruleId: 'cancellation_window_closed', decision: 'deny' },
+      policyCheck: {
+        policyKey: 'cancellations',
+        ruleId: 'cancellation_window_closed',
+        action: 'cancel_subscription',
+        decision: 'deny',
+      },
       escalation: { status: 'open' },
     });
   }
@@ -226,7 +231,7 @@ describe('failure breakdown', () => {
     expect(byCode.get('TOOL_EXECUTION_FAILURE')).toEqual({
       code: 'TOOL_EXECUTION_FAILURE',
       count: 4,
-      topDetail: 'create_refund / upstream_timeout',
+      topDetail: 'change_plan / upstream_timeout',
     });
     expect(byCode.get('POLICY_FAILURE')).toEqual({
       code: 'POLICY_FAILURE',
