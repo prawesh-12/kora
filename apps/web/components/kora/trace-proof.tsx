@@ -1,7 +1,7 @@
 import { ProofCard, type ProofCardProps } from '@/components/kora/proof-card';
 import type { TraceDto } from '@/lib/api/schemas';
 
-const WRITE_TOOLS = ['create_refund', 'cancel_subscription', 'change_plan', 'create_replacement'];
+const WRITE_TOOLS = ['create_refund', 'cancel_subscription', 'change_plan'];
 
 function stripeIdFrom(output: unknown): string | null {
   if (!output || typeof output !== 'object') return null;
@@ -41,12 +41,6 @@ const TITLES: Record<string, Record<string, string>> = {
     pending: 'Plan change in progress',
     denied: 'Plan change not approved',
     failed: 'Plan change did not go through',
-  },
-  create_replacement: {
-    verified: 'Replacement confirmed',
-    pending: 'Replacement in progress',
-    denied: 'Replacement not approved',
-    failed: 'Replacement did not go through',
   },
 };
 
