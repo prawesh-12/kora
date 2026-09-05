@@ -6,7 +6,7 @@ export const searchKnowledge = defineTool({
   name: 'search_knowledge',
   version: 1,
   description:
-    'Use this when you need the current business policy before telling the customer what can or cannot be done. Never answer a policy question from memory.',
+    'Use this when you need the current billing policy before telling the customer what can or cannot be done. Never answer a policy question from memory.',
   inputSchema: z.object({
     query: z.string().min(1),
     topic: z.string().optional(),
@@ -31,9 +31,7 @@ export const searchKnowledge = defineTool({
   timeoutMs: 6000,
   maxRetries: 2,
   idempotent: true,
-  inputExamples: [
-    { input: { query: 'damaged item replacement policy', topic: 'returns', topK: 5 } },
-  ],
+  inputExamples: [{ input: { query: 'subscription refund policy', topic: 'refunds', topK: 5 } }],
   async execute(input, ctx) {
     if (!ctx.searchKnowledge) {
       throw new ToolError('no knowledge searcher was wired into the tool context', {

@@ -39,7 +39,7 @@ export async function spentToday(
     WHERE t.tenant_id = ${tenantId}
       AND t.started_at >= date_trunc('day', now())
       AND t.status IN ('ok', 'replayed')
-      AND t.tool_name IN ('create_replacement', 'create_refund', 'cancel_order')`;
+      AND t.tool_name IN ('create_refund', 'cancel_subscription', 'change_plan')`;
 
   return {
     actions: Number(rows[0]?.actions ?? 0),

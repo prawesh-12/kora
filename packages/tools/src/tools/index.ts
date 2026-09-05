@@ -1,23 +1,27 @@
 import { ToolRegistry } from '../registry.js';
-import { cancelOrder } from './cancel-order.js';
+import { cancelSubscription } from './cancel-subscription.js';
+import { changePlan } from './change-plan.js';
 import { checkPolicy } from './check-policy.js';
 import { createRefund } from './create-refund.js';
-import { createReplacement } from './create-replacement.js';
 import { createTicket } from './create-ticket.js';
 import { escalateToHuman } from './escalate-to-human.js';
 import { getCustomer } from './get-customer.js';
-import { getOrder } from './get-order.js';
+import { getInvoice } from './get-invoice.js';
+import { getSubscription } from './get-subscription.js';
+import { previewChange } from './preview-change.js';
 import { searchKnowledge } from './search-knowledge.js';
 
 export const registry = new ToolRegistry();
 for (const tool of [
-  getOrder,
+  getSubscription,
   getCustomer,
+  getInvoice,
+  previewChange,
   searchKnowledge,
   checkPolicy,
-  createReplacement,
   createRefund,
-  cancelOrder,
+  cancelSubscription,
+  changePlan,
   createTicket,
   escalateToHuman,
 ]) {
@@ -25,13 +29,15 @@ for (const tool of [
 }
 
 export {
-  getOrder,
+  getSubscription,
   getCustomer,
+  getInvoice,
+  previewChange,
   searchKnowledge,
   checkPolicy,
-  createReplacement,
   createRefund,
-  cancelOrder,
+  cancelSubscription,
+  changePlan,
   createTicket,
   escalateToHuman,
 };

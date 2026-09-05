@@ -9,7 +9,7 @@ export const escalateToHuman = defineTool({
   name: 'escalate_to_human',
   version: 1,
   description:
-    'Use this when the customer asks for a person, when you cannot confirm the policy, or when an action failed and you cannot honestly tell the customer what happened.',
+    'Use this when the customer asks for a person, when you cannot confirm the policy, when a request is ambiguous, or when an action failed and you cannot honestly tell the customer what happened.',
   inputSchema: z.object({
     reason: z.enum([
       'LOW_CONFIDENCE',

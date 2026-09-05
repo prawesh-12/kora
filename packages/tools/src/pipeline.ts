@@ -5,10 +5,10 @@ import {
   RETRY_POLICY,
   type RetryClass,
   type ToolErrorCode,
+  ToolError,
   canonicalJson,
   backoffMs,
   budgetedTimeoutMs,
-  evaluatePolicy,
   isRetryable,
   newId,
   now,
@@ -18,6 +18,7 @@ import { type RunHandle, db, withTenant } from '@kora/db';
 import { capExceeded, loadCaps, spentToday } from './caps.js';
 import { breaker, toolBreakerKey } from './breaker.js';
 import { buildFacts } from './facts.js';
+import { decideAndRecordPolicy } from './policy-gate.js';
 import { claim, deriveKey, requestHash, settleFailure, settleSuccess } from './idempotency.js';
 import type { GatheredContext, ToolContext, ToolDefinition, ToolOutcome } from './types.js';
 import { runVerification } from './verify.js';
@@ -75,6 +76,7 @@ function codeOf(error: unknown, fallback: ToolErrorCode): ToolErrorCode {
     'DEADLINE_EXCEEDED',
     'TOOL_SELECTION_FAILURE',
     'REPLAY_GAP',
+    'CONFIG_ERROR',
   ];
   return known.includes(code as ToolErrorCode) ? (code as ToolErrorCode) : fallback;
 }
@@ -160,19 +162,16 @@ export async function executeTool(args: ExecuteToolArgs): Promise<ToolOutcome<un
   // This runs before the deployment-mode gate rather than after it, because
   // simulation and shadow both have to show what the policy engine *would* have
   // decided. A replay that skipped policy evaluation would compare nothing.
-  const facts = buildFacts(tool.name, gathered, now(), input);
-  const decision = evaluatePolicy(policy, facts, now());
-  const check = await repos.policyChecks.create({
+  const evaluatedAt = now();
+  const facts = buildFacts(tool.name, gathered, evaluatedAt, input);
+  const { result: decision, checkId } = await decideAndRecordPolicy({
+    tenantId: args.ctx.tenantId,
     runId: run.runId,
-    policyKey: decision.policyKey,
-    policyVersion: decision.policyVersion,
-    ruleId: decision.ruleId,
+    policy,
     action: tool.name,
-    decision: decision.decision,
-    reason: decision.reason,
-    facts: decision.factsUsed,
-    missingFacts: decision.missingFacts,
-    createdAt: now(),
+    facts,
+    evaluatedAt,
+    advisory: false,
   });
 
   if (decision.decision === 'deny') {
@@ -190,7 +189,7 @@ export async function executeTool(args: ExecuteToolArgs): Promise<ToolOutcome<un
     });
     return {
       status: 'denied',
-      policyCheckId: check.id,
+      policyCheckId: checkId,
       reason: decision.reason,
       code: 'POLICY_DENIED',
     };
@@ -235,7 +234,7 @@ export async function executeTool(args: ExecuteToolArgs): Promise<ToolOutcome<un
       });
       return {
         status: 'denied',
-        policyCheckId: check.id,
+        policyCheckId: checkId,
         reason: denied.decisionNote ?? 'a person declined this action',
         code: 'PERMISSION_DENIED',
       };
@@ -253,7 +252,7 @@ export async function executeTool(args: ExecuteToolArgs): Promise<ToolOutcome<un
           toolName: tool.name,
           proposedInput: input,
           reason: overCap ?? decision.reason,
-          policyCheckId: check.id,
+          policyCheckId: checkId,
           status: 'pending',
           requestedAt: now(),
           expiresAt: new Date(now().getTime() + serverEnv().KORA_APPROVAL_TTL_MINUTES * 60_000),
@@ -431,6 +430,13 @@ export async function executeTool(args: ExecuteToolArgs): Promise<ToolOutcome<un
     const attemptStartedAt = now();
 
     try {
+      if (ctx.fault === '500' || ctx.fault === 'timeout') {
+        clearTimeout(timer);
+        throw new ToolError(`scenario fault ${ctx.fault} on ${tool.name}`, {
+          code: ctx.fault === '500' ? 'UPSTREAM_5XX' : 'UPSTREAM_TIMEOUT',
+          retryable: true,
+        });
+      }
       const raw = await tool.execute(input, ctx);
       clearTimeout(timer);
 

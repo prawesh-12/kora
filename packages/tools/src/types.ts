@@ -6,6 +6,12 @@ import type {
   SideEffect,
   ToolErrorCode,
 } from '@kora/core';
+import type {
+  ChargeRecord,
+  InvoicePreview,
+  InvoiceRecord,
+  SubscriptionRecord,
+} from './billing/types.js';
 import type { z } from 'zod';
 
 export interface ToolContext {
@@ -89,6 +95,10 @@ export interface GatheredContext {
   customer?: { id: string; name: string; email: string };
   /** Total already refunded on the order, read back from the business system. */
   refundedAmountMinor?: number;
+  subscription?: SubscriptionRecord;
+  invoice?: InvoiceRecord;
+  charge?: ChargeRecord;
+  preview?: InvoicePreview;
   retrievedChunkIds?: string[];
   intent?: string;
   lastPolicyDecision?: PolicyDecision;

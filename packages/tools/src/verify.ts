@@ -1,10 +1,7 @@
+import type { BillingProvider } from './billing/types.js';
 import { acme } from './clients/acme.js';
 import type { ToolContext, ToolDefinition, VerifyResult } from './types.js';
 
-/**
- * A verify that itself errors is treated exactly like `verified: false`.
- * Ambiguity resolves toward a human, always.
- */
 export async function runVerification(
   tool: ToolDefinition,
   input: unknown,
@@ -24,117 +21,141 @@ export async function runVerification(
   }
 }
 
-export async function verifyReplacement(
-  input: { orderId: string },
-  output: { id: string },
-  ctx: ToolContext,
-): Promise<VerifyResult> {
-  const opts = { signal: ctx.signal, fault: ctx.fault };
-
-  let observed: unknown = null;
-  try {
-    observed = await acme.getReplacement(output.id, opts);
-  } catch (e) {
-    const code = (e as { code?: string }).code;
-    if (code === 'UPSTREAM_4XX') {
-      return { verified: false, observed: null, reason: 'replacement_not_found' };
-    }
-    throw e;
-  }
-
-  const replacement = observed as { orderId: string; status: string };
-  if (replacement.orderId !== input.orderId) {
-    return { verified: false, observed, reason: 'order_mismatch' };
-  }
-  if (replacement.status !== 'created' && replacement.status !== 'processing') {
-    return { verified: false, observed, reason: `unexpected_status_${replacement.status}` };
-  }
-
-  const forOrder = await acme.listReplacements(input.orderId, opts);
-  if (forOrder.length !== 1) {
-    return {
-      verified: false,
-      observed: { replacement: observed, forOrder },
-      reason: forOrder.length === 0 ? 'replacement_not_found' : 'duplicate_detected',
-    };
-  }
-
-  return { verified: true, observed: { replacement: observed, forOrder } };
+function isNotFound(e: unknown): boolean {
+  return (e as { code?: string }).code === 'UPSTREAM_4XX';
 }
 
-/**
- * A partial refund at the wrong amount is a silent money bug, so the amount is
- * checked against the read-back, not just the presence of a refund.
- */
 export async function verifyRefund(
-  input: { orderId: string; amountMinor: number },
-  output: { id: string },
-  ctx: ToolContext,
+  provider: BillingProvider,
+  input: { amountMinor: number },
+  output: { id: string; amountMinor: number; currency: string },
 ): Promise<VerifyResult> {
-  const opts = { signal: ctx.signal, fault: ctx.fault };
-
   let observed: unknown = null;
   try {
-    observed = await acme.getRefund(output.id, opts);
+    observed = await provider.getRefund(output.id);
   } catch (e) {
-    if ((e as { code?: string }).code === 'UPSTREAM_4XX') {
-      return { verified: false, observed: null, reason: 'refund_not_found' };
-    }
+    if (isNotFound(e)) return { verified: false, observed: null, reason: 'refund_not_found' };
     throw e;
   }
 
-  const refund = observed as { orderId: string; amountMinor: number; status: string };
-  if (refund.orderId !== input.orderId) {
-    return { verified: false, observed, reason: 'order_mismatch' };
+  const refund = observed as {
+    status: string;
+    amount: { amountMinor: number; currency: string };
+  };
+  if (refund.status === 'pending' || refund.status === 'requires_action') {
+    return { verified: false, observed, reason: 'refund_pending' };
   }
-  if (refund.amountMinor !== input.amountMinor) {
-    return { verified: false, observed, reason: 'amount_mismatch' };
+  if (refund.status === 'failed' || refund.status === 'canceled') {
+    return { verified: false, observed, reason: `refund_${refund.status}` };
   }
-  if (!['created', 'processing', 'settled'].includes(refund.status)) {
+  if (refund.status !== 'succeeded') {
     return { verified: false, observed, reason: `unexpected_status_${refund.status}` };
   }
-
-  const forOrder = await acme.listRefunds(input.orderId, opts);
-  if (!forOrder.some((r) => r.id === output.id)) {
-    return {
-      verified: false,
-      observed: { refund: observed, forOrder },
-      reason: 'refund_not_found',
-    };
+  if (
+    refund.amount.amountMinor !== input.amountMinor ||
+    refund.amount.amountMinor !== output.amountMinor
+  ) {
+    return { verified: false, observed, reason: 'amount_mismatch' };
   }
-
-  return { verified: true, observed: { refund: observed, forOrder } };
+  if (refund.amount.currency !== output.currency) {
+    return { verified: false, observed, reason: 'currency_mismatch' };
+  }
+  return { verified: true, observed };
 }
 
-export async function verifyCancellation(
-  input: { orderId: string },
-  output: { id: string },
-  ctx: ToolContext,
+export async function verifyCancelSubscription(
+  provider: BillingProvider,
+  input: { subscriptionId: string; mode: 'at_period_end' | 'immediate' },
+  output: { subscriptionId: string },
 ): Promise<VerifyResult> {
-  const opts = { signal: ctx.signal, fault: ctx.fault };
-
-  // The cancellation record is not the point. The order actually being cancelled
-  // is, so that is what gets checked first and what a failure reports.
-  const order = await acme.getOrder(input.orderId, opts);
-  if (order.status !== 'cancelled') {
-    return { verified: false, observed: { order }, reason: `order_still_${order.status}` };
-  }
-
-  let cancellation: unknown = null;
+  let observed: unknown = null;
   try {
-    cancellation = await acme.getCancellation(output.id, opts);
+    observed = await provider.getSubscription(output.subscriptionId);
   } catch (e) {
-    if ((e as { code?: string }).code === 'UPSTREAM_4XX') {
-      return { verified: false, observed: { order }, reason: 'cancellation_not_found' };
-    }
+    if (isNotFound(e)) return { verified: false, observed: null, reason: 'subscription_not_found' };
     throw e;
   }
 
-  if ((cancellation as { orderId: string }).orderId !== input.orderId) {
-    return { verified: false, observed: { cancellation, order }, reason: 'order_mismatch' };
+  const subscription = observed as {
+    id: string;
+    status: string;
+    cancelAtPeriodEnd: boolean;
+    canceledAt: number | null;
+    cancelAt: number | null;
+    currentPeriodEnd: number | null;
+  };
+  if (subscription.id !== input.subscriptionId) {
+    return { verified: false, observed, reason: 'subscription_mismatch' };
   }
 
-  return { verified: true, observed: { cancellation, order } };
+  if (input.mode === 'immediate') {
+    if (subscription.status !== 'canceled' || subscription.canceledAt == null) {
+      return { verified: false, observed, reason: `subscription_still_${subscription.status}` };
+    }
+    return { verified: true, observed };
+  }
+
+  if (
+    subscription.cancelAtPeriodEnd !== true ||
+    subscription.status !== 'active' ||
+    (subscription.cancelAt == null && subscription.currentPeriodEnd == null)
+  ) {
+    return { verified: false, observed, reason: 'cancel_at_period_end_not_set' };
+  }
+  const effectiveStop = subscription.cancelAt ?? subscription.currentPeriodEnd;
+  return { verified: true, observed: { subscription: observed, effectiveStop } };
+}
+
+export async function verifyChangePlan(
+  provider: BillingProvider,
+  input: {
+    subscriptionId: string;
+    subscriptionItemId: string;
+    targetPriceId: string;
+    prorationBehavior: string;
+  },
+  output: { subscriptionId: string },
+  quotedNextChargeMinor?: number | undefined,
+): Promise<VerifyResult> {
+  let observed: unknown = null;
+  try {
+    observed = await provider.getSubscription(output.subscriptionId);
+  } catch (e) {
+    if (isNotFound(e)) return { verified: false, observed: null, reason: 'subscription_not_found' };
+    throw e;
+  }
+
+  const subscription = observed as {
+    id: string;
+    items: Array<{ subscriptionItemId: string; priceId: string }>;
+    latestInvoiceId: string | null;
+  };
+  if (subscription.id !== input.subscriptionId) {
+    return { verified: false, observed, reason: 'subscription_mismatch' };
+  }
+  const item = subscription.items.find((i) => i.subscriptionItemId === input.subscriptionItemId);
+  if (!item || item.priceId !== input.targetPriceId) {
+    return { verified: false, observed, reason: 'price_not_changed' };
+  }
+
+  if (
+    quotedNextChargeMinor !== undefined &&
+    input.prorationBehavior !== 'none' &&
+    subscription.latestInvoiceId
+  ) {
+    const invoice = await provider.getInvoice(subscription.latestInvoiceId);
+    const created = invoice.amountDue.amountMinor;
+    if (Math.abs(created - quotedNextChargeMinor) > 1) {
+      return {
+        verified: false,
+        observed: { subscription: observed, invoice, quotedNextChargeMinor },
+        reason: 'proration_mismatch',
+      };
+    }
+    return { verified: true, observed: { subscription: observed, invoice } };
+  }
+
+  return { verified: true, observed };
 }
 
 export async function verifyTicket(
@@ -148,7 +169,7 @@ export async function verifyTicket(
       observed: await acme.getTicket(output.id, { signal: ctx.signal, fault: ctx.fault }),
     };
   } catch (e) {
-    if ((e as { code?: string }).code === 'UPSTREAM_4XX') {
+    if (isNotFound(e)) {
       return { verified: false, observed: null, reason: 'ticket_not_found' };
     }
     throw e;

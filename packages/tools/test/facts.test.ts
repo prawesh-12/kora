@@ -1,120 +1,138 @@
 import { describe, expect, it } from 'vitest';
 import { buildFacts } from '../src/facts.js';
+import type { SubscriptionItemRecord, SubscriptionRecord } from '../src/billing/types.js';
+import type { GatheredContext } from '../src/types.js';
 
 const AT = new Date('2026-08-27T12:00:00.000Z');
+const AT_S = Math.floor(AT.getTime() / 1000);
+const DAY_S = 86_400;
 
-const order = {
-  id: '9832',
-  customerId: 'cus_014',
-  status: 'delivered',
-  items: [{ sku: 'SKU-CM-01', category: 'appliance', quantity: 1, unitAmountMinor: 349900 }],
-  totalAmountMinor: 349900,
-  currency: 'INR',
-  deliveredAt: '2026-08-23T12:00:00.000Z',
-  replacementIds: [] as string[],
+const baseItem: SubscriptionItemRecord = {
+  subscriptionItemId: 'si_1S',
+  priceId: 'price_A',
+  productId: 'prod_A',
+  unitAmount: { amountMinor: 349900, currency: 'INR' },
+  quantity: 1,
 };
 
-describe('buildFacts', () => {
-  it('derives every fact from the order record', () => {
-    expect(buildFacts('create_replacement', { order }, AT)).toMatchObject({
-      action: 'create_replacement',
+const subscription: SubscriptionRecord = {
+  id: 'sub_1S',
+  status: 'active' as const,
+  customerId: 'cus_014',
+  items: [baseItem],
+  currentPeriodEnd: AT_S + 26 * DAY_S,
+  cancelAtPeriodEnd: false,
+  canceledAt: null,
+  cancelAt: null,
+  latestInvoiceId: 'in_1S',
+  collectionMethod: 'charge_automatically',
+};
+
+const charge = {
+  id: 'ch_1S',
+  amountCaptured: { amountMinor: 349900, currency: 'INR' },
+  amountRefunded: { amountMinor: 100000, currency: 'INR' },
+  remainingRefundable: { amountMinor: 249900, currency: 'INR' },
+  currency: 'INR',
+  paymentIntentId: 'pi_1S',
+  invoiceId: 'in_1S',
+  customerId: 'cus_014',
+  created: AT_S - 4 * DAY_S,
+  refunded: false,
+};
+
+const gathered: GatheredContext = { subscription, charge };
+
+describe('billing facts', () => {
+  it('derives every refund fact from the records', () => {
+    expect(buildFacts('create_refund', gathered, AT, { amountMinor: 200000 })).toMatchObject({
+      action: 'create_refund',
       channel: 'web',
-      orderStatus: 'delivered',
-      amountMinor: 349900,
       currency: 'INR',
-      itemCategory: 'appliance',
-      daysSinceDelivery: 4,
-      alreadyReplaced: false,
+      subscriptionStatus: 'active',
+      cancelAtPeriodEnd: false,
+      currentPlanPriceId: 'price_A',
+      amountMinor: 200000,
+      remainingRefundableMinor: 249900,
+      exceedsRefundable: false,
+      daysSinceCharge: 4,
     });
   });
 
-  it('marks an order that already has a replacement', () => {
-    const facts = buildFacts(
-      'create_replacement',
-      { order: { ...order, replacementIds: ['REP-0001'] } },
-      AT,
-    );
-    expect(facts.alreadyReplaced).toBe(true);
+  it('flags a request above the remaining refundable amount', () => {
+    const facts = buildFacts('create_refund', gathered, AT, { amountMinor: 249901 });
+    expect(facts.exceedsRefundable).toBe(true);
+    expect(facts.remainingRefundableMinor).toBe(249900);
   });
 
-  it('omits daysSinceDelivery for an undelivered order rather than guessing zero', () => {
-    const facts = buildFacts(
-      'create_replacement',
-      { order: { ...order, status: 'shipped', deliveredAt: null } },
-      AT,
-    );
-    expect(facts.daysSinceDelivery).toBeUndefined();
-    expect(facts.orderStatus).toBe('shipped');
+  it('records charge facts as missing when no charge was resolved, so no rule matches on them', () => {
+    const facts = buildFacts('create_refund', { subscription }, AT, { amountMinor: 100 });
+    expect(facts.remainingRefundableMinor).toBeUndefined();
+    expect(facts.exceedsRefundable).toBeUndefined();
+    expect(facts.daysSinceCharge).toBeUndefined();
+    expect(facts.amountMinor).toBe(100);
+    expect(facts.currency).toBe('INR');
   });
 
-  it('carries no order facts at all when no order was fetched', () => {
-    const facts = buildFacts('create_replacement', {}, AT);
-    expect(facts).toEqual({ action: 'create_replacement', channel: 'web' });
-  });
-
-  it('ignores anything the model might have claimed, because it takes nothing but the record', () => {
-    const facts = buildFacts(
-      'create_replacement',
-      { order: { ...order, deliveredAt: '2026-08-15T12:00:00.000Z' } },
-      AT,
-    );
-    expect(facts.daysSinceDelivery).toBe(12);
-  });
-});
-
-describe('refund facts', () => {
-  const refundOrder = { ...order, totalAmountMinor: 349900 };
-
-  it('derives the remaining balance from the order and what is already refunded', () => {
-    const facts = buildFacts(
-      'create_refund',
-      { order: refundOrder, refundedAmountMinor: 100000 },
-      AT,
-      { amountMinor: 200000 },
-    );
-    expect(facts).toMatchObject({
-      orderTotalMinor: 349900,
-      refundedAmountMinor: 100000,
-      requestedAmountMinor: 200000,
-      fullyRefunded: false,
-      exceedsRemaining: false,
-    });
-  });
-
-  it('flags a request for more than what is left', () => {
-    const facts = buildFacts(
-      'create_refund',
-      { order: refundOrder, refundedAmountMinor: 300000 },
-      AT,
-      { amountMinor: 100000 },
-    );
-    expect(facts.exceedsRemaining).toBe(true);
-  });
-
-  it('flags an order that is already fully refunded', () => {
-    const facts = buildFacts(
-      'create_refund',
-      { order: refundOrder, refundedAmountMinor: 349900 },
-      AT,
-      { amountMinor: 1 },
-    );
-    expect(facts.fullyRefunded).toBe(true);
-  });
-
-  it('omits the requested amount when the input does not carry an integer', () => {
-    for (const amountMinor of [undefined, '200000', 1.5, null]) {
-      const facts = buildFacts('create_refund', { order: refundOrder }, AT, { amountMinor });
-      expect(facts.requestedAmountMinor).toBeUndefined();
-      expect(facts.exceedsRemaining).toBeUndefined();
+  it('omits the requested amount when the input does not carry a positive integer', () => {
+    for (const amountMinor of [undefined, '200000', 1.5, 0, -50, null]) {
+      const facts = buildFacts('create_refund', gathered, AT, { amountMinor });
+      expect(facts.amountMinor).toBeUndefined();
+      expect(facts.exceedsRefundable).toBeUndefined();
     }
   });
 
-  it('compares the requested amount against the record, never trusting it alone', () => {
-    // The model could ask for anything. The comparison is what makes it safe.
-    const facts = buildFacts('create_refund', { order: refundOrder }, AT, {
+  it('never lets the customer message move a record-derived fact', () => {
+    const facts = buildFacts('create_refund', gathered, AT, {
       amountMinor: 99_999_999,
+      messageAmount: 349900,
+      claimedTotal: 1,
     });
-    expect(facts.exceedsRemaining).toBe(true);
-    expect(facts.orderTotalMinor).toBe(349900);
+    expect(facts.remainingRefundableMinor).toBe(249900);
+    expect(facts.exceedsRefundable).toBe(true);
+    expect(facts).not.toHaveProperty('messageAmount');
+    expect(facts).not.toHaveProperty('claimedTotal');
+  });
+
+  it('picks the targeted item for the current plan price', () => {
+    const twoItems = {
+      ...subscription,
+      items: [
+        baseItem,
+        {
+          subscriptionItemId: 'si_2S',
+          priceId: 'price_B',
+          productId: 'prod_B',
+          unitAmount: { amountMinor: 899900, currency: 'INR' },
+          quantity: 1,
+        },
+      ],
+    };
+    const facts = buildFacts('change_plan', { subscription: twoItems }, AT, {
+      subscriptionItemId: 'si_2S',
+      targetPriceId: 'price_C',
+    });
+    expect(facts.currentPlanPriceId).toBe('price_B');
+    expect(facts.targetPlanPriceId).toBe('price_C');
+  });
+
+  it('takes the proration credit from the preview record', () => {
+    const facts = buildFacts(
+      'change_plan',
+      {
+        subscription,
+        preview: { lines: [], prorationCreditMinor: 12000, nextChargeMinor: 5000, currency: 'INR' },
+      },
+      AT,
+      { subscriptionItemId: 'si_1S', targetPriceId: 'price_B' },
+    );
+    expect(facts.prorationCreditMinor).toBe(12000);
+  });
+
+  it('carries no billing facts at all when nothing was fetched', () => {
+    expect(buildFacts('create_refund', {}, AT)).toEqual({
+      action: 'create_refund',
+      channel: 'web',
+    });
   });
 });

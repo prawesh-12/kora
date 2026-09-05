@@ -1,20 +1,20 @@
 import { z } from 'zod';
-import { acme, customerSchema } from '../clients/acme.js';
+import { billingProvider } from '../billing/provider.js';
+import { customerRecordSchema } from '../billing/schemas.js';
 import { defineTool } from '../registry.js';
 
 export const getCustomer = defineTool({
   name: 'get_customer',
   version: 1,
   description:
-    'Use this when you need to confirm who the customer is or which orders belong to them before acting on their behalf.',
+    'Use this when you need to confirm who the customer is and which payment method their subscription bills to before acting on their behalf.',
   inputSchema: z.object({ customerId: z.string().min(1) }),
-  outputSchema: customerSchema,
+  outputSchema: customerRecordSchema,
   sideEffect: 'read',
   requiredPermission: 'customers:read',
   timeoutMs: 4000,
   maxRetries: 2,
   idempotent: true,
   inputExamples: [{ input: { customerId: 'cus_014' } }],
-  execute: (input, ctx) =>
-    acme.getCustomer(input.customerId, { signal: ctx.signal, fault: ctx.fault }),
+  execute: (input, _ctx) => billingProvider().getCustomer(input.customerId),
 });

@@ -1,18 +1,12 @@
 import type { Intent, PolicyFacts } from '@kora/core';
 import type { GatheredContext } from './types.js';
 
-const MS_PER_DAY = 86_400_000;
+const SECONDS_PER_DAY = 86_400;
 
-/**
- * Every fact here comes from a tool result or a database row. Nothing comes from
- * model-generated text. If the customer says the item was delivered yesterday and
- * the order record says twelve days ago, the order wins, silently.
- *
- * `proposedInput` is the exception that proves the rule: the requested refund
- * amount genuinely originates with the request. It is never trusted on its own —
- * every rule that uses it compares it against the order total, which does come
- * from the record.
- */
+function isPositiveInt(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value > 0;
+}
+
 export function buildFacts(
   action: string,
   gathered: GatheredContext,
@@ -23,33 +17,48 @@ export function buildFacts(
 
   if (gathered.intent) facts.intent = gathered.intent as Intent;
 
-  const order = gathered.order;
-  if (!order) return facts;
+  const input = (proposedInput ?? {}) as Record<string, unknown>;
+  const subscription = gathered.subscription;
+  const charge = gathered.charge;
+  const preview = gathered.preview;
 
-  facts.orderStatus = order.status;
-  facts.amountMinor = order.totalAmountMinor;
-  facts.orderTotalMinor = order.totalAmountMinor;
-  facts.currency = order.currency;
-  facts.alreadyReplaced = order.replacementIds.length > 0;
+  if (subscription) {
+    facts.subscriptionStatus = subscription.status;
+    facts.cancelAtPeriodEnd = subscription.cancelAtPeriodEnd;
 
-  const firstItem = order.items[0];
-  if (firstItem) facts.itemCategory = firstItem.category;
+    const targetedItemId = input.subscriptionItemId;
+    const targeted =
+      typeof targetedItemId === 'string'
+        ? subscription.items.find((item) => item.subscriptionItemId === targetedItemId)
+        : undefined;
+    const current =
+      targeted ?? (subscription.items.length === 1 ? subscription.items[0] : undefined);
+    if (current) facts.currentPlanPriceId = current.priceId;
+  }
 
-  if (order.deliveredAt) {
-    const deliveredAt = new Date(order.deliveredAt).getTime();
-    if (Number.isFinite(deliveredAt)) {
-      facts.daysSinceDelivery = Math.floor((at.getTime() - deliveredAt) / MS_PER_DAY);
+  if (charge) {
+    facts.currency = charge.currency;
+    facts.remainingRefundableMinor = charge.remainingRefundable.amountMinor;
+    if (Number.isFinite(charge.created)) {
+      facts.daysSinceCharge = Math.floor((at.getTime() / 1000 - charge.created) / SECONDS_PER_DAY);
+    }
+  } else if (subscription?.items[0]) {
+    facts.currency = subscription.items[0].unitAmount.currency;
+  }
+
+  if (isPositiveInt(input.amountMinor)) {
+    facts.amountMinor = input.amountMinor;
+    if (typeof facts.remainingRefundableMinor === 'number') {
+      facts.exceedsRefundable = input.amountMinor > facts.remainingRefundableMinor;
     }
   }
 
-  const refunded = gathered.refundedAmountMinor ?? 0;
-  facts.refundedAmountMinor = refunded;
-  facts.fullyRefunded = refunded >= order.totalAmountMinor;
+  if (typeof input.targetPriceId === 'string' && input.targetPriceId.length > 0) {
+    facts.targetPlanPriceId = input.targetPriceId;
+  }
 
-  const requested = (proposedInput as { amountMinor?: unknown } | undefined)?.amountMinor;
-  if (typeof requested === 'number' && Number.isInteger(requested)) {
-    facts.requestedAmountMinor = requested;
-    facts.exceedsRemaining = requested > order.totalAmountMinor - refunded;
+  if (preview && Number.isInteger(preview.prorationCreditMinor)) {
+    facts.prorationCreditMinor = preview.prorationCreditMinor;
   }
 
   return facts;
