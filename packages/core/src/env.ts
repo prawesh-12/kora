@@ -30,7 +30,6 @@ const serverSchema = z.object({
   OPENAI_API_KEY: z.string().optional(),
   ANTHROPIC_API_KEY: z.string().optional(),
 
-
   KORA_MAX_STEPS: z.coerce.number().int().positive().default(8),
   KORA_RUN_DEADLINE_MS: z.coerce.number().int().positive().default(45000),
   KORA_CONFIDENCE_THRESHOLD: z.coerce.number().min(0).max(1).default(0.7),
@@ -62,7 +61,15 @@ const serverSchema = z.object({
 export type ServerEnv = z.infer<typeof serverSchema>;
 
 export function parseServerEnv(source: Record<string, string | undefined>): ServerEnv {
-  const parsed = serverSchema.safeParse(source);
+  // A key left blank in a .env file arrives as an empty string, not as absent, so
+  // every optional setting would fail its own min length. `.env.example` ships the
+  // optional keys blank, which is the shape a first setup copies.
+  const present: Record<string, string | undefined> = {};
+  for (const [key, value] of Object.entries(source)) {
+    if (value !== '') present[key] = value;
+  }
+
+  const parsed = serverSchema.safeParse(present);
   if (!parsed.success) {
     const problems = parsed.error.issues
       .map((i) => `  ${i.path.join('.')}: ${i.message}`)
