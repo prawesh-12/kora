@@ -9,22 +9,22 @@ const RECENT_MESSAGES = 6;
 
 const intentSchema = z.object({
   intent: z.enum([
-    'ORDER_STATUS',
-    'DAMAGED_ORDER',
-    'CANCEL_ORDER',
+    'CANCEL_SUBSCRIPTION',
     'REFUND_REQUEST',
+    'CHANGE_PLAN',
+    'BILLING_QUESTION',
     'HUMAN_REQUEST',
     'OUT_OF_SCOPE',
   ]),
   confidence: z.number().min(0).max(1),
-  orderReference: z.string().nullable(),
+  subscriptionReference: z.string().nullable(),
   evidence: z.string().max(200),
 });
 
 export interface IntentResult {
   intent: Intent;
   confidence: number;
-  orderReference: string | null;
+  subscriptionReference: string | null;
   evidence: string;
   belowThreshold: boolean;
 }

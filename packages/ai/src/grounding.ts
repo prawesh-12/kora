@@ -1,54 +1,71 @@
-const REPLACEMENT_ID = /\bREP-\d+\b/g;
-const ORDER_ID = /\b\d{4,}\b/g;
-const MONEY = /(?:INR|Rs\.?|₹)\s?([\d,]+(?:\.\d{1,2})?)/gi;
+const STRIPE_ID = /\b(?:re|sub|in|price|prod|pi|ch|cus|si)_[A-Za-z0-9]+\b/g;
+const PLAN_NAME = /\b([A-Z][A-Za-z]*(?:\s+[A-Z][A-Za-z]*)*\s+(?:plan|tier))\b/g;
+const MONEY = /(?:INR|Rs\.?|₹|\$|USD)\s?([\d,]+(?:\.\d{1,2})?)/gi;
+
+const GENERIC_LEADERS = new Set([
+  'the',
+  'your',
+  'this',
+  'that',
+  'a',
+  'an',
+  'our',
+  'their',
+  'my',
+  'its',
+]);
 
 export interface GroundingResult {
   grounded: boolean;
   unsupported: string[];
 }
 
-function normaliseAmount(raw: string): string {
-  return raw.replace(/[,\s]/g, '').replace(/\.00$/, '');
+function tokensOf(value: unknown): Set<string> {
+  return new Set(
+    JSON.stringify(value ?? null)
+      .split(/[^A-Za-z0-9_]+/)
+      .filter((p) => p.length > 0),
+  );
 }
 
-/**
- * Extracts every replacement id, order id and money amount from the draft and
- * asserts each one appears somewhere in a tool result from this run.
- *
- * A regex sweep will not catch a subtly wrong sentence, but it catches the
- * expensive failure cheaply: a confident, specific, invented identifier.
- */
+function planNameOf(match: string): string | null {
+  const leader = match.split(/\s+/)[0]?.toLowerCase() ?? '';
+  if (GENERIC_LEADERS.has(leader)) return null;
+  return match;
+}
+
 export function checkGrounding(
   message: string,
   toolOutputs: unknown[],
   customerText = '',
 ): GroundingResult {
-  const haystack = toolOutputs.map((o) => JSON.stringify(o ?? null)).join('\n');
-  // An order number the customer typed is theirs to be told back. A replacement
-  // id is not: repeating one the customer supplied would claim an action happened.
-  const echoable = `${haystack}\n${customerText}`;
-  const normalisedHaystack = echoable.replace(/[,\s]/g, '');
+  const toolTokens = new Set<string>();
+  for (const output of toolOutputs) {
+    for (const token of tokensOf(output)) toolTokens.add(token);
+  }
+  const customerTokens = tokensOf(customerText);
+  const toolText = toolOutputs.map((o) => JSON.stringify(o ?? null).toLowerCase()).join('\n');
+  const customerLower = customerText.toLowerCase();
   const unsupported: string[] = [];
 
-  for (const id of message.match(REPLACEMENT_ID) ?? []) {
-    if (!haystack.includes(id)) unsupported.push(id);
+  for (const id of message.match(STRIPE_ID) ?? []) {
+    if (!toolTokens.has(id) && !customerTokens.has(id)) unsupported.push(id);
   }
 
-  // Scan for order ids only after removing replacement ids: `\b\d{4,}\b` also
-  // matches the digits inside REP-9999 and would report the same id twice.
-  const withoutReplacementIds = message.replace(REPLACEMENT_ID, ' ');
-  for (const id of withoutReplacementIds.match(ORDER_ID) ?? []) {
-    if (!echoable.includes(id)) unsupported.push(id);
+  for (const match of message.matchAll(PLAN_NAME)) {
+    const name = planNameOf(match[1] ?? '');
+    if (!name) continue;
+    const needle = name.toLowerCase();
+    if (!toolText.includes(needle) && !customerLower.includes(needle)) {
+      unsupported.push(name);
+    }
   }
 
   for (const match of message.matchAll(MONEY)) {
-    const amount = normaliseAmount(match[1] ?? '');
-    if (!amount) continue;
-    // Tool results carry minor units, so 3,499 has to be found as 349900 too.
-    const minor = String(Math.round(Number(amount) * 100));
-    if (!normalisedHaystack.includes(amount) && !normalisedHaystack.includes(minor)) {
-      unsupported.push(match[0]);
-    }
+    const raw = (match[1] ?? '').replace(/,/g, '');
+    if (!raw) continue;
+    const minor = String(Math.round(Number(raw) * 100));
+    if (!toolTokens.has(minor)) unsupported.push(match[0]);
   }
 
   return { grounded: unsupported.length === 0, unsupported: [...new Set(unsupported)] };

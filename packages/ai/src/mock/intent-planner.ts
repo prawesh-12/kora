@@ -3,6 +3,8 @@ import type { MockPlanner, MockPlannerContext } from './language-model.js';
 
 export const ORDER_REF = /\b(\d{4,})\b/;
 
+const SUBSCRIPTION_REF = /\b((?:sub|in|re|price)_[A-Za-z0-9]+)\b/;
+
 export const HUMAN_PHRASES = [
   'talk to a human',
   'talk to a person',
@@ -17,65 +19,47 @@ export const HUMAN_PHRASES = [
   'agent please',
 ];
 
-// No phrase may be a substring of another in the same list, or one message
-// scores twice for saying one thing and beats a genuinely competing intent.
-const DAMAGE_PHRASES = [
-  'broken',
-  'damaged',
-  'smashed',
-  'cracked',
-  'shattered',
-  'faulty',
-  'defective',
-  'missing item',
-  'wrong item',
-  'replacement',
-  'replace it',
-  'destroyed',
-  'send me a new',
-  'send a new',
-  'new one',
+const CANCEL_PHRASES = [
+  'cancel',
+  'call it off',
+  'stop my subscription',
+  'end my subscription',
+  'do not renew',
+  "don't renew",
+  'stop charging me',
+  'turn off auto-renew',
+  'no longer need',
 ];
 
 const REFUND_PHRASES = ['refund', 'money back', 'reimburse', 'pay me back', 'charge back'];
 
-const CANCEL_PHRASES = [
-  'cancel',
-  'call it off',
-  'stop the order',
-  'do not ship',
-  "don't ship",
-  'no longer want',
+const CHANGE_PHRASES = [
+  'change my plan',
+  'change plan',
+  'switch plan',
+  'switch to',
+  'upgrade',
+  'downgrade',
+  'move to',
+  'cheaper plan',
+  'different plan',
+];
+
+const BILLING_PHRASES: Array<string | RegExp> = [
+  'why was i charged',
+  'charged twice',
+  'what is this charge',
+  'invoice',
+  'receipt',
+  'billing',
+  'how much',
+  'when will i be charged',
+  'card was charged',
+  'explain my bill',
 ];
 
 const HUMAN_WEIGHT = 3;
 
-// Phrases here must not assume the customer says "it": "has order 9834 shipped"
-// and "has it shipped" are the same question.
-const STATUS_PHRASES: Array<string | RegExp> = [
-  'where is',
-  "where's",
-  'track',
-  'delivery date',
-  // A word boundary, not a substring: "arrive" is a question about the future,
-  // "arrived" is a delivery that already happened and usually precedes a damage
-  // report. A substring match cannot tell them apart.
-  /\barrive\b/,
-  /\barriving\b/,
-  'shipped',
-  'status of',
-  'any update',
-];
-
-/**
- * The offline classifier. Recognised by the JSON response format the intent step
- * asks for, which no other model call uses.
- *
- * The scoring is deliberately crude: it exists to make the workflow deterministic,
- * not to be a good classifier. What it does have to get right is the confidence,
- * because a genuinely ambiguous message must land below the threshold rather than
- * guessing.
- */
 type Pattern = string | RegExp;
 
 export function scoreIntents(text: string): Array<{ intent: Intent; hits: number }> {
@@ -83,19 +67,15 @@ export function scoreIntents(text: string): Array<{ intent: Intent; hits: number
     patterns.filter((p) => (typeof p === 'string' ? text.includes(p) : p.test(text))).length;
   return [
     { intent: 'HUMAN_REQUEST' as Intent, hits: count(HUMAN_PHRASES) * HUMAN_WEIGHT },
-    { intent: 'DAMAGED_ORDER' as Intent, hits: count(DAMAGE_PHRASES) },
+    { intent: 'CANCEL_SUBSCRIPTION' as Intent, hits: count(CANCEL_PHRASES) },
     { intent: 'REFUND_REQUEST' as Intent, hits: count(REFUND_PHRASES) },
-    { intent: 'CANCEL_ORDER' as Intent, hits: count(CANCEL_PHRASES) },
-    { intent: 'ORDER_STATUS' as Intent, hits: count(STATUS_PHRASES) },
+    { intent: 'CHANGE_PLAN' as Intent, hits: count(CHANGE_PHRASES) },
+    { intent: 'BILLING_QUESTION' as Intent, hits: count(BILLING_PHRASES) },
   ].sort((a, b) => b.hits - a.hits);
 }
 
-/** Damage plus a refund ask means refund: the customer named the remedy they want. */
 function resolveTie(top: Intent, second: Intent): Intent {
-  if (top === 'DAMAGED_ORDER' && second === 'REFUND_REQUEST') return 'REFUND_REQUEST';
-  if (top === 'REFUND_REQUEST' && second === 'DAMAGED_ORDER') return 'REFUND_REQUEST';
-  // Otherwise prefer the one that can lead to a write, so policy gets to check it.
-  const writeCapable: Intent[] = ['REFUND_REQUEST', 'CANCEL_ORDER', 'DAMAGED_ORDER'];
+  const writeCapable: Intent[] = ['CANCEL_SUBSCRIPTION', 'REFUND_REQUEST', 'CHANGE_PLAN'];
   if (writeCapable.includes(second) && !writeCapable.includes(top)) return second;
   return top;
 }
@@ -113,7 +93,8 @@ export const intentPlanner: MockPlanner = (ctx) => {
   if (ctx.options.responseFormat?.type !== 'json') return undefined;
 
   const text = lastCustomerTurn(ctx);
-  const orderReference = text.match(ORDER_REF)?.[1] ?? null;
+  const subscriptionReference =
+    text.match(SUBSCRIPTION_REF)?.[1] ?? text.match(ORDER_REF)?.[1] ?? null;
   const scored = scoreIntents(text);
   const top = scored[0]!;
   const second = scored[1]!;
@@ -122,7 +103,7 @@ export const intentPlanner: MockPlanner = (ctx) => {
     text: JSON.stringify({
       intent,
       confidence: Number(confidence.toFixed(2)),
-      orderReference,
+      subscriptionReference,
       evidence: evidence.slice(0, 200),
     }),
   });
@@ -138,23 +119,15 @@ export const intentPlanner: MockPlanner = (ctx) => {
   const contested = second.hits === top.hits && second.hits > 0;
   if (contested) {
     const chosen = resolveTie(top.intent, second.intent);
-    // A real tie between two unrelated intents is ambiguous and must not be guessed.
-    const related =
-      chosen === 'REFUND_REQUEST' &&
-      [top.intent, second.intent].every((i) => i === 'DAMAGED_ORDER' || i === 'REFUND_REQUEST');
-    return emit(
-      chosen,
-      related ? 0.88 : 0.62,
-      `both ${top.intent} and ${second.intent} apply; chose ${chosen}`,
-    );
+    return emit(chosen, 0.62, `both ${top.intent} and ${second.intent} apply; chose ${chosen}`);
   }
 
-  const confidence = orderReference ? 0.94 : 0.78;
+  const confidence = subscriptionReference ? 0.94 : 0.78;
   return emit(
     top.intent,
     confidence,
-    orderReference
-      ? `the customer names order ${orderReference} and asks for ${top.intent}`
-      : `the request matches ${top.intent} but names no order`,
+    subscriptionReference
+      ? `the customer names ${subscriptionReference} and asks for ${top.intent}`
+      : `the request matches ${top.intent} but names no subscription`,
   );
 };

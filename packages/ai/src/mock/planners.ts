@@ -1,22 +1,36 @@
-import { HUMAN_PHRASES, ORDER_REF, intentPlanner } from './intent-planner.js';
+import { HUMAN_PHRASES, intentPlanner } from './intent-planner.js';
 import type { MockPlanner, MockPlannerContext, MockTurn } from './language-model.js';
 
 export { intentPlanner };
 
-interface OrderView {
+const SUBSCRIPTION_REF = /\b((?:sub|in|re|price|prod|pi|ch|cus|si)_[A-Za-z0-9]+)\b/;
+
+interface SubscriptionView {
   id: string;
   status: string;
-  items: Array<{ sku: string; category: string; quantity: number; unitAmountMinor: number }>;
-  totalAmountMinor: number;
-  currency: string;
-  deliveredAt: string | null;
-  replacementIds: string[];
+  customerId: string;
+  latestInvoiceId: string | null;
+  cancelAtPeriodEnd: boolean;
+  currentPeriodEnd: number | null;
+  items: Array<{ subscriptionItemId: string; priceId: string }>;
 }
 
-interface ToolFailure {
+interface InvoiceView {
+  id: string;
+  status: string;
+  amountPaid: { amountMinor: number; currency: string };
+}
+
+interface WriteResult {
   ok?: false;
-  reason?: string;
   awaitingApproval?: boolean;
+  refundId?: string;
+  status?: string;
+  amountMinor?: number;
+  currency?: string;
+  id?: string;
+  subscription?: { id: string };
+  quotedNextChargeMinor?: number;
 }
 
 function findToolResult<T>(ctx: MockPlannerContext, toolName: string): T | null {
@@ -27,30 +41,28 @@ function findToolResult<T>(ctx: MockPlannerContext, toolName: string): T | null 
   return null;
 }
 
-function isFailure(output: unknown): boolean {
-  return Boolean(output && typeof output === 'object' && (output as ToolFailure).ok === false);
-}
-
 function called(ctx: MockPlannerContext, name: string): boolean {
   return ctx.calledTools.includes(name);
 }
 
-function money(amountMinor: number, currency: string): string {
-  return `${currency} ${(amountMinor / 100).toLocaleString('en-IN')}`;
+function major(amountMinor: number): string {
+  return (amountMinor / 100).toLocaleString('en-IN');
 }
 
-/**
- * The offline agent. Walks whichever workflow the exposed tool set implies, one
- * tool at a time, reacting to what the previous tool actually returned. It never
- * invents an id or an amount: every fact in a final message comes from a tool
- * result or from the order record.
- */
+function requestedAmountMinor(text: string): number | null {
+  const match = text.match(/inr\s?([\d,]+)/);
+  if (!match) return null;
+  const major = Number((match[1] ?? '').replace(/,/g, ''));
+  if (!Number.isFinite(major) || major <= 0) return null;
+  return Math.round(major * 100);
+}
+
 export const agentPlanner: MockPlanner = (ctx): MockTurn | undefined => {
   if (ctx.options.responseFormat?.type === 'json') return undefined;
 
   const has = (name: string) => ctx.availableTools.includes(name);
   const text = ctx.customerText.toLowerCase();
-  const orderId = text.match(ORDER_REF)?.[1];
+  const ref = text.match(SUBSCRIPTION_REF)?.[1];
 
   const escalate = (reason: string, message: string): MockTurn => ({
     text: message,
@@ -64,41 +76,76 @@ export const agentPlanner: MockPlanner = (ctx): MockTurn | undefined => {
     );
   }
 
-  if (!orderId) {
+  if (!ref) {
     return escalate(
       'UNSUPPORTED_SCENARIO',
-      'I could not find an order number in your message, so I have asked a colleague to pick this up.',
+      'I could not find a subscription reference in your message, so I have asked a colleague to pick this up.',
     );
   }
 
-  if (!called(ctx, 'get_order') && has('get_order')) {
-    return { toolCalls: [{ toolName: 'get_order', input: { orderId } }] };
+  const subscriptionId = ref.startsWith('in_') ? null : ref;
+
+  if (subscriptionId && !called(ctx, 'get_subscription') && has('get_subscription')) {
+    return { toolCalls: [{ toolName: 'get_subscription', input: { subscriptionId } }] };
   }
 
-  const fetched = findToolResult<OrderView | ToolFailure>(ctx, 'get_order');
-  if (!fetched || isFailure(fetched)) {
+  const subscription = findToolResult<SubscriptionView>(ctx, 'get_subscription');
+  if (subscriptionId && !subscription?.id) {
     return escalate(
       'TOOL_FAILED',
-      `I could not look up order ${orderId} just now, so I have asked a colleague to check it. I have not made any changes.`,
+      `I could not look up subscription ${subscriptionId} just now, so I have asked a colleague to check it. I have not made any changes.`,
     );
   }
-  const order = fetched as OrderView;
+
+  const invoiceId = ref.startsWith('in_') ? ref : (subscription?.latestInvoiceId ?? null);
+  if (invoiceId && !called(ctx, 'get_invoice') && has('get_invoice')) {
+    return { toolCalls: [{ toolName: 'get_invoice', input: { invoiceId } }] };
+  }
+  const invoice = findToolResult<InvoiceView>(ctx, 'get_invoice');
 
   const action = has('create_refund')
     ? 'create_refund'
-    : has('cancel_order')
-      ? 'cancel_order'
-      : has('create_replacement')
-        ? 'create_replacement'
+    : has('cancel_subscription')
+      ? 'cancel_subscription'
+      : has('change_plan')
+        ? 'change_plan'
         : null;
 
-  // A status question exposes no write tool at all, so it is answered from the
-  // order record alone. No policy check, nothing to gate.
   if (!action) {
-    const delivered = order.deliveredAt
-      ? `It was delivered on ${order.deliveredAt.slice(0, 10)}.`
-      : 'It has not been delivered yet.';
-    return { text: `Order ${order.id} is currently ${order.status}. ${delivered}` };
+    if (subscription && invoice) {
+      return {
+        text: `Subscription ${subscription.id} is currently ${subscription.status}. The latest invoice ${invoice.id} shows ${invoice.amountPaid.currency} ${major(invoice.amountPaid.amountMinor)} paid.`,
+      };
+    }
+    return escalate(
+      'TOOL_FAILED',
+      'I could not pull up the billing records just now, so a colleague will confirm the details shortly.',
+    );
+  }
+
+  const requested = requestedAmountMinor(text);
+
+  const subscriptionItemId = subscription?.items?.[0]?.subscriptionItemId ?? null;
+  const currentPriceId = subscription?.items?.[0]?.priceId ?? null;
+  const targetPriceId =
+    currentPriceId === 'price_basic' ? 'price_pro' : currentPriceId ? 'price_basic' : null;
+
+  if (action === 'change_plan' && subscription && subscriptionItemId && targetPriceId) {
+    if (!called(ctx, 'preview_change') && has('preview_change')) {
+      return {
+        toolCalls: [
+          {
+            toolName: 'preview_change',
+            input: {
+              subscriptionId: subscription.id,
+              subscriptionItemId,
+              targetPriceId,
+              prorationBehavior: 'create_prorations' as const,
+            },
+          },
+        ],
+      };
+    }
   }
 
   if (!called(ctx, 'search_knowledge') && has('search_knowledge')) {
@@ -106,7 +153,7 @@ export const agentPlanner: MockPlanner = (ctx): MockTurn | undefined => {
       toolCalls: [
         {
           toolName: 'search_knowledge',
-          input: { query: 'returns refunds cancellations policy', topic: 'returns' },
+          input: { query: 'subscription refunds cancellations billing policy', topic: 'refunds' },
         },
       ],
     };
@@ -120,6 +167,26 @@ export const agentPlanner: MockPlanner = (ctx): MockTurn | undefined => {
     );
   }
 
+  const writeInput =
+    action === 'create_refund'
+      ? {
+          subscriptionId: subscription?.id ?? subscriptionId ?? ref,
+          ...(invoice ? { invoiceId: invoice.id } : {}),
+          amountMinor: requested ?? invoice?.amountPaid.amountMinor ?? 0,
+          reason: 'requested_by_customer' as const,
+        }
+      : action === 'change_plan' && subscriptionItemId && targetPriceId
+        ? {
+            subscriptionId: subscription?.id ?? subscriptionId ?? ref,
+            subscriptionItemId,
+            targetPriceId,
+            prorationBehavior: 'create_prorations' as const,
+          }
+        : {
+            subscriptionId: subscription?.id ?? subscriptionId ?? ref,
+            mode: 'at_period_end' as const,
+          };
+
   if (!called(ctx, 'check_policy') && has('check_policy')) {
     return {
       toolCalls: [
@@ -127,10 +194,12 @@ export const agentPlanner: MockPlanner = (ctx): MockTurn | undefined => {
           toolName: 'check_policy',
           input: {
             action,
-            orderId: order.id,
-            // Without the amount the advisory answer falls back to the fail-safe
-            // default and disagrees with what the pipeline will decide.
-            ...(action === 'create_refund' ? { amountMinor: order.totalAmountMinor } : {}),
+            ...(typeof writeInput.subscriptionId === 'string'
+              ? { subscriptionId: writeInput.subscriptionId }
+              : {}),
+            ...(action === 'create_refund' && (requested ?? invoice)
+              ? { amountMinor: requested ?? invoice!.amountPaid.amountMinor }
+              : {}),
           },
         },
       ],
@@ -139,14 +208,16 @@ export const agentPlanner: MockPlanner = (ctx): MockTurn | undefined => {
 
   const policy = findToolResult<{ decision?: string; reason?: string }>(ctx, 'check_policy');
   if (policy?.decision === 'deny') {
-    return { text: `I am not able to do that for order ${order.id}. ${policy.reason}.` };
+    return {
+      text: `I am not able to refund that amount for subscription ${subscription?.id ?? ref}. ${policy.reason ?? 'The policy does not allow it.'} A colleague can review this with you.`,
+    };
   }
 
   if (!called(ctx, action)) {
-    return { toolCalls: [{ toolName: action, input: inputFor(action, order) }] };
+    return { toolCalls: [{ toolName: action, input: writeInput }] };
   }
 
-  const result = findToolResult<Record<string, unknown> & ToolFailure>(ctx, action);
+  const result = findToolResult<WriteResult>(ctx, action);
 
   if (result?.awaitingApproval) {
     return {
@@ -157,12 +228,35 @@ export const agentPlanner: MockPlanner = (ctx): MockTurn | undefined => {
   if (result && result.ok === false) {
     return escalate(
       'TOOL_FAILED',
-      `I was not able to complete this for order ${order.id} just now. I have not confirmed any change, and a colleague will pick it up and confirm shortly.`,
+      `I was not able to complete this for subscription ${subscription?.id ?? ref} just now. I have not confirmed any change, and a colleague will pick it up and confirm shortly.`,
     );
   }
 
-  if (result?.id) {
-    return { text: confirmationFor(action, order, result) };
+  if (action === 'create_refund' && result?.refundId) {
+    if (result.status !== 'succeeded') {
+      return escalate(
+        'REFUND_PENDING',
+        `The refund for subscription ${subscription?.id ?? ref} is waiting on the payment provider. I have not confirmed it yet, and a colleague will confirm it with you as soon as it lands.`,
+      );
+    }
+    return {
+      text: `I have arranged a refund of ${result.currency ?? invoice?.amountPaid.currency ?? 'INR'} ${major(result.amountMinor ?? invoice?.amountPaid.amountMinor ?? 0)} for subscription ${subscription?.id ?? ref}. Your refund reference is ${result.refundId}.`,
+    };
+  }
+
+  if (action === 'change_plan' && result?.subscription) {
+    return {
+      text: `Subscription ${result.subscription.id} is now on the cheaper plan. The prorated amount is ${invoice?.amountPaid.currency ?? 'INR'} ${major(result.quotedNextChargeMinor ?? 0)}.`,
+    };
+  }
+
+  if (action === 'cancel_subscription' && result?.id) {
+    const end = subscription?.currentPeriodEnd
+      ? new Date(subscription.currentPeriodEnd * 1000).toISOString().slice(0, 10)
+      : 'the end of the current period';
+    return {
+      text: `Subscription ${result.id} will stay active until ${end} and then end. Nothing further will be charged.`,
+    };
   }
 
   if (called(ctx, 'escalate_to_human')) {
@@ -174,39 +268,5 @@ export const agentPlanner: MockPlanner = (ctx): MockTurn | undefined => {
     'I am not able to complete this myself, so a colleague will pick it up and come back to you.',
   );
 };
-
-function inputFor(action: string, order: OrderView): Record<string, unknown> {
-  const item = order.items[0];
-  switch (action) {
-    case 'create_refund':
-      return { orderId: order.id, amountMinor: order.totalAmountMinor, reason: 'damaged' };
-    case 'cancel_order':
-      return { orderId: order.id, reason: 'customer_request' };
-    default:
-      return {
-        orderId: order.id,
-        items: [{ sku: item?.sku ?? 'UNKNOWN', quantity: item?.quantity ?? 1 }],
-        reason: 'damaged',
-      };
-  }
-}
-
-function confirmationFor(
-  action: string,
-  order: OrderView,
-  result: Record<string, unknown>,
-): string {
-  switch (action) {
-    case 'create_refund':
-      return `Thanks for letting us know. I have arranged a refund of ${money(
-        Number(result.amountMinor ?? order.totalAmountMinor),
-        String(result.currency ?? order.currency),
-      )} for order ${order.id}. Your refund reference is ${result.id}.`;
-    case 'cancel_order':
-      return `Order ${order.id} has been cancelled. Your cancellation reference is ${result.id} and nothing will be shipped.`;
-    default:
-      return `Thanks for letting us know. I have arranged a replacement for order ${order.id}. Your replacement reference is ${result.id} and it is on its way.`;
-  }
-}
 
 export const DEFAULT_PLANNERS: MockPlanner[] = [intentPlanner, agentPlanner];

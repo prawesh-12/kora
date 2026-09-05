@@ -97,7 +97,7 @@ describe('ingest', () => {
     const rows = await sql()<{ source_uri: string; n: string }[]>`
       SELECT source_uri, count(*) AS n FROM documents
       WHERE tenant_id = ${TENANT} AND status = 'active' GROUP BY source_uri`;
-    expect(rows.length).toBe(2);
+    expect(rows.length).toBe(3);
     for (const r of rows) expect(Number(r.n)).toBe(1);
   });
 

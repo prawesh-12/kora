@@ -1,381 +1,153 @@
 {
+  "ambiguous": [
+    "It's about sub_7H21.",
+    "Something is wrong.",
+    "Can you help me with my subscription?",
+    "I have a problem.",
+    "sub_7H22.",
+    "Not happy.",
+    "This is about a payment I made.",
+    "Hello?",
+    "Need help with something.",
+    "It didn't work out.",
+    "About my recent payment please.",
+    "Can someone look at this?",
+    "There's an issue with in_9K44.",
+    "I need something sorted.",
+    "Cancel my subscription and refund my last payment."
+  ],
   "clear": [
+    { "intent": "CANCEL_SUBSCRIPTION", "message": "Please cancel my subscription sub_7H21." },
     {
-      "intent": "ORDER_STATUS",
-      "message": "Where is my order 9832?"
+      "intent": "CANCEL_SUBSCRIPTION",
+      "message": "I want to cancel my plan, subscription sub_7H22."
     },
     {
-      "intent": "ORDER_STATUS",
-      "message": "Can you track order 9838 for me?"
+      "intent": "CANCEL_SUBSCRIPTION",
+      "message": "Cancel subscription sub_7H23 effective immediately."
+    },
+    { "intent": "CANCEL_SUBSCRIPTION", "message": "Please end my subscription sub_7H24." },
+    {
+      "intent": "CANCEL_SUBSCRIPTION",
+      "message": "I would like to stop my subscription sub_7H25."
+    },
+    { "intent": "CANCEL_SUBSCRIPTION", "message": "Do not renew my subscription sub_7H26." },
+    { "intent": "CANCEL_SUBSCRIPTION", "message": "Please don't renew subscription sub_7H27." },
+    { "intent": "CANCEL_SUBSCRIPTION", "message": "Stop charging me for subscription sub_7H28." },
+    { "intent": "CANCEL_SUBSCRIPTION", "message": "Turn off auto-renew for sub_7H29." },
+    {
+      "intent": "CANCEL_SUBSCRIPTION",
+      "message": "I no longer need this subscription, please cancel sub_7H30."
+    },
+    { "intent": "CANCEL_SUBSCRIPTION", "message": "Call it off, cancel my subscription sub_7H31." },
+    { "intent": "CANCEL_SUBSCRIPTION", "message": "End my subscription sub_7H32 right away." },
+    { "intent": "CANCEL_SUBSCRIPTION", "message": "Cancel sub_7H33, I signed up by mistake." },
+    {
+      "intent": "CANCEL_SUBSCRIPTION",
+      "message": "Please cancel my subscription sub_7H34 before the next charge."
+    },
+    { "intent": "CANCEL_SUBSCRIPTION", "message": "I want out, stop my subscription sub_7H35." },
+    { "intent": "REFUND_REQUEST", "message": "I want a refund for subscription sub_7H40." },
+    { "intent": "REFUND_REQUEST", "message": "Please give me my money back for sub_7H41." },
+    { "intent": "REFUND_REQUEST", "message": "Can I get a refund on sub_7H42?" },
+    { "intent": "REFUND_REQUEST", "message": "I would like to be reimbursed for sub_7H43." },
+    { "intent": "REFUND_REQUEST", "message": "Refund my last payment, subscription sub_7H44." },
+    { "intent": "REFUND_REQUEST", "message": "Please pay me back for sub_7H45." },
+    { "intent": "REFUND_REQUEST", "message": "I want my money back for sub_7H46." },
+    { "intent": "REFUND_REQUEST", "message": "Can you refund sub_7H47?" },
+    { "intent": "REFUND_REQUEST", "message": "I need a refund for sub_7H48." },
+    { "intent": "REFUND_REQUEST", "message": "Refund me for sub_7H49 please." },
+    { "intent": "REFUND_REQUEST", "message": "Please process a refund for sub_7H50." },
+    { "intent": "REFUND_REQUEST", "message": "I would like a refund on sub_7H51." },
+    { "intent": "REFUND_REQUEST", "message": "Give me my money back for sub_7H52." },
+    { "intent": "REFUND_REQUEST", "message": "Can I have a refund for sub_7H53?" },
+    { "intent": "REFUND_REQUEST", "message": "Please refund sub_7H54 to my card." },
+    {
+      "intent": "CHANGE_PLAN",
+      "message": "I want to change my plan to the cheaper one, subscription sub_8M61."
+    },
+    { "intent": "CHANGE_PLAN", "message": "Please upgrade my subscription sub_8M62 to Pro." },
+    { "intent": "CHANGE_PLAN", "message": "Downgrade me to the basic option on sub_8M63." },
+    { "intent": "CHANGE_PLAN", "message": "Move me to the cheaper plan, sub_8M64." },
+    { "intent": "CHANGE_PLAN", "message": "Switch plan on sub_8M65 to the annual one." },
+    { "intent": "CHANGE_PLAN", "message": "I would like a different plan for sub_8M66." },
+    { "intent": "CHANGE_PLAN", "message": "Please switch to the Pro option for sub_8M67." },
+    { "intent": "CHANGE_PLAN", "message": "Change plan on sub_8M68 effective next cycle." },
+    { "intent": "CHANGE_PLAN", "message": "Upgrade sub_8M69 please." },
+    { "intent": "CHANGE_PLAN", "message": "Can you downgrade sub_8M70?" },
+    {
+      "intent": "CHANGE_PLAN",
+      "message": "I want to move to a yearly option, subscription sub_8M71."
+    },
+    { "intent": "CHANGE_PLAN", "message": "Please change my plan for sub_8M72." },
+    { "intent": "CHANGE_PLAN", "message": "Switch to basic on sub_8M73." },
+    { "intent": "CHANGE_PLAN", "message": "I would like to upgrade to Pro on sub_8M74." },
+    { "intent": "CHANGE_PLAN", "message": "Downgrade my plan sub_8M75 to save money." },
+    {
+      "intent": "BILLING_QUESTION",
+      "message": "Why was I charged twice this month? Invoice in_9K81."
     },
     {
-      "intent": "ORDER_STATUS",
-      "message": "What is the status of order 9839?"
+      "intent": "BILLING_QUESTION",
+      "message": "What is this charge on my card? Subscription sub_9K82."
+    },
+    { "intent": "BILLING_QUESTION", "message": "Can you explain my bill for sub_9K83?" },
+    { "intent": "BILLING_QUESTION", "message": "I need a copy of my invoice in_9K84." },
+    { "intent": "BILLING_QUESTION", "message": "When will I be charged next for sub_9K85?" },
+    {
+      "intent": "BILLING_QUESTION",
+      "message": "My card was charged an unexpected amount on sub_9K86."
+    },
+    { "intent": "BILLING_QUESTION", "message": "How much will I pay next month for sub_9K87?" },
+    { "intent": "BILLING_QUESTION", "message": "I have a billing question about in_9K88." },
+    { "intent": "BILLING_QUESTION", "message": "Please send me the receipt for in_9K89." },
+    { "intent": "BILLING_QUESTION", "message": "Why was I charged INR 3,499 on sub_9K90?" },
+    { "intent": "BILLING_QUESTION", "message": "What is invoice in_9K91 for?" },
+    {
+      "intent": "BILLING_QUESTION",
+      "message": "I do not recognise the amount on sub_9K92, what is this charge?"
     },
     {
-      "intent": "ORDER_STATUS",
-      "message": "Any update on order 9840?"
+      "intent": "BILLING_QUESTION",
+      "message": "How much is my current option per month? Sub sub_9K93."
     },
+    { "intent": "BILLING_QUESTION", "message": "My invoice in_9K94 shows the wrong total." },
     {
-      "intent": "ORDER_STATUS",
-      "message": "When will order 9837 arrive?"
-    },
-    {
-      "intent": "ORDER_STATUS",
-      "message": "Has order 9833 shipped yet?"
-    },
-    {
-      "intent": "ORDER_STATUS",
-      "message": "I want to track order 9834 please."
-    },
-    {
-      "intent": "ORDER_STATUS",
-      "message": "What is the delivery date for order 9841?"
-    },
-    {
-      "intent": "ORDER_STATUS",
-      "message": "Where's order 9835 right now?"
-    },
-    {
-      "intent": "ORDER_STATUS",
-      "message": "Could you check the status of order 9836 for me?"
-    },
-    {
-      "intent": "ORDER_STATUS",
-      "message": "Order 9838 tracking please."
-    },
-    {
-      "intent": "ORDER_STATUS",
-      "message": "When does order 9837 arrive?"
-    },
-    {
-      "intent": "ORDER_STATUS",
-      "message": "Any update on the delivery of order 9840?"
-    },
-    {
-      "intent": "ORDER_STATUS",
-      "message": "Has order 9839 shipped?"
-    },
-    {
-      "intent": "ORDER_STATUS",
-      "message": "I would like tracking for order 9832."
-    },
-    {
-      "intent": "DAMAGED_ORDER",
-      "message": "My coffee machine from order 9832 arrived broken. I want a replacement."
-    },
-    {
-      "intent": "DAMAGED_ORDER",
-      "message": "The espresso machine in order 9833 came smashed. Please send a replacement."
-    },
-    {
-      "intent": "DAMAGED_ORDER",
-      "message": "The kettle from order 9834 was damaged. Send me a new one."
-    },
-    {
-      "intent": "DAMAGED_ORDER",
-      "message": "Order 9840 arrived with a cracked screen."
-    },
-    {
-      "intent": "DAMAGED_ORDER",
-      "message": "The blender in order 9836 is faulty, can you replace it?"
-    },
-    {
-      "intent": "DAMAGED_ORDER",
-      "message": "My speaker from order 9840 is defective."
-    },
-    {
-      "intent": "DAMAGED_ORDER",
-      "message": "Order 9832 arrived broken, please replace it."
-    },
-    {
-      "intent": "DAMAGED_ORDER",
-      "message": "The item in order 9835 was shattered in transit."
-    },
-    {
-      "intent": "DAMAGED_ORDER",
-      "message": "There is a missing item in order 9838."
-    },
-    {
-      "intent": "DAMAGED_ORDER",
-      "message": "I received the wrong item in order 9837."
-    },
-    {
-      "intent": "DAMAGED_ORDER",
-      "message": "The microwave from order 9838 came damaged."
-    },
-    {
-      "intent": "DAMAGED_ORDER",
-      "message": "Order 9839 arrived broken, I need a replacement."
-    },
-    {
-      "intent": "DAMAGED_ORDER",
-      "message": "My headphones from order 9837 are defective, please replace them."
-    },
-    {
-      "intent": "DAMAGED_ORDER",
-      "message": "The vacuum cleaner in order 9841 arrived damaged."
-    },
-    {
-      "intent": "DAMAGED_ORDER",
-      "message": "Order 9834 was delivered with a smashed lid."
-    },
-    {
-      "intent": "CANCEL_ORDER",
-      "message": "Please cancel order 9837."
-    },
-    {
-      "intent": "CANCEL_ORDER",
-      "message": "I want to cancel order 9838 before it ships."
-    },
-    {
-      "intent": "CANCEL_ORDER",
-      "message": "Can you stop the order 9839 from going out?"
-    },
-    {
-      "intent": "CANCEL_ORDER",
-      "message": "Cancel my order 9837 please."
-    },
-    {
-      "intent": "CANCEL_ORDER",
-      "message": "I no longer want order 9838, please cancel it."
-    },
-    {
-      "intent": "CANCEL_ORDER",
-      "message": "Please do not ship order 9837."
-    },
-    {
-      "intent": "CANCEL_ORDER",
-      "message": "Call it off, cancel order 9838."
-    },
-    {
-      "intent": "CANCEL_ORDER",
-      "message": "I changed my mind, cancel order 9839."
-    },
-    {
-      "intent": "CANCEL_ORDER",
-      "message": "Cancel order 9840 for me."
-    },
-    {
-      "intent": "CANCEL_ORDER",
-      "message": "Please cancel order 9841 immediately."
-    },
-    {
-      "intent": "CANCEL_ORDER",
-      "message": "Don't ship order 9837, I want to cancel."
-    },
-    {
-      "intent": "CANCEL_ORDER",
-      "message": "Can I cancel order 9838?"
-    },
-    {
-      "intent": "CANCEL_ORDER",
-      "message": "Stop the order 9839, I do not want it."
-    },
-    {
-      "intent": "CANCEL_ORDER",
-      "message": "I would like to cancel order 9840."
-    },
-    {
-      "intent": "CANCEL_ORDER",
-      "message": "Cancel order 9837, I ordered by mistake."
-    },
-    {
-      "intent": "REFUND_REQUEST",
-      "message": "I want a refund for order 9832."
-    },
-    {
-      "intent": "REFUND_REQUEST",
-      "message": "Please give me my money back for order 9840."
-    },
-    {
-      "intent": "REFUND_REQUEST",
-      "message": "Can I get a refund on order 9834?"
-    },
-    {
-      "intent": "REFUND_REQUEST",
-      "message": "I would like to be reimbursed for order 9835."
-    },
-    {
-      "intent": "REFUND_REQUEST",
-      "message": "Refund order 9833 please."
-    },
-    {
-      "intent": "REFUND_REQUEST",
-      "message": "Please pay me back for order 9836."
-    },
-    {
-      "intent": "REFUND_REQUEST",
-      "message": "I want my money back for order 9841."
-    },
-    {
-      "intent": "REFUND_REQUEST",
-      "message": "Can you refund order 9837?"
-    },
-    {
-      "intent": "REFUND_REQUEST",
-      "message": "I need a refund for order 9838."
-    },
-    {
-      "intent": "REFUND_REQUEST",
-      "message": "Refund me for order 9839 please."
-    },
-    {
-      "intent": "REFUND_REQUEST",
-      "message": "Please process a refund for order 9840."
-    },
-    {
-      "intent": "REFUND_REQUEST",
-      "message": "I would like a refund on order 9832."
-    },
-    {
-      "intent": "REFUND_REQUEST",
-      "message": "Give me my money back for order 9834."
-    },
-    {
-      "intent": "REFUND_REQUEST",
-      "message": "Can I have a refund for order 9835?"
-    },
-    {
-      "intent": "REFUND_REQUEST",
-      "message": "Please refund order 9836 to my card."
+      "intent": "BILLING_QUESTION",
+      "message": "Did invoice in_9K95 go through? I need the receipt."
     },
     {
       "intent": "HUMAN_REQUEST",
       "message": "I don't want to talk to a bot. Put me through to a person."
     },
-    {
-      "intent": "HUMAN_REQUEST",
-      "message": "Can I speak to a human please?"
-    },
-    {
-      "intent": "HUMAN_REQUEST",
-      "message": "Get me a real person."
-    },
-    {
-      "intent": "HUMAN_REQUEST",
-      "message": "I want to talk to a human agent."
-    },
-    {
-      "intent": "HUMAN_REQUEST",
-      "message": "Put me through to someone real."
-    },
-    {
-      "intent": "HUMAN_REQUEST",
-      "message": "Let me speak to a person."
-    },
-    {
-      "intent": "HUMAN_REQUEST",
-      "message": "I would like to talk to a person, not a bot."
-    },
-    {
-      "intent": "HUMAN_REQUEST",
-      "message": "Human agent please."
-    },
-    {
-      "intent": "HUMAN_REQUEST",
-      "message": "Can you put me through to a human?"
-    },
-    {
-      "intent": "HUMAN_REQUEST",
-      "message": "I do not want to talk to a bot."
-    },
-    {
-      "intent": "HUMAN_REQUEST",
-      "message": "Give me a real person to talk to."
-    },
-    {
-      "intent": "HUMAN_REQUEST",
-      "message": "Please put me through to an agent."
-    },
-    {
-      "intent": "HUMAN_REQUEST",
-      "message": "I need to speak to a human about order 9832."
-    },
-    {
-      "intent": "HUMAN_REQUEST",
-      "message": "Transfer me to a real person."
-    },
-    {
-      "intent": "HUMAN_REQUEST",
-      "message": "Agent please, I do not want a bot."
-    },
-    {
-      "intent": "OUT_OF_SCOPE",
-      "message": "Do you have any job openings?"
-    },
-    {
-      "intent": "OUT_OF_SCOPE",
-      "message": "What are your opening hours?"
-    },
-    {
-      "intent": "OUT_OF_SCOPE",
-      "message": "Can you recommend a good coffee machine?"
-    },
-    {
-      "intent": "OUT_OF_SCOPE",
-      "message": "Is there a store near me?"
-    },
-    {
-      "intent": "OUT_OF_SCOPE",
-      "message": "Do you ship to Nepal?"
-    },
-    {
-      "intent": "OUT_OF_SCOPE",
-      "message": "What is your VAT number?"
-    },
-    {
-      "intent": "OUT_OF_SCOPE",
-      "message": "I want to leave a review of your website."
-    },
-    {
-      "intent": "OUT_OF_SCOPE",
-      "message": "Can I get a discount code?"
-    },
-    {
-      "intent": "OUT_OF_SCOPE",
-      "message": "Who is your CEO?"
-    },
-    {
-      "intent": "OUT_OF_SCOPE",
-      "message": "Do you have a loyalty programme?"
-    },
-    {
-      "intent": "OUT_OF_SCOPE",
-      "message": "What is the weather like today?"
-    },
-    {
-      "intent": "OUT_OF_SCOPE",
-      "message": "Can you write me a poem?"
-    },
-    {
-      "intent": "OUT_OF_SCOPE",
-      "message": "How do I unsubscribe from marketing emails?"
-    },
-    {
-      "intent": "OUT_OF_SCOPE",
-      "message": "Do you sell gift wrapping?"
-    },
-    {
-      "intent": "OUT_OF_SCOPE",
-      "message": "What is your returns address for correspondence?"
-    }
-  ],
-  "ambiguous": [
-    "It's about order 9832.",
-    "Something is wrong.",
-    "Can you help me with my order?",
-    "I have a problem.",
-    "Order 9838.",
-    "Not happy.",
-    "This is about a purchase I made.",
-    "Hello?",
-    "Need help with something.",
-    "It didn't work out.",
-    "About my recent order please.",
-    "Can someone look at this?",
-    "There's an issue with 9840.",
-    "I need something sorted.",
-    "Following up on my order."
+    { "intent": "HUMAN_REQUEST", "message": "Can I speak to a human please?" },
+    { "intent": "HUMAN_REQUEST", "message": "Get me a real person." },
+    { "intent": "HUMAN_REQUEST", "message": "I want to talk to a human agent." },
+    { "intent": "HUMAN_REQUEST", "message": "Put me through to someone real." },
+    { "intent": "HUMAN_REQUEST", "message": "Let me speak to a person." },
+    { "intent": "HUMAN_REQUEST", "message": "I would like to talk to a person, not a bot." },
+    { "intent": "HUMAN_REQUEST", "message": "Human agent please." },
+    { "intent": "HUMAN_REQUEST", "message": "Can you put me through to a human?" },
+    { "intent": "HUMAN_REQUEST", "message": "I do not want to talk to a bot." },
+    { "intent": "HUMAN_REQUEST", "message": "Give me a real person to talk to." },
+    { "intent": "HUMAN_REQUEST", "message": "Please put me through to an agent." },
+    { "intent": "HUMAN_REQUEST", "message": "I need to speak to a human about sub_7H21." },
+    { "intent": "HUMAN_REQUEST", "message": "Transfer me to a real person." },
+    { "intent": "HUMAN_REQUEST", "message": "Agent please, I do not want a bot." },
+    { "intent": "OUT_OF_SCOPE", "message": "Do you have any job openings?" },
+    { "intent": "OUT_OF_SCOPE", "message": "What are your opening hours?" },
+    { "intent": "OUT_OF_SCOPE", "message": "Can you recommend a good savings account?" },
+    { "intent": "OUT_OF_SCOPE", "message": "Is there an office near me?" },
+    { "intent": "OUT_OF_SCOPE", "message": "Do you operate in Nepal?" },
+    { "intent": "OUT_OF_SCOPE", "message": "What is your VAT number?" },
+    { "intent": "OUT_OF_SCOPE", "message": "I want to leave a review of your website." },
+    { "intent": "OUT_OF_SCOPE", "message": "Can I get a discount code?" },
+    { "intent": "OUT_OF_SCOPE", "message": "Who is your CEO?" },
+    { "intent": "OUT_OF_SCOPE", "message": "Do you have a loyalty programme?" },
+    { "intent": "OUT_OF_SCOPE", "message": "What is the weather like today?" },
+    { "intent": "OUT_OF_SCOPE", "message": "Can you write me a poem?" },
+    { "intent": "OUT_OF_SCOPE", "message": "How do I unsubscribe from marketing emails?" },
+    { "intent": "OUT_OF_SCOPE", "message": "Do you sell gift wrapping?" },
+    { "intent": "OUT_OF_SCOPE", "message": "What is your mailing address for correspondence?" }
   ]
 }

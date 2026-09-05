@@ -18,6 +18,7 @@ import {
   type ToolOutcome,
   executeTool,
   registry,
+  resolveChargeForInvoice,
 } from '@kora/tools';
 import { type ToolSet, ToolLoopAgent, hasToolCall, stepCountIs, tool } from 'ai';
 import { type ResolvedAgentConfig, resolveAgentConfig } from './config.js';
@@ -29,20 +30,27 @@ import { getModel } from './models.js';
 import { assemblePrompt } from './prompts/assemble.js';
 import { assertTransition } from './state.js';
 
-/** Read tools are exposed first; a write tool only appears once an order exists. */
-const READ_TOOLS = ['get_order', 'get_customer', 'search_knowledge', 'check_policy'];
+/** Read tools are exposed first; a write tool only appears once billing records exist. */
+const READ_TOOLS = [
+  'get_subscription',
+  'get_customer',
+  'get_invoice',
+  'preview_change',
+  'search_knowledge',
+  'check_policy',
+];
 
 /**
  * Which write tool each intent is allowed to reach. A tool absent from this map
  * is never exposed for that intent, whatever the model proposes, so
  * `gateToolsByState` removes a whole class of wrong-tool errors without any
- * prompt engineering. `ORDER_STATUS` has none by design.
+ * prompt engineering. `BILLING_QUESTION` has none by design.
  */
 const WRITE_TOOLS_BY_INTENT: Record<Intent, string[]> = {
-  ORDER_STATUS: [],
-  DAMAGED_ORDER: ['create_replacement'],
-  CANCEL_ORDER: ['cancel_order'],
+  CANCEL_SUBSCRIPTION: ['cancel_subscription'],
   REFUND_REQUEST: ['create_refund'],
+  CHANGE_PLAN: ['change_plan'],
+  BILLING_QUESTION: [],
   HUMAN_REQUEST: [],
   OUT_OF_SCOPE: [],
 };
@@ -171,7 +179,7 @@ function buildTools(args: {
         });
 
         args.state.toolsCalled.push(def.name);
-        recordOutcome(def, outcome, args.state);
+        await recordOutcome(def, outcome, args.state);
         return toModelResult(outcome);
       },
       toModelOutput: ({ output }: { output: unknown }) => ({
@@ -198,7 +206,11 @@ function makeSearcher(tenantId: string, state: TurnState, run: RunHandle) {
   };
 }
 
-function recordOutcome(def: ToolDefinition, outcome: ToolOutcome<unknown>, state: TurnState): void {
+async function recordOutcome(
+  def: ToolDefinition,
+  outcome: ToolOutcome<unknown>,
+  state: TurnState,
+): Promise<void> {
   if (outcome.status === 'awaiting_approval') {
     state.approvalId = outcome.approvalId;
     return;
@@ -221,10 +233,21 @@ function recordOutcome(def: ToolDefinition, outcome: ToolOutcome<unknown>, state
   }
 
   // Facts for the policy engine come from here, and only from here.
-  if (def.name === 'get_order') {
-    state.gathered.order = output as unknown as NonNullable<GatheredContext['order']>;
-    const refunded = (output as { refundedAmountMinor?: number }).refundedAmountMinor;
-    if (typeof refunded === 'number') state.gathered.refundedAmountMinor = refunded;
+  if (def.name === 'get_subscription') {
+    state.gathered.subscription = output as unknown as NonNullable<GatheredContext['subscription']>;
+  }
+  if (def.name === 'get_invoice') {
+    state.gathered.invoice = output as unknown as NonNullable<GatheredContext['invoice']>;
+    const invoiceId = (output as { id?: unknown }).id;
+    if (typeof invoiceId === 'string' && invoiceId.length > 0) {
+      const charge = await resolveChargeForInvoice(invoiceId).catch(() => null);
+      if (charge) {
+        state.gathered.charge = charge as unknown as NonNullable<GatheredContext['charge']>;
+      }
+    }
+  }
+  if (def.name === 'preview_change') {
+    state.gathered.preview = output as unknown as NonNullable<GatheredContext['preview']>;
   }
   if (def.name === 'get_customer') {
     state.gathered.customer = output as unknown as NonNullable<GatheredContext['customer']>;
@@ -538,7 +561,7 @@ export async function runAgentTurn(args: {
 
 /**
  * Narrows the tool set per step. Read tools are always available; a write tool
- * appears only once an order has actually been fetched, and only if this intent
+ * appears only once a subscription has actually been fetched, and only if this intent
  * is allowed to reach it.
  */
 export function gateToolsByState(
@@ -550,7 +573,7 @@ export function gateToolsByState(
   const active = [...READ_TOOLS, 'escalate_to_human'].filter((n) => registered.has(n));
 
   if (READ_ONLY_INTENTS.includes(intent)) return active;
-  if (!state.gathered.order) return active;
+  if (!state.gathered.order && !state.gathered.subscription) return active;
 
   for (const name of WRITE_TOOLS_BY_INTENT[intent]) {
     if (registered.has(name)) active.push(name);
