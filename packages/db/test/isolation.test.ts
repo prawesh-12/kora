@@ -129,6 +129,7 @@ describe('the application role cannot bypass row-level security', () => {
       'run_steps',
       'shadow_comparisons',
       'tenants',
+      'tickets',
       'tool_executions',
     ];
 

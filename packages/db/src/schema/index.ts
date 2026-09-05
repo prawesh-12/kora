@@ -15,4 +15,5 @@ export * from './policies.js';
 export * from './shadow.js';
 export * from './promotions.js';
 export * from './events.js';
+export * from './tickets.js';
 export * from './webhooks.js';

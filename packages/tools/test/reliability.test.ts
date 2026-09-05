@@ -11,70 +11,73 @@ import {
 } from '../src/breaker.js';
 import { executeTool } from '../src/pipeline.js';
 import {
+  SUBSCRIPTION,
   TENANT,
-  acmeRequestLog,
-  acmeUp,
   argsFor,
   cleanupTenant,
   ensureTenant,
+  installFakeBilling,
   newRun,
-  resetAcme,
+  resetBilling,
+  resetRunState,
 } from './helpers.js';
+import type { FakeBillingProvider } from './fake-billing.js';
 
 const DEAD_REDIS_URL = 'redis://127.0.0.1:6390';
-const ORDER_IDS = ['9832', '9833', '9834', '9835', '9836'];
 
 function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-function replacementInput(orderId: string) {
+/** Distinct amounts, so each call claims its own idempotency key. */
+function refundOf(amountMinor: number) {
   return {
-    orderId,
-    items: [{ sku: 'SKU-CM-01', quantity: 1 }],
-    reason: 'damaged' as const,
+    subscriptionId: SUBSCRIPTION.id,
+    invoiceId: 'in_1S',
+    amountMinor,
+    reason: 'requested_by_customer' as const,
   };
 }
 
-beforeAll(async () => {
-  if (!(await acmeUp())) {
-    throw new Error('the acme mock commerce service is not running on ACME_BASE_URL');
-  }
-  await ensureTenant();
-});
+let billing: FakeBillingProvider;
+
+beforeAll(ensureTenant);
 
 beforeEach(async () => {
-  await resetAcme(ORDER_IDS);
-  await sql()`DELETE FROM idempotency_keys WHERE tenant_id = ${TENANT}`;
-  await breaker().recordSuccess(toolBreakerKey(TENANT, 'create_replacement'));
-  await breaker().recordSuccess(toolBreakerKey(TENANT, 'get_order'));
+  billing = installFakeBilling();
+  await resetRunState();
+  await breaker().recordSuccess(toolBreakerKey(TENANT, 'create_refund'));
+  await breaker().recordSuccess(toolBreakerKey(TENANT, 'get_subscription'));
 });
 
 afterEach(async () => {
+  resetBilling();
   setBreaker(null);
-  await breaker().recordSuccess(toolBreakerKey(TENANT, 'create_replacement'));
-  await breaker().recordSuccess(toolBreakerKey(TENANT, 'get_order'));
+  await breaker().recordSuccess(toolBreakerKey(TENANT, 'create_refund'));
+  await breaker().recordSuccess(toolBreakerKey(TENANT, 'get_subscription'));
 });
 
 afterAll(cleanupTenant);
 
 describe('circuit breaker', () => {
-  it('opens after five failed calls and the sixth never reaches acme', async () => {
+  it('opens after five failed calls and the sixth never reaches the provider', async () => {
     const { run, conversationId } = await newRun();
 
-    for (const orderId of ORDER_IDS) {
-      const args = argsFor('create_replacement', replacementInput(orderId), run, conversationId);
-      args.ctx.fault = '500';
-      const outcome = await executeTool(args);
+    billing.fault = '500';
+    for (const amountMinor of [1000, 2000, 3000, 4000, 5000]) {
+      const outcome = await executeTool(
+        argsFor('create_refund', refundOf(amountMinor), run, conversationId),
+      );
       expect(outcome.status).toBe('failed');
       if (outcome.status === 'failed') expect(outcome.code).toBe('UPSTREAM_5XX');
     }
 
-    expect(await breaker().state(toolBreakerKey(TENANT, 'create_replacement'))).toBe('open');
+    expect(await breaker().state(toolBreakerKey(TENANT, 'create_refund'))).toBe('open');
 
-    const before = (await acmeRequestLog('/replacements')).length;
+    billing.fault = null;
+    const before = billing.calls.length;
     const sixth = await executeTool(
-      argsFor('create_replacement', replacementInput('9837'), run, conversationId),
+      argsFor('create_refund', refundOf(6000), run, conversationId),
     );
 
     expect(sixth.status).toBe('failed');
@@ -83,14 +86,14 @@ describe('circuit breaker', () => {
       expect(sixth.retryable).toBe(false);
       expect(sixth.error).toContain('paused');
     }
-    expect((await acmeRequestLog('/replacements')).length).toBe(before);
+    expect(billing.calls).toHaveLength(before);
 
     const rows = await sql()<{ error_message: string }[]>`
       SELECT error_message FROM tool_executions
-      WHERE run_id = ${run.runId} AND tool_name = 'create_replacement'
+      WHERE run_id = ${run.runId} AND tool_name = 'create_refund'
       ORDER BY id DESC LIMIT 1`;
     expect(rows[0]?.error_message).toContain('paused');
-  });
+  }, 90_000);
 
   it('half-opens after the open window, closes on a good probe and re-opens on a bad one', async () => {
     const b = createBreaker({ openMs: 150, failureThreshold: 5, windowMs: 60_000 });
@@ -136,10 +139,10 @@ describe('circuit breaker', () => {
   it('lets a write through once the breaker is closed again', async () => {
     const { run, conversationId } = await newRun();
     const outcome = await executeTool(
-      argsFor('create_replacement', replacementInput('9832'), run, conversationId),
+      argsFor('create_refund', refundOf(7000), run, conversationId),
     );
     expect(outcome.status).toBe('ok');
-    expect(await breaker().state(toolBreakerKey(TENANT, 'create_replacement'))).toBe('closed');
+    expect(await breaker().state(toolBreakerKey(TENANT, 'create_refund'))).toBe('closed');
   });
 });
 
@@ -157,10 +160,9 @@ describe('redis down', () => {
 
   it('blocks a write rather than executing it', async () => {
     const { run, conversationId } = await newRun();
-    const before = (await acmeRequestLog('/replacements')).length;
 
     const outcome = await executeTool(
-      argsFor('create_replacement', replacementInput('9832'), run, conversationId),
+      argsFor('create_refund', refundOf(8000), run, conversationId),
     );
 
     expect(outcome.status).toBe('failed');
@@ -168,7 +170,7 @@ describe('redis down', () => {
       expect(outcome.code).toBe('UPSTREAM_5XX');
       expect(outcome.error).toContain('unreachable');
     }
-    expect((await acmeRequestLog('/replacements')).length).toBe(before);
+    expect(billing.calls).toHaveLength(0);
 
     const claims = await sql()<{ count: string }[]>`
       SELECT count(*)::text AS count FROM idempotency_keys WHERE tenant_id = ${TENANT}`;
@@ -178,7 +180,7 @@ describe('redis down', () => {
   it('lets a read through', async () => {
     const { run, conversationId } = await newRun();
     const outcome = await executeTool(
-      argsFor('get_order', { orderId: '9832' }, run, conversationId),
+      argsFor('get_subscription', { subscriptionId: SUBSCRIPTION.id }, run, conversationId),
     );
     expect(outcome.status).toBe('ok');
   }, 30_000);

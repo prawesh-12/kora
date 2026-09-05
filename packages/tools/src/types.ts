@@ -35,7 +35,10 @@ export interface ToolContext {
    * imported here. The caller injects it instead.
    */
   searchKnowledge?: KnowledgeSearcher;
-  /** Forwarded to Acme as X-Acme-Fault so scenarios can arm a fault. */
+  /**
+   * Scenario use only. `500` and `timeout` are raised by the pipeline itself;
+   * anything else is for a fault-injecting billing provider to interpret.
+   */
   fault?: string | undefined;
 }
 
@@ -63,8 +66,8 @@ export interface ToolDefinition<
    * recorded output. True only for tools that read nothing from the business
    * system: retrieval and policy evaluation are things replay is meant to re-run.
    *
-   * Defaults to false so a new tool that reads Acme fails loudly on replay rather
-   * than quietly comparing the new version against today's state.
+   * Defaults to false so a new tool that reads the billing provider fails loudly
+   * on replay rather than quietly comparing the new version against today's state.
    */
   rerunOnReplay?: boolean;
   inputExamples?: Array<{ input: z.infer<I> }>;
@@ -82,19 +85,7 @@ export type ToolOutcome<O> =
   | { status: 'simulated'; output: O };
 
 export interface GatheredContext {
-  order?: {
-    id: string;
-    customerId: string;
-    status: string;
-    items: Array<{ sku: string; category: string; quantity: number; unitAmountMinor: number }>;
-    totalAmountMinor: number;
-    currency: string;
-    deliveredAt: string | null;
-    replacementIds: string[];
-  };
   customer?: { id: string; name: string; email: string };
-  /** Total already refunded on the order, read back from the business system. */
-  refundedAmountMinor?: number;
   subscription?: SubscriptionRecord;
   invoice?: InvoiceRecord;
   charge?: ChargeRecord;

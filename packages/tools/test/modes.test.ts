@@ -1,91 +1,91 @@
 import { sql } from '@kora/db';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { capExceeded } from '../src/caps.js';
 import { executeTool } from '../src/pipeline.js';
 import {
-  ORDER_9832,
+  CHARGE,
+  OLD_CHARGE,
+  SUBSCRIPTION,
   TENANT,
-  acmeRequestLog,
-  acmeUp,
   argsFor,
   cleanupTenant,
   ensureTenant,
+  installFakeBilling,
   newRun,
-  resetAcme,
+  resetBilling,
+  resetRunState,
 } from './helpers.js';
+import type { FakeBillingProvider } from './fake-billing.js';
 
-const REPLACEMENT = {
-  orderId: '9832',
-  items: [{ sku: 'SKU-CM-01', quantity: 1 }],
-  reason: 'damaged' as const,
+const REFUND = {
+  subscriptionId: SUBSCRIPTION.id,
+  invoiceId: 'in_1S',
+  amountMinor: 200_000,
+  reason: 'requested_by_customer' as const,
 };
 
-beforeAll(async () => {
-  if (!(await acmeUp())) {
-    throw new Error('the acme mock commerce service is not running on ACME_BASE_URL');
-  }
-  await ensureTenant();
-});
+let billing: FakeBillingProvider;
+
+beforeAll(ensureTenant);
 
 beforeEach(async () => {
-  await resetAcme(['9832']);
-  await sql()`DELETE FROM idempotency_keys WHERE tenant_id = ${TENANT}`;
+  billing = installFakeBilling();
+  await resetRunState();
 });
+
+afterEach(resetBilling);
 
 afterAll(cleanupTenant);
 
 describe('shadow mode', () => {
-  it('returns simulated for a write and sends nothing to acme', async () => {
-    const before = (await acmeRequestLog('/replacements')).length;
+  it('returns simulated for a write and sends nothing to the billing provider', async () => {
     const { run, conversationId } = await newRun();
 
     const outcome = await executeTool(
-      argsFor('create_replacement', REPLACEMENT, run, conversationId, {
-        deploymentMode: 'shadow',
-      }),
+      argsFor('create_refund', REFUND, run, conversationId, { deploymentMode: 'shadow' }),
     );
 
     expect(outcome.status).toBe('simulated');
-    expect((await acmeRequestLog('/replacements')).length).toBe(before);
+    expect(billing.calls).toHaveLength(0);
   });
 
   it('still writes the policy check, so the proposal can be compared', async () => {
     const { run, conversationId } = await newRun();
 
     await executeTool(
-      argsFor('create_replacement', REPLACEMENT, run, conversationId, {
-        deploymentMode: 'shadow',
-      }),
+      argsFor('create_refund', REFUND, run, conversationId, { deploymentMode: 'shadow' }),
     );
 
     const rows = await sql()<{ decision: string }[]>`
-      SELECT decision FROM policy_checks WHERE run_id = ${run.runId} AND action = 'create_replacement'`;
+      SELECT decision FROM policy_checks WHERE run_id = ${run.runId} AND action = 'create_refund'`;
     expect(rows).toHaveLength(1);
   });
 
   it('still stops for approval, because that is the proposal worth comparing', async () => {
-    const before = (await acmeRequestLog('/replacements')).length;
     const { run, conversationId } = await newRun();
 
-    // 9833 is INR 8,999, above the approval threshold.
+    // INR 6,000 is above the high-value threshold a person has to sign off.
     const outcome = await executeTool(
-      argsFor('create_replacement', { ...REPLACEMENT, orderId: '9833' }, run, conversationId, {
+      argsFor('create_refund', { ...REFUND, amountMinor: 600_000 }, run, conversationId, {
         deploymentMode: 'shadow',
-        gathered: { order: { ...ORDER_9832, id: '9833', totalAmountMinor: 899_900 } },
+        gathered: {
+          subscription: SUBSCRIPTION,
+          charge: { ...CHARGE, remainingRefundable: { amountMinor: 1_200_000, currency: 'INR' } },
+        },
       }),
     );
 
     // Turning this into a silent simulated success would say the agent resolved
     // a case that a person actually had to sign off.
     expect(outcome.status).toBe('awaiting_approval');
-    expect((await acmeRequestLog('/replacements')).length).toBe(before);
+    expect(billing.calls).toHaveLength(0);
   });
 
-  it('lets reads through, because shadow mode reads the real business system', async () => {
+  it('lets reads through, because shadow mode reads the real billing records', async () => {
     const { run, conversationId } = await newRun();
 
     const outcome = await executeTool(
-      argsFor('get_order', { orderId: '9832' }, run, conversationId, {
+      argsFor('get_subscription', { subscriptionId: SUBSCRIPTION.id }, run, conversationId, {
         deploymentMode: 'shadow',
       }),
     );
@@ -95,30 +95,31 @@ describe('shadow mode', () => {
 });
 
 describe('replay', () => {
-  it('serves a read from the recorded output instead of calling acme', async () => {
-    const before = (await acmeRequestLog('/orders/9832')).length;
+  it('serves a read from the recorded output instead of calling the provider', async () => {
     const { run, conversationId } = await newRun();
-    const recorded = { id: '9832', status: 'from-the-past' };
+    const recorded = { id: SUBSCRIPTION.id, status: 'from-the-past' };
 
     const outcome = await executeTool(
-      argsFor('get_order', { orderId: '9832' }, run, conversationId, {
+      argsFor('get_subscription', { subscriptionId: SUBSCRIPTION.id }, run, conversationId, {
         deploymentMode: 'simulation',
-        recordedOutputs: { 'get_order:{"orderId":"9832"}': recorded },
+        recordedOutputs: { [`get_subscription:{"subscriptionId":"${SUBSCRIPTION.id}"}`]: recorded },
       }),
     );
 
     expect(outcome.status).toBe('simulated');
     expect((outcome as { output: unknown }).output).toEqual(recorded);
-    expect((await acmeRequestLog('/orders/9832')).length).toBe(before);
+    expect(billing.calls).toHaveLength(0);
   });
 
   it('refuses a read the original run never made rather than answering from today', async () => {
     const { run, conversationId } = await newRun();
 
     const outcome = await executeTool(
-      argsFor('get_order', { orderId: '9833' }, run, conversationId, {
+      argsFor('get_subscription', { subscriptionId: 'sub_2S' }, run, conversationId, {
         deploymentMode: 'simulation',
-        recordedOutputs: { 'get_order:{"orderId":"9832"}': { id: '9832' } },
+        recordedOutputs: {
+          [`get_subscription:{"subscriptionId":"${SUBSCRIPTION.id}"}`]: { id: SUBSCRIPTION.id },
+        },
       }),
     );
 
@@ -129,18 +130,11 @@ describe('replay', () => {
   it('evaluates policy on replay, so a denied action stays denied', async () => {
     const { run, conversationId } = await newRun();
 
-    // 9834 was delivered twelve days ago, outside the seven-day window.
+    // The charge behind in_3S is 45 days old, outside the 30-day refund window.
     const outcome = await executeTool(
-      argsFor('create_replacement', { ...REPLACEMENT, orderId: '9834' }, run, conversationId, {
+      argsFor('create_refund', { ...REFUND, invoiceId: 'in_3S' }, run, conversationId, {
         deploymentMode: 'simulation',
-        gathered: {
-          order: {
-            ...ORDER_9832,
-            id: '9834',
-            totalAmountMinor: 219_900,
-            deliveredAt: new Date(Date.now() - 12 * 86_400_000).toISOString(),
-          },
-        },
+        gathered: { subscription: SUBSCRIPTION, charge: OLD_CHARGE },
         recordedOutputs: {},
       }),
     );
@@ -188,20 +182,17 @@ describe('limited mode caps', () => {
   });
 
   it('sends a capped write to a person instead of executing it', async () => {
-    const before = (await acmeRequestLog('/replacements')).length;
     await sql()`UPDATE tenants SET max_actions_per_day = 0 WHERE id = ${TENANT}`;
     const { run, conversationId } = await newRun();
 
     try {
       const outcome = await executeTool(
-        argsFor('create_replacement', REPLACEMENT, run, conversationId, {
-          deploymentMode: 'limited',
-        }),
+        argsFor('create_refund', REFUND, run, conversationId, { deploymentMode: 'limited' }),
       );
 
       expect(outcome.status).toBe('awaiting_approval');
       expect((outcome as { reason: string }).reason).toMatch(/daily limit/);
-      expect((await acmeRequestLog('/replacements')).length).toBe(before);
+      expect(billing.calls).toHaveLength(0);
     } finally {
       await sql()`UPDATE tenants SET max_actions_per_day = NULL WHERE id = ${TENANT}`;
     }
@@ -214,9 +205,7 @@ describe('limited mode caps', () => {
 
     try {
       const outcome = await executeTool(
-        argsFor('create_replacement', REPLACEMENT, run, conversationId, {
-          deploymentMode: 'limited',
-        }),
+        argsFor('create_refund', REFUND, run, conversationId, { deploymentMode: 'limited' }),
       );
       expect(outcome.status).toBe('ok');
     } finally {

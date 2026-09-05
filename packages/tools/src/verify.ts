@@ -1,5 +1,5 @@
+import { withTenant } from '@kora/db';
 import type { BillingProvider } from './billing/types.js';
-import { acme } from './clients/acme.js';
 import type { ToolContext, ToolDefinition, VerifyResult } from './types.js';
 
 export async function runVerification(
@@ -138,11 +138,12 @@ export async function verifyChangePlan(
     return { verified: false, observed, reason: 'price_not_changed' };
   }
 
-  if (
-    quotedNextChargeMinor !== undefined &&
-    input.prorationBehavior !== 'none' &&
-    subscription.latestInvoiceId
-  ) {
+  if (quotedNextChargeMinor !== undefined && input.prorationBehavior !== 'none') {
+    if (!subscription.latestInvoiceId) {
+      // A proration was quoted and there is no invoice to check it against.
+      // Unconfirmable is not the same as correct.
+      return { verified: false, observed, reason: 'proration_not_invoiced' };
+    }
     const invoice = await provider.getInvoice(subscription.latestInvoiceId);
     const created = invoice.amountDue.amountMinor;
     if (Math.abs(created - quotedNextChargeMinor) > 1) {
@@ -159,19 +160,14 @@ export async function verifyChangePlan(
 }
 
 export async function verifyTicket(
-  _input: unknown,
+  input: { customerId: string; subject: string },
   output: { id: string },
   ctx: ToolContext,
 ): Promise<VerifyResult> {
-  try {
-    return {
-      verified: true,
-      observed: await acme.getTicket(output.id, { signal: ctx.signal, fault: ctx.fault }),
-    };
-  } catch (e) {
-    if (isNotFound(e)) {
-      return { verified: false, observed: null, reason: 'ticket_not_found' };
-    }
-    throw e;
+  const row = await withTenant(ctx.tenantId).tickets.get(output.id);
+  if (!row) return { verified: false, observed: null, reason: 'ticket_not_found' };
+  if (row.customerId !== input.customerId || row.subject !== input.subject) {
+    return { verified: false, observed: row, reason: 'ticket_mismatch' };
   }
+  return { verified: true, observed: row };
 }

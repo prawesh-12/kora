@@ -363,6 +363,33 @@ export function createRepositories(tenantId: string, conn: Database | Tx = db())
       },
     },
 
+    tickets: {
+      /**
+       * The caller supplies the id so a retried write lands on the row it already
+       * created rather than filing a second ticket for the same request.
+       */
+      async create(row: Insert<typeof s.tickets> & { id: string }) {
+        const [created] = await conn
+          .insert(s.tickets)
+          .values({ ...row, tenantId })
+          .onConflictDoNothing()
+          .returning();
+        if (created) return created;
+        const [existing] = await conn
+          .select()
+          .from(s.tickets)
+          .where(and(eq(s.tickets.id, row.id), eq(s.tickets.tenantId, tenantId)));
+        return existing!;
+      },
+      async get(id: string) {
+        const [row] = await conn
+          .select()
+          .from(s.tickets)
+          .where(and(eq(s.tickets.id, id), eq(s.tickets.tenantId, tenantId)));
+        return row ?? null;
+      },
+    },
+
     webhookEvents: {
       async claim(row: {
         id: string;

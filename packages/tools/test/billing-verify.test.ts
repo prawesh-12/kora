@@ -194,6 +194,19 @@ describe('verifyChangePlan', () => {
     expect(result.verified).toBe(true);
   });
 
+  it('fails a quoted proration that produced no invoice to check it against', async () => {
+    const provider = stubProvider({
+      getSubscription: () =>
+        Promise.resolve({
+          ...baseSubscription,
+          items: [{ ...baseItem, priceId: 'price_B' }],
+          latestInvoiceId: null,
+        }),
+    });
+    const result = await verifyChangePlan(provider, input, { subscriptionId: 'sub_1S' }, 5000);
+    expect(result).toMatchObject({ verified: false, reason: 'proration_not_invoiced' });
+  });
+
   it('fails on an unchanged price', async () => {
     const result = await verifyChangePlan(stubProvider(), input, { subscriptionId: 'sub_1S' });
     expect(result).toMatchObject({ verified: false, reason: 'price_not_changed' });
