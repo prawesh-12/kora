@@ -15,6 +15,15 @@ export interface PolicyFacts {
   requestedAmountMinor?: number;
   fullyRefunded?: boolean;
   exceedsRemaining?: boolean;
+  /** Money-ops facts, all derived from Stripe records. Absent when unknown. */
+  remainingRefundableMinor?: number;
+  exceedsRefundable?: boolean;
+  daysSinceCharge?: number;
+  subscriptionStatus?: string;
+  cancelAtPeriodEnd?: boolean;
+  currentPlanPriceId?: string;
+  targetPlanPriceId?: string;
+  prorationCreditMinor?: number;
   channel: 'web';
   [k: string]: unknown;
 }

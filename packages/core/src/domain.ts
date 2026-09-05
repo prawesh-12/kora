@@ -14,24 +14,28 @@ export type AgentState =
   | 'NEEDS_HUMAN';
 
 export type Intent =
-  | 'ORDER_STATUS'
-  | 'DAMAGED_ORDER'
-  | 'CANCEL_ORDER'
+  | 'CANCEL_SUBSCRIPTION'
   | 'REFUND_REQUEST'
+  | 'CHANGE_PLAN'
+  | 'BILLING_QUESTION'
   | 'HUMAN_REQUEST'
   | 'OUT_OF_SCOPE';
 
 export const INTENTS: readonly Intent[] = [
-  'ORDER_STATUS',
-  'DAMAGED_ORDER',
-  'CANCEL_ORDER',
+  'CANCEL_SUBSCRIPTION',
   'REFUND_REQUEST',
+  'CHANGE_PLAN',
+  'BILLING_QUESTION',
   'HUMAN_REQUEST',
   'OUT_OF_SCOPE',
 ];
 
 /** Intents that can never lead to a write, whatever the model proposes. */
-export const READ_ONLY_INTENTS: readonly Intent[] = ['ORDER_STATUS'];
+export const READ_ONLY_INTENTS: readonly Intent[] = [
+  'BILLING_QUESTION',
+  'HUMAN_REQUEST',
+  'OUT_OF_SCOPE',
+];
 
 /** Intents that hand over immediately, with no context gathering at all. */
 export const HANDOVER_INTENTS: readonly Intent[] = ['HUMAN_REQUEST', 'OUT_OF_SCOPE'];
@@ -62,6 +66,7 @@ export type ToolErrorCode =
   | 'VERIFY_FAILED'
   | 'DEADLINE_EXCEEDED'
   | 'TOOL_SELECTION_FAILURE'
+  | 'CONFIG_ERROR'
   /** Replay only: the original run never made this call, so there is nothing to serve. */
   | 'REPLAY_GAP';
 

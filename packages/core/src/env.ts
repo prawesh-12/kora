@@ -43,7 +43,15 @@ const serverSchema = z.object({
   KORA_APPROVAL_WEBHOOK_URL: z.string().url().optional(),
   /** Encrypts business API credentials at rest. Rotatable without a redeploy. */
   KORA_SECRET_KEY: z.string().min(16).optional(),
+  /** Stripe webhook endpoint secret: raw `whsec_…` or a `v1.…` blob from encryptSecret. */
+  STRIPE_WEBHOOK_SECRET: z.string().optional(),
   KORA_RETENTION_DAYS: z.coerce.number().int().positive().default(90),
+  KORA_REFUND_WINDOW_DAYS: z.coerce.number().int().positive().default(30),
+  STRIPE_DEV_KEY: z.string().min(1).optional(),
+  STRIPE_TENANT_KEY: z.string().min(1).optional(),
+  STRIPE_FIXTURE_FROZEN_TIME: z.string().min(1).optional(),
+  STRIPE_PRICE_BASIC: z.string().min(1).optional(),
+  STRIPE_PRICE_PRO: z.string().min(1).optional(),
   KORA_DEPLOYMENT_MODE: z
     .enum(['simulation', 'shadow', 'human_approval', 'limited', 'full'])
     .default('full'),
