@@ -2,6 +2,7 @@ import { pathToFileURL } from 'node:url';
 import { logger, newId, now, serverEnv } from '@kora/core';
 import { eq } from 'drizzle-orm';
 import { closeDb, db } from './client.js';
+import { ensureTenantSettings } from './queries/tenant-settings.js';
 import * as s from './schema/index.js';
 
 function isMain(url: string): boolean {
@@ -43,6 +44,8 @@ export async function seed(): Promise<{ tenantId: string; operatorId: string }> 
       createdAt: now(),
     })
     .onConflictDoNothing();
+
+  await ensureTenantSettings(tenantId, conn);
 
   const email = env.KORA_SEED_OPERATOR_EMAIL;
   const [existing] = await conn.select().from(s.user).where(eq(s.user.email, email));

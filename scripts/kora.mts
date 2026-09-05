@@ -33,7 +33,46 @@ async function main(): Promise<number> {
 
       case 'seed': {
         const { seed } = await import('@kora/db');
-        log.info(await seed(), 'seed complete');
+        const seeded = await seed();
+        const { runStripeFixtures } = await import('./stripe-fixtures.mts');
+        const fixtures = await runStripeFixtures(seeded.tenantId);
+        log.info({ ...seeded, fixtures }, 'seed complete');
+        return 0;
+      }
+
+      case 'stripe:set-key': {
+        const { setTenantStripeKey } = await import('@kora/tools');
+        const { redactSecret } = await import('@kora/core');
+        const arg = (name: string) => {
+          const at = rest.indexOf(`--${name}`);
+          return at === -1 ? undefined : rest[at + 1];
+        };
+        const tenantId = arg('tenant') ?? serverEnv().KORA_TENANT_ID;
+        const plain = arg('key') ?? serverEnv().STRIPE_TENANT_KEY;
+        if (!plain) {
+          console.error('stripe:set-key needs --key <rk_test_...> or STRIPE_TENANT_KEY in env');
+          return 1;
+        }
+        const { getStripeSecretEncrypted } = await import('@kora/db');
+        await setTenantStripeKey(tenantId, plain);
+        const stored = await getStripeSecretEncrypted(tenantId);
+        log.info(
+          { tenantId, cipher: stored ? redactSecret(stored) : 'missing' },
+          'stripe key stored',
+        );
+        return 0;
+      }
+
+      case 'stripe:fixtures': {
+        const { runStripeFixtures } = await import('./stripe-fixtures.mts');
+        const arg = (name: string) => {
+          const at = rest.indexOf(`--${name}`);
+          return at === -1 ? undefined : rest[at + 1];
+        };
+        const result = await runStripeFixtures(arg('tenant'));
+        log.info(result, 'stripe fixtures complete');
+        if (result.liveSkippedReason)
+          log.info({ reason: result.liveSkippedReason }, 'live run skipped');
         return 0;
       }
 
@@ -194,7 +233,7 @@ async function main(): Promise<number> {
       case 'bench': {
         const { runBench } = await import('@kora/evaluation');
         const { runAgentTurn, makeJudgeCaller } = await import('@kora/ai');
-        return runBench(rest, {
+        return await runBench(rest, {
           runAgentTurn,
           judge: { call: makeJudgeCaller(serverEnv().KORA_TENANT_ID) },
         });
@@ -217,6 +256,7 @@ async function main(): Promise<number> {
           faultRate: flag('fault-rate', 0.2),
           repeat: flag('repeat', 3),
           category: rest.find((a) => a.startsWith('--category='))?.split('=')[1],
+          ...(rest.includes('--suite=acceptance') ? { suite: 'acceptance' as const } : {}),
         });
 
         console.log(renderChaos(results));
@@ -316,12 +356,12 @@ async function main(): Promise<number> {
         const judge = rest.includes('--no-judge')
           ? undefined
           : { call: makeJudgeCaller(serverEnv().KORA_TENANT_ID) };
-        return runScenarios(rest, { runAgentTurn, ...(judge ? { judge } : {}) });
+        return await runScenarios(rest, { runAgentTurn, ...(judge ? { judge } : {}) });
       }
 
       default:
         console.error(
-          'usage: pnpm kora <ingest|migrate|seed|idempotency:cleanup|smoke:model|scenarios|bench|chaos|replay|agent:publish|agent:versions|agent:promote|agent:rollback|judge:goldset|judge:calibrate|alerts:test|approvals:expire|security:isolation>',
+          'usage: pnpm kora <ingest|migrate|seed|stripe:set-key|stripe:fixtures|idempotency:cleanup|smoke:model|scenarios|bench|chaos|replay|agent:publish|agent:versions|agent:promote|agent:rollback|judge:goldset|judge:calibrate|alerts:test|approvals:expire|security:isolation>',
         );
         return 1;
     }

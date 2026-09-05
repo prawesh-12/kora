@@ -9,6 +9,7 @@ import {
   inArray,
   lte,
   ne,
+  or,
   sql as raw,
   sql as rawSql,
 } from 'drizzle-orm';
@@ -196,6 +197,39 @@ export function createRepositories(tenantId: string, conn: Database | Tx = db())
           .where(and(eq(s.toolExecutions.runId, runId), eq(s.toolExecutions.tenantId, tenantId)))
           .orderBy(asc(s.toolExecutions.startedAt));
       },
+      async findByProviderObjectId(toolNames: string[], objectId: string) {
+        const [row] = await conn
+          .select({
+            executionId: s.toolExecutions.id,
+            runId: s.toolExecutions.runId,
+            conversationId: s.agentRuns.conversationId,
+            verified: s.toolExecutions.verified,
+          })
+          .from(s.toolExecutions)
+          .innerJoin(s.agentRuns, eq(s.agentRuns.id, s.toolExecutions.runId))
+          .where(
+            and(
+              eq(s.toolExecutions.tenantId, tenantId),
+              inArray(s.toolExecutions.toolName, toolNames),
+              or(
+                raw`${s.toolExecutions.output}->>'id' = ${objectId}`,
+                raw`${s.toolExecutions.output}->>'refundId' = ${objectId}`,
+                raw`${s.toolExecutions.output}->>'subscriptionId' = ${objectId}`,
+              ),
+            ),
+          )
+          .orderBy(desc(s.toolExecutions.startedAt))
+          .limit(1);
+        return row ?? null;
+      },
+      async setVerification(executionId: string, verified: boolean, observed: unknown) {
+        await conn
+          .update(s.toolExecutions)
+          .set({ verified, verifyObserved: observed })
+          .where(
+            and(eq(s.toolExecutions.id, executionId), eq(s.toolExecutions.tenantId, tenantId)),
+          );
+      },
     },
 
     policyChecks: {
@@ -326,6 +360,32 @@ export function createRepositories(tenantId: string, conn: Database | Tx = db())
           .orderBy(asc(s.escalations.createdAt))
           .limit(1);
         return row ?? null;
+      },
+    },
+
+    webhookEvents: {
+      async claim(row: {
+        id: string;
+        type: string;
+        objectId: string;
+        outcome?: string;
+        payload?: Record<string, unknown>;
+      }): Promise<boolean> {
+        const [inserted] = await conn
+          .insert(s.stripeWebhookEvents)
+          .values({ ...row, tenantId })
+          .onConflictDoNothing()
+          .returning({ id: s.stripeWebhookEvents.id });
+        return Boolean(inserted);
+      },
+      async get(id: string) {
+        const [found] = await conn
+          .select()
+          .from(s.stripeWebhookEvents)
+          .where(
+            and(eq(s.stripeWebhookEvents.id, id), eq(s.stripeWebhookEvents.tenantId, tenantId)),
+          );
+        return found ?? null;
       },
     },
 

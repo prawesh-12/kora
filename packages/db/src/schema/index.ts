@@ -1,4 +1,5 @@
 export * from './tenancy.js';
+export * from './tenant-settings.js';
 export * from './auth.js';
 export * from './knowledge.js';
 export * from './conversations.js';
@@ -14,3 +15,4 @@ export * from './policies.js';
 export * from './shadow.js';
 export * from './promotions.js';
 export * from './events.js';
+export * from './webhooks.js';
