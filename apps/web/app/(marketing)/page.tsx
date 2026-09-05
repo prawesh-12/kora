@@ -1,84 +1,8 @@
-import { CONTACT, Nav } from './components/nav';
+import { ProofCard } from '@/components/kora/proof-card';
+import { Nav } from './components/nav';
 import { Footer } from './components/footer';
-import { Reveal } from './components/reveal';
-import { SystemMap } from './components/system-map';
-import { TraceFragment } from './components/trace';
-import {
-  ActGlyph,
-  BrokenLogGlyph,
-  BubbleGlyph,
-  DuplicateGlyph,
-  EmptyResultGlyph,
-  EvaluateGlyph,
-  ImproveGlyph,
-  ArrowDownGlyph,
-  VerifyGlyph,
-} from './components/glyphs';
-import {
-  ChatFragment,
-  ChecksFragment,
-  TraceResponseBlock,
-  PipelineFragment,
-  ReplayFragment,
-  RouteRows,
-} from './components/fragments';
-import { Dots, Eyebrow, IconTile, Mark, Pill, SectionHeading } from './components/primitives';
-
-const PROBLEMS = [
-  {
-    glyph: <EmptyResultGlyph />,
-    claim: 'Your agent said it issued the refund.',
-    reality: 'Nobody checked whether the refund exists.',
-  },
-  {
-    glyph: <BubbleGlyph />,
-    claim: 'Your refund policy lives in a prompt.',
-    reality: 'So a customer can argue with it.',
-  },
-  {
-    glyph: <DuplicateGlyph />,
-    claim: 'A retry created a second refund.',
-    reality: 'You found out from the customer, not the dashboard.',
-  },
-  {
-    glyph: <BrokenLogGlyph />,
-    claim: 'A run failed and the log says 500.',
-    reality: 'Which of the eleven steps broke is anyone’s guess.',
-  },
-];
-
-const PILLARS = [
-  {
-    id: 'act',
-    glyph: <ActGlyph />,
-    title: 'Act',
-    body: 'Every external action runs through one pipeline: input validation, permission check, policy check, circuit breaker, idempotency claim, timeout, output validation. There is no second path to your business API, and a retried request never creates a second replacement.',
-    figure: <PipelineFragment />,
-  },
-  {
-    id: 'verify',
-    glyph: <VerifyGlyph />,
-    title: 'Verify',
-    body: 'A 200 response is not proof that anything changed. KORA reads the entity back and compares it. If the read-back disagrees, the agent stops and a person takes over.',
-    figure: <ChatFragment />,
-  },
-  {
-    id: 'evaluate',
-    glyph: <EvaluateGlyph />,
-    title: 'Evaluate',
-    body: 'Every finished run is scored against your business system, not against the transcript. Nine deterministic checks run on all of it, and a run only counts as resolved if the write is still there when we look. Verified Resolution Rate is one number you can act on.',
-    figure: <ChecksFragment />,
-  },
-  {
-    id: 'improve',
-    glyph: <ImproveGlyph />,
-    title: 'Improve',
-    body: 'Replay recorded conversations against a new configuration and compare the two runs on the same traffic. Regressions are listed above the aggregate, because a version that gained four points and broke six runs is not a better version.',
-    figure: <ReplayFragment />,
-  },
-];
-
-const CTA_STEP_FILL = ['var(--cobalt)', 'var(--amber)', 'var(--signal)', 'var(--signal)'];
+import { ChatFragment, ChecksFragment, PipelineFragment } from './components/fragments';
+import { Pill } from './components/primitives';
 
 const SCHEMA = {
   '@context': 'https://schema.org',
@@ -86,20 +10,110 @@ const SCHEMA = {
     {
       '@type': 'Organization',
       '@id': '#organization',
-      name: 'KORA',
-      description: 'Customer support automation with verified outcomes.',
+      name: 'Kora',
+      description: 'Money operations for subscriptions, proven in Stripe.',
     },
     {
       '@type': 'SoftwareApplication',
-      name: 'KORA',
+      name: 'Kora',
       applicationCategory: 'BusinessApplication',
       operatingSystem: 'Web',
       description:
-        'KORA resolves customer requests end to end, then reads the business system back to confirm the action landed. Policy runs in code and every run is scored against what really happened.',
+        'Kora handles refunds, cancellations and plan changes for subscription businesses, then reads Stripe back to confirm each action landed.',
       publisher: { '@id': '#organization' },
     },
   ],
 };
+
+function ActionToProofDiagram() {
+  return (
+    <svg
+      aria-label="Action to proof: request, execute, read back, confirmed"
+      className="proof-diagram"
+      role="img"
+      viewBox="0 0 640 120"
+    >
+      {[
+        { x: 8, label: 'Request' },
+        { x: 168, label: 'Execute' },
+        { x: 328, label: 'Read back' },
+        { x: 488, label: 'Confirmed' },
+      ].map((node, i) => (
+        <g key={node.label}>
+          {i < 3 ? (
+            <line
+              x1={node.x + 136}
+              y1="60"
+              x2={node.x + 160}
+              y2="60"
+              stroke="#111418"
+              strokeWidth="2"
+            />
+          ) : null}
+          {i < 3 ? (
+            <path
+              d={`M ${node.x + 152} 54 L ${node.x + 160} 60 L ${node.x + 152} 66`}
+              fill="none"
+              stroke="#111418"
+              strokeWidth="2"
+            />
+          ) : null}
+          <rect
+            x={node.x}
+            y="24"
+            width="136"
+            height="72"
+            fill={i === 3 ? '#3B4CCA' : '#FCFCFD'}
+            stroke="#E4E7EC"
+            strokeWidth="1"
+          />
+          <text
+            x={node.x + 68}
+            y="52"
+            textAnchor="middle"
+            fontFamily="Geist Mono, ui-monospace, monospace"
+            fontSize="12"
+            fill={i === 3 ? '#FCFCFD' : '#6a6a6f'}
+          >
+            {`0${i + 1}`}
+          </text>
+          <text
+            x={node.x + 68}
+            y="74"
+            textAnchor="middle"
+            fontFamily="Geist, system-ui, sans-serif"
+            fontSize="14"
+            fontWeight="600"
+            fill={i === 3 ? '#FCFCFD' : '#111418'}
+          >
+            {node.label}
+          </text>
+        </g>
+      ))}
+    </svg>
+  );
+}
+
+const DIFFERENTIATORS = [
+  {
+    id: 'acts',
+    title: 'Kora acts',
+    body: 'Refunds, cancellations and plan changes run through one pipeline with the policy check before the write and the claim key on every call. A retried request never creates a second refund.',
+    figure: <PipelineFragment />,
+  },
+  {
+    id: 'proves',
+    title: 'Kora proves',
+    body: 'A 200 response is not proof. Kora reads the refund or subscription back from Stripe and compares it. The Proof Card shows requested, executed and verified, with the Stripe reference attached.',
+    figure: <ChatFragment />,
+  },
+  {
+    id: 'never-lies',
+    title: 'Kora never lies about money',
+    body: 'A refund still waiting on Stripe says waiting on Stripe. A denial names the rule in plain words. A failure brings in a person. The customer never hears that money moved when it did not.',
+    figure: <ChecksFragment />,
+  },
+];
 
 export default function MarketingPage() {
   return (
@@ -109,146 +123,71 @@ export default function MarketingPage() {
       </a>
       <Nav />
       <main id="main">
-        {/* 3.2 */}
         <section className="hero">
-          <Dots style={{ left: 16, top: 48 }} />
-          <Dots style={{ right: 16, top: 48 }} />
           <div className="mk-container hero__grid">
             <div className="hero__left">
-              <h1 className="hero-h1 t-hero">
-                <span className="hero-badge">
-                  <Mark size={72} />
-                </span>
-                <span className="hl hl--light">Support that</span>
-                <br />
-                <span className="hl hl--dark">proves it worked</span>
-              </h1>
+              <h1 className="hero-serif t-hero">Refunds and cancellations, proven in Stripe.</h1>
               <p className="t-lead hero__lead">
-                KORA resolves customer requests end to end, then reads your business system back to
-                confirm the refund landed. Policy runs in code, not a prompt. Every run is scored
-                against what happened.
+                Kora handles the money operations of your subscription business, then reads Stripe
+                back to confirm each one landed. Refund confirmed means confirmed.
               </p>
-              <Pill href="#trace" icon={<ArrowDownGlyph />}>
-                See a real trace
-              </Pill>
+              <Pill href="/ops/connect">Connect Stripe</Pill>
             </div>
             <div className="hero__right">
-              <SystemMap />
-            </div>
-          </div>
-        </section>
-
-        {/* 3.4 */}
-        <section className="product-band" id="trace">
-          <div className="band product-band__bg" aria-hidden="true" />
-          <div className="mk-container product-band__inner">
-            <TraceFragment />
-          </div>
-        </section>
-
-        {/* 3.5 */}
-        <Reveal>
-          <section className="mk-section" id="why">
-            <div className="mk-container">
-              <Eyebrow>Why we made this</Eyebrow>
-              <SectionHeading>
-                Most AI support agents cannot tell you whether they worked
-              </SectionHeading>
-              <ul className="problems">
-                {PROBLEMS.map((p) => (
-                  <li className="problems__card" key={p.claim}>
-                    <IconTile fill="var(--amber)">{p.glyph}</IconTile>
-                    <p className="t-card problems__copy">
-                      <strong>{p.claim}</strong> <span>{p.reality}</span>
-                    </p>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </section>
-        </Reveal>
-
-        {/* 3.7 */}
-        <Reveal>
-          <section className="mk-section" id="how-it-works">
-            <div className="mk-container">
-              <Eyebrow>How we do it</Eyebrow>
-              <SectionHeading>Four things that make an answer trustworthy</SectionHeading>
-              <div className="pillars">
-                {PILLARS.map((pillar) => (
-                  <section className="panel pillar" id={pillar.id} key={pillar.id}>
-                    <span className="pillar__glyph" aria-hidden="true">
-                      {pillar.glyph}
-                    </span>
-                    <h3 className="t-pillar pillar__title">{pillar.title}</h3>
-                    <p className="t-body pillar__body">{pillar.body}</p>
-                    {pillar.figure}
-                  </section>
-                ))}
-              </div>
-            </div>
-          </section>
-        </Reveal>
-
-        {/* 3.8 */}
-        <Reveal>
-          <section className="mk-section" id="integrations">
-            <div className="mk-container integrations">
-              <div className="integrations__left">
-                <Eyebrow>Fits in everywhere</Eyebrow>
-                <SectionHeading>Connects to the systems you already run</SectionHeading>
-                <p className="t-body integrations__body">
-                  KORA talks to your order system over a plain HTTP API, and every run it does is
-                  readable back out the same way. The trace endpoint returns the intent, the rule
-                  that decided each write, and what the read-back saw.
+              <div>
+                <ProofCard
+                  amountMinor={349900}
+                  currency="INR"
+                  policyRule="Within the 30-day window and under the approval threshold."
+                  status="verified"
+                  stripeId="re_1S7xQ2mK9pL4test"
+                  title="Refund confirmed"
+                  verifiedAt={new Date('2026-08-14T10:24:00Z')}
+                />
+                <p className="t-meta hero__caption">
+                  A real confirmation: requested, executed, read back from Stripe.
                 </p>
-                <div className="integrations__actions">
-                  <Pill href="/ops">Open the console</Pill>
-                  <Pill href="#trace" variant="secondary">
-                    See a trace
-                  </Pill>
-                </div>
-              </div>
-              <div className="integrations__right">
-                <ul className="tiles" aria-hidden="true">
-                  <li className="tiles__tile" style={{ background: 'var(--rust)' }} />
-                  <li className="tiles__tile" style={{ background: 'var(--cobalt)' }} />
-                  <li className="tiles__tile" style={{ background: 'var(--ink)' }} />
-                  <li className="tiles__tile" style={{ background: 'var(--signal)' }} />
-                </ul>
-                <TraceResponseBlock />
-                <RouteRows />
               </div>
             </div>
-          </section>
-        </Reveal>
+          </div>
+        </section>
 
-        {/* 3.9 */}
+        <section className="mk-section" id="different">
+          <div className="mk-container">
+            <h2 className="t-section section-heading">Three things that make Kora different</h2>
+            <div className="pillars">
+              {DIFFERENTIATORS.map((item) => (
+                <section className="panel pillar" id={item.id} key={item.id}>
+                  <h3 className="t-pillar pillar__title">{item.title}</h3>
+                  <p className="t-body pillar__body">{item.body}</p>
+                  {item.figure}
+                </section>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section className="mk-section" id="action-to-proof">
+          <div className="mk-container">
+            <h2 className="t-section section-heading">From action to proof</h2>
+            <p className="t-body console__lead">
+              Every money action ends the same way: the write, then a read-back, then the word
+              confirmed only when Stripe agrees. Cancellation scheduled for 14 June is a date from
+              the subscription record, not a promise from the transcript.
+            </p>
+            <ActionToProofDiagram />
+          </div>
+        </section>
+
         <section className="cta">
           <div className="band cta__bg" aria-hidden="true" />
           <div className="mk-container cta__inner">
             <div className="offset-card">
               <div className="offset-card__inner">
-                <h2 className="t-section cta__copy">
-                  Stop guessing whether
-                  <br />
-                  your agent worked.
-                </h2>
-                <Pill href={CONTACT}>Talk to us</Pill>
+                <h2 className="t-section cta__copy">Prove your next refund landed.</h2>
+                <Pill href="/ops/connect">Connect Stripe</Pill>
               </div>
             </div>
-            <svg className="cta__shape" viewBox="0 0 440 340" aria-hidden="true">
-              <g transform="rotate(-12 220 170)">
-                {[0, 1, 2, 3].map((i) => (
-                  <g key={i} transform={`translate(${70 + i * 14} ${34 + i * 72})`}>
-                    <rect width="300" height="60" rx="4" fill="var(--paper)" />
-                    <rect x="18" y="18" width="24" height="24" fill={CTA_STEP_FILL[i]} />
-                    <rect x="58" y="20" width="132" height="8" fill="var(--border)" />
-                    <rect x="58" y="36" width="86" height="8" fill="var(--border)" />
-                  </g>
-                ))}
-              </g>
-            </svg>
           </div>
         </section>
       </main>

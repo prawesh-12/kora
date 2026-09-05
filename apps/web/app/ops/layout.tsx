@@ -11,7 +11,11 @@ export default async function OpsLayout({ children }: { children: ReactNode }) {
   if (!operator) redirect('/login?next=/ops');
 
   return (
-    <OpsShell deploymentMode={serverEnv().KORA_DEPLOYMENT_MODE} operatorEmail={operator.email}>
+    <OpsShell
+      deploymentMode={serverEnv().KORA_DEPLOYMENT_MODE}
+      operatorEmail={operator.email}
+      tenant={serverEnv().KORA_TENANT_ID}
+    >
       {children}
     </OpsShell>
   );

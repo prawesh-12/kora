@@ -12,11 +12,13 @@ import {
   useAnimatedToastStack,
 } from '@/components/motion/animated-toast-stack';
 import { EscalationNotice } from '@/components/kora/escalation-notice';
+import { ProofCard, type ProofCardProps } from '@/components/kora/proof-card';
 import { ToolPart, type ToolPartData } from '@/components/kora/tool-part';
 
 export type ChatPart = { key: string } & (
   | { kind: 'text'; text: string }
   | { kind: 'tool'; tool: ToolPartData }
+  | { kind: 'proof'; proof: ProofCardProps }
   | { kind: 'escalation'; reason: string }
 );
 
@@ -33,6 +35,21 @@ interface TurnResponse {
   toolsCalled: string[];
   approvalId: string | null;
   escalationReason: string | null;
+  outcome: string | null;
+}
+
+const WRITE_TOOLS = ['create_refund', 'cancel_subscription', 'change_plan', 'create_replacement'];
+
+const PROOF_TITLES: Record<string, { verified: string; pending: string }> = {
+  create_refund: { verified: 'Refund confirmed', pending: 'Refund in progress' },
+  cancel_subscription: { verified: 'Cancellation confirmed', pending: 'Cancellation in progress' },
+  change_plan: { verified: 'Plan change confirmed', pending: 'Plan change in progress' },
+  create_replacement: { verified: 'Replacement confirmed', pending: 'Replacement in progress' },
+};
+
+function stripeIdFromText(text: string): string | null {
+  const match = text.match(/\b((?:re|sub|in|ch|cus|pi)_[A-Za-z0-9]+)\b/);
+  return match?.[1] ?? null;
 }
 
 interface ApiError {
@@ -47,19 +64,41 @@ function assistantMessage(turn: TurnResponse): ChatMessage {
   const parts: ChatPart[] = [];
 
   const seen = new Set<string>();
+  let completedWrite: string | null = null;
   for (const tool of turn.toolsCalled) {
     if (tool === 'escalate_to_human' || seen.has(tool)) continue;
     seen.add(tool);
-    const awaiting = turn.approvalId !== null && tool === 'create_replacement';
+    const awaiting = turn.approvalId !== null && WRITE_TOOLS.includes(tool);
     parts.push({
       key: `tool-${tool}`,
       kind: 'tool',
       tool: { type: tool, state: awaiting ? 'approval-requested' : 'complete' },
     });
+    if (WRITE_TOOLS.includes(tool) && !awaiting) completedWrite = tool;
   }
 
   if (turn.escalationReason) {
     parts.push({ key: 'escalation', kind: 'escalation', reason: turn.escalationReason });
+  }
+  // A completed money action renders its Proof Card in the customer's own
+  // language. A resolved turn with no escalation means the read-back passed, so
+  // the card shows confirmed; anything else stays honestly pending.
+  if (completedWrite && !turn.escalationReason && !turn.approvalId) {
+    const titles = PROOF_TITLES[completedWrite] ?? {
+      verified: 'Action confirmed',
+      pending: 'Action in progress',
+    };
+    const verified = turn.outcome === 'resolved_automatically';
+    parts.push({
+      key: `proof-${completedWrite}`,
+      kind: 'proof',
+      proof: {
+        status: verified ? 'verified' : 'pending',
+        title: verified ? titles.verified : titles.pending,
+        stripeId: stripeIdFromText(turn.text),
+        compact: true,
+      },
+    });
   }
   if (turn.text) parts.push({ key: 'text', kind: 'text', text: turn.text });
 
@@ -72,6 +111,8 @@ function PartView({ part }: { part: ChatPart }) {
       return <StreamingResponse status="complete">{part.text}</StreamingResponse>;
     case 'tool':
       return <ToolPart part={part.tool} />;
+    case 'proof':
+      return <ProofCard {...part.proof} />;
     case 'escalation':
       return <EscalationNotice reason={part.reason} />;
     default:
@@ -82,9 +123,9 @@ function PartView({ part }: { part: ChatPart }) {
 /**
  * Shown on an empty conversation. A customer landing on a blank page with a
  * floating text box has no way to know what this is or what it can do, so the
- * agent opens and offers the two things it actually handles.
+ * agent opens and offers the three things it actually handles.
  */
-const STARTERS = ['My order arrived damaged', 'Where is my order', 'I want to return something'];
+const STARTERS = ['Refund my last payment', 'Cancel my subscription', 'Why was I charged'];
 
 export function ChatTranscript({
   conversationId,
@@ -165,7 +206,7 @@ export function ChatTranscript({
         <div className="mx-auto w-full max-w-[720px] px-4 py-3">
           <h1 className="font-semibold text-base">{merchantName}</h1>
           <p className="text-muted-foreground text-sm">
-            Order updates, returns and replacements. Ask in your own words.
+            Refunds, cancellations and billing questions. Ask in your own words.
           </p>
         </div>
       </header>
@@ -182,8 +223,8 @@ export function ChatTranscript({
             <MessageContent className="flex flex-col gap-3">
               <MessageBubble align="start" variant="solid">
                 <MessageBubbleContent>
-                  Hi, I can help with an order that arrived damaged, a return, or finding out where
-                  your order is. What is going on?
+                  Hi, I can help with a refund, cancelling your subscription, or a question about
+                  your bill. What is going on?
                 </MessageBubbleContent>
               </MessageBubble>
               <div className="flex flex-wrap gap-2">

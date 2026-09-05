@@ -632,6 +632,28 @@
   }
 }
 
+/* The serif is allowed on the landing hero headline only. Nowhere else. */
+.hero-serif {
+  font-family: Georgia, "Times New Roman", serif;
+  font-weight: 700;
+  letter-spacing: 0;
+  margin: 0;
+  max-width: 16ch;
+}
+
+.hero__caption {
+  margin: 16px 0 0;
+  color: var(--ink-muted);
+  max-width: 46ch;
+}
+
+.proof-diagram {
+  width: 100%;
+  max-width: 640px;
+  height: auto;
+  margin-top: 48px;
+}
+
 /* ------------------------------------------------------------ 3.2 hero */
 
 /*

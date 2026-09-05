@@ -1,26 +1,23 @@
-import { Inter, JetBrains_Mono } from 'next/font/google';
+import { Geist, Geist_Mono } from 'next/font/google';
 import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import './globals.css';
 
-/**
- * One sans for the product, one mono for ids, codes and JSON. Nothing else.
- *
- * `--font-sans` used to be defined as `var(--font-sans)`, which resolves to
- * nothing, so every surface fell back to the browser default and headings came
- * out serif.
+/*
+ * Ledger type system (P8): Geist for UI and display, Geist Mono with tabular
+ * figures for every amount and id. No third UI face.
  */
-const sans = Inter({
+const sans = Geist({
   subsets: ['latin'],
-  variable: '--font-inter',
+  variable: '--font-geist',
   display: 'swap',
-  preload: false,
+  preload: true,
 });
 
-const mono = JetBrains_Mono({
+const mono = Geist_Mono({
   subsets: ['latin'],
-  variable: '--font-jetbrains-mono',
+  variable: '--font-geist-mono',
   display: 'swap',
   // Nothing above the fold on any route is set in mono: it carries ids, codes
   // and JSON further down. Preloading it competes with the display face for the
@@ -28,9 +25,18 @@ const mono = JetBrains_Mono({
   preload: false,
 });
 
+// TODO(plan): brand identity is a designer task. The wordmark, favicon and OG
+// image below are Geist plus the signal accent only, no bespoke mark.
 export const metadata: Metadata = {
   title: 'Kora',
-  description: 'A customer support agent you can inspect.',
+  description: 'Money operations for subscriptions, proven in Stripe.',
+  icons: { icon: '/icon.svg' },
+  openGraph: {
+    type: 'website',
+    siteName: 'Kora',
+    title: 'Kora — money operations, proven in Stripe',
+    description: 'Refunds, cancellations and plan changes, read back and confirmed.',
+  },
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

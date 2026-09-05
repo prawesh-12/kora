@@ -1,4 +1,5 @@
 import { Children, type ReactNode } from 'react';
+import { CountUp } from '@/components/kora/count-up';
 import { cn } from '@/lib/utils';
 
 export type StatTone = 'default' | 'ok' | 'warn' | 'danger' | 'info';
@@ -75,6 +76,8 @@ export function HeroStat({
   tone = 'default',
   context,
   aside,
+  countTo,
+  formatCount,
 }: {
   label: string;
   value: string;
@@ -83,12 +86,21 @@ export function HeroStat({
   context?: string;
   /** Trend, or the reason there is no trend to draw. */
   aside?: ReactNode;
+  /** When set, the value counts up once on load (600ms, static under reduced motion). */
+  countTo?: number;
+  formatCount?: (n: number) => string;
 }) {
   return (
     <div className="flex h-[112px] flex-col justify-center gap-1 rounded-[10px] border px-5 py-4">
       <span className={LABEL}>{label}</span>
       <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
-        <span className={cn('font-semibold text-4xl tabular-nums', TONE_CLASS[tone])}>{value}</span>
+        <span className={cn('font-semibold text-4xl tabular-nums', TONE_CLASS[tone])}>
+          {countTo !== undefined ? (
+            <CountUp format={formatCount ?? ((n) => `${n.toFixed(1)}%`)} to={countTo} />
+          ) : (
+            value
+          )}
+        </span>
         {context ? <span className="text-muted-foreground text-sm">{context}</span> : null}
         {aside ? <div className="ml-auto">{aside}</div> : null}
       </div>

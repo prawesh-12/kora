@@ -12,7 +12,7 @@ export function CopyId({ id, className }: { id: string; className?: string }) {
   return (
     <button
       className={cn(
-        'inline-flex items-center gap-1.5 rounded font-mono text-muted-foreground text-xs hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+        'tnum inline-flex items-center gap-1.5 rounded font-mono text-muted-foreground text-xs hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
         className,
       )}
       onClick={async () => {

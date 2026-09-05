@@ -27,10 +27,10 @@ const START = daysAgo(30);
 const WINDOW = { tenantId: TENANT, from: daysAgo(31), to: daysAgo(0) };
 
 const INTENT_CYCLE: Intent[] = [
-  'DAMAGED_ORDER',
   'REFUND_REQUEST',
-  'CANCEL_ORDER',
-  'ORDER_STATUS',
+  'REFUND_REQUEST',
+  'CANCEL_SUBSCRIPTION',
+  'BILLING_QUESTION',
   'HUMAN_REQUEST',
 ];
 const FAILURE_CYCLE: FailureCode[] = [
@@ -162,7 +162,7 @@ describe(`metrics at ${ROWS} runs`, () => {
 
 describe(`the conversation explorer at ${ROWS} rows`, () => {
   const combinations: Array<Record<string, unknown>> = [];
-  for (const intent of [undefined, 'REFUND_REQUEST', 'ORDER_STATUS']) {
+  for (const intent of [undefined, 'REFUND_REQUEST', 'BILLING_QUESTION']) {
     for (const outcome of [undefined, 'failed', 'resolved_automatically']) {
       for (const verified of [undefined, true, false]) {
         for (const escalated of [undefined, true]) {
@@ -246,7 +246,7 @@ describe(`the conversation explorer at ${ROWS} rows`, () => {
       if (inserted < 10) {
         await seedRuns(TENANT, [
           {
-            intent: 'ORDER_STATUS',
+            intent: 'BILLING_QUESTION',
             outcome: 'resolved_automatically',
             durationMs: 10,
             costUsdMicros: 1,

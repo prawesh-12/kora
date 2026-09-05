@@ -8,17 +8,23 @@
   /* The loaded families, named distinctly from the theme keys so the chain is
      not self-referential. `--font-sans: var(--font-sans)` resolved to nothing,
      which is why headings came out serif. */
-  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
-  --font-mono: var(--font-jetbrains-mono), ui-monospace, SFMono-Regular, monospace;
+  --font-sans: var(--font-geist), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, monospace;
   /* Headings use the sans family. Serif headings over sans body over mono
-     captions is three voices arguing. */
-  --font-heading: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+     captions is three voices arguing. The landing hero headline is the one
+     exception and sets its own serif stack locally. */
+  --font-heading: var(--font-geist), ui-sans-serif, system-ui, sans-serif;
   /* Tailwind's 2xl and 4xl are 24/32 and 36/40. Tile values and the one hero
      value per page need more separation than that, so both steps are pinned. */
   --text-2xl: 1.75rem;
   --text-2xl--line-height: 2.125rem;
   --text-4xl: 2.75rem;
   --text-4xl--line-height: 3rem;
+  --color-ink: var(--ink);
+  --color-paper: var(--paper);
+  --color-vellum: var(--vellum);
+  --color-line: var(--line);
+  --color-signal: var(--signal);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -74,6 +80,13 @@
 }
 
 :root {
+  /* Ledger tokens (P8 design plan). Consumed by token name so a P8a foundation
+     can re-own the values without touching call sites. */
+  --ink: #111418;
+  --paper: #fcfcfd;
+  --vellum: #f4f6f8;
+  --line: #e4e7ec;
+  --signal: #3b4cca;
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
@@ -126,6 +139,11 @@
 }
 
 .dark {
+  --ink: #fcfcfd;
+  --paper: #111418;
+  --vellum: #1a1f26;
+  --line: rgb(255 255 255 / 0.1);
+  --signal: #7b86e8;
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);
   --card: oklch(0.205 0 0);
@@ -182,6 +200,55 @@
   }
   html {
     @apply font-sans;
+  }
+  :is(a, button, summary, input, textarea, select, [tabindex]):focus-visible {
+    outline: 2px solid var(--signal);
+    outline-offset: 2px;
+  }
+}
+
+@layer utilities {
+  .tnum {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum" 1;
+  }
+  .ledger-prose {
+    max-width: 80ch;
+  }
+}
+
+.proof-check-path {
+  stroke-dasharray: 48;
+  stroke-dashoffset: 48;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .proof-check-draw .proof-check-path {
+    animation: proof-check-draw 400ms ease-out forwards;
+  }
+  .approval-urgent-pulse {
+    animation: approval-pulse 500ms ease-out 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .proof-check-draw .proof-check-path {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes proof-check-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes approval-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgb(180 130 20 / 0.45);
+  }
+  100% {
+    box-shadow: 0 0 0 10px rgb(180 130 20 / 0);
   }
 }
 

@@ -37,7 +37,7 @@ function fixture(): RunSpec[] {
 
   for (let i = 0; i < 10; i++) {
     specs.push({
-      intent: 'DAMAGED_ORDER',
+      intent: 'REFUND_REQUEST',
       outcome: 'resolved_automatically',
       durationMs: nextDuration(),
       costUsdMicros: 100,
@@ -76,7 +76,7 @@ function fixture(): RunSpec[] {
 
   for (let i = 0; i < 3; i++) {
     specs.push({
-      intent: 'CANCEL_ORDER',
+      intent: 'CANCEL_SUBSCRIPTION',
       outcome: 'escalated',
       finalState: 'NEEDS_HUMAN',
       durationMs: nextDuration(),
@@ -94,7 +94,7 @@ function fixture(): RunSpec[] {
 
   for (let i = 0; i < 2; i++) {
     specs.push({
-      intent: 'ORDER_STATUS',
+      intent: 'BILLING_QUESTION',
       outcome: 'resolved_automatically',
       durationMs: nextDuration(),
       costUsdMicros: 100,
@@ -201,7 +201,7 @@ describe('metric definitions', () => {
   });
 
   it('narrows to one intent and one agent config version', async () => {
-    const byIntent = await computeMetrics({ ...WINDOW, intent: 'DAMAGED_ORDER' });
+    const byIntent = await computeMetrics({ ...WINDOW, intent: 'REFUND_REQUEST' });
     expect(byIntent.runs.total).toBe(10);
     expect(byIntent.verifiedResolutionRate).toBe(1);
 

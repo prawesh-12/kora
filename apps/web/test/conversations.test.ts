@@ -18,7 +18,7 @@ function fixture(): RunSpec[] {
   return Array.from({ length: TOTAL }, (_, i) => {
     const failing = i % 5 === 0;
     return {
-      intent: failing ? 'REFUND_REQUEST' : 'DAMAGED_ORDER',
+      intent: failing ? 'REFUND_REQUEST' : 'REFUND_REQUEST',
       outcome: failing ? 'failed' : 'resolved_automatically',
       finalState: failing ? 'ACTION_FAILED' : 'RESOLVED',
       durationMs: 100 + i,
@@ -104,7 +104,7 @@ describe('cursor pagination', () => {
       if (inserted < 3) {
         await seedRuns(TENANT, [
           {
-            intent: 'ORDER_STATUS',
+            intent: 'BILLING_QUESTION',
             outcome: 'resolved_automatically',
             durationMs: 10,
             costUsdMicros: 1,

@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { HeroStat, StatBar, Tile } from '@/components/kora/stat';
 import { EmptyState } from '@/components/kora/states';
 import { VerifiedPill } from '@/components/kora/status-pill';
+import { VrrTrend } from '@/components/ops/vrr-trend';
 import { Button } from '@/components/ui/button';
 import {
   Table,
@@ -35,6 +36,7 @@ const RECENT_RUNS = 10;
  */
 export default async function OverviewPage() {
   const [metrics, runs] = await Promise.all([loadMetrics(), loadRecentRuns(RECENT_RUNS)]);
+  const trend = metrics.trend.filter((p) => p.rate !== null);
 
   return (
     <div className="flex flex-col gap-8 p-8">
@@ -51,7 +53,20 @@ export default async function OverviewPage() {
         label="Verified resolution rate"
         tone={metrics.verifiedResolutionRate === null ? 'default' : 'ok'}
         value={formatRate(metrics.verifiedResolutionRate)}
+        {...(metrics.verifiedResolutionRate !== null
+          ? {
+              countTo: metrics.verifiedResolutionRate * 100,
+              formatCount: (n: number) => `${n.toFixed(1)}%`,
+            }
+          : {})}
       />
+
+      {trend.length >= 2 ? (
+        <section className="space-y-3">
+          <h2 className="font-medium text-lg">Verified resolution over time</h2>
+          <VrrTrend points={trend} />
+        </section>
+      ) : null}
 
       <StatBar columns={3}>
         <Tile label="Total runs" sub="in the window" value={metrics.runs.total.toLocaleString()} />

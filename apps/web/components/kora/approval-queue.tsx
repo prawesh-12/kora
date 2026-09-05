@@ -137,7 +137,10 @@ export function ApprovalQueue({ items }: { items: QueueItem[] }) {
             <div className="flex flex-wrap items-baseline justify-between gap-3">
               <span className="font-medium font-mono">{selected.toolName}</span>
               {selected.amountMinor !== null ? (
-                <span data-testid="approval-amount" className="font-semibold text-2xl tabular-nums">
+                <span
+                  data-testid="approval-amount"
+                  className="tnum font-mono font-semibold text-2xl"
+                >
                   {formatMoneyMinor(selected.amountMinor, selected.currency)}
                 </span>
               ) : null}
@@ -155,9 +158,7 @@ export function ApprovalQueue({ items }: { items: QueueItem[] }) {
                 <span
                   data-testid="approval-elapsed"
                   className={
-                    selectedWaiting.urgent
-                      ? 'font-medium text-destructive-strong text-xs'
-                      : 'text-xs'
+                    selectedWaiting.urgent ? 'font-medium text-warning-strong text-xs' : 'text-xs'
                   }
                 >
                   requested {formatElapsed(selectedWaiting.elapsedMs)}

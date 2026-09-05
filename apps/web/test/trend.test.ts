@@ -11,7 +11,7 @@ const TENANT = 'ten_trend_test';
 
 function runOn(day: number, verified: boolean): RunSpec {
   return {
-    intent: 'DAMAGED_ORDER',
+    intent: 'REFUND_REQUEST',
     outcome: verified ? 'resolved_automatically' : 'failed',
     finalState: verified ? 'RESOLVED' : 'NEEDS_HUMAN',
     durationMs: 1200,

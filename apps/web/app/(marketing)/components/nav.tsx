@@ -6,19 +6,17 @@ import { Pill, Wordmark } from './primitives';
  * appears in both, and there is no link here that does not resolve.
  */
 const PRODUCT = [
-  { label: 'Operator console', href: '/console' },
+  { label: 'Operator console', href: '/ops' },
   { label: 'Approvals', href: '/ops/approvals' },
-  { label: 'Evaluations', href: '/ops/evaluations' },
+  { label: 'Customer chat', href: '/chat' },
 ];
 
 const SECTIONS = [
-  { label: 'Why we made this', href: '#why' },
-  { label: 'How it works', href: '#how-it-works' },
-  { label: 'Verification', href: '#verify' },
-  { label: 'Integrations', href: '#integrations' },
+  { label: 'Why Kora', href: '#different' },
+  { label: 'Action to proof', href: '#action-to-proof' },
 ];
 
-export const CONTACT = 'mailto:hello@kora.example?subject=KORA';
+export const CONTACT = '/ops/connect';
 
 export function Nav() {
   return (
@@ -39,7 +37,7 @@ export function Nav() {
           </ul>
           <ul className="nav__utility">
             <li>
-              <Pill href={CONTACT}>Talk to us</Pill>
+              <Pill href={CONTACT}>Connect Stripe</Pill>
             </li>
           </ul>
         </div>

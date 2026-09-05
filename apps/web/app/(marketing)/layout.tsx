@@ -1,14 +1,14 @@
-import { Inter_Tight } from 'next/font/google';
+import { Geist } from 'next/font/google';
 import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
 import './marketing.css';
 
 /**
- * One geometric grotesk for the whole route. Loaded as a variable font: the
- * page needs 400, 500, 600, 700 and 800, and one variable file is smaller than
- * five static cuts. The mono comes from the root layout, already loaded there.
+ * Geist for display, matching the product's Ledger type system. The hero
+ * headline sets its own serif stack locally; that exception lives only on the
+ * landing page. The mono comes from the root layout, already loaded there.
  */
-const display = Inter_Tight({
+const display = Geist({
   subsets: ['latin'],
   variable: '--font-inter-tight',
   display: 'swap',

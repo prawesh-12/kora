@@ -1,6 +1,7 @@
 'use client';
 
 import { CodeBlock } from '@/components/agents/code-block';
+import { StateLegend } from '@/components/kora/state-legend';
 import { StatusPill } from '@/components/kora/status-pill';
 import { EMPTY, formatDuration, formatUsd, humanizeEnum } from '@/lib/ops/format';
 import { cn } from '@/lib/utils';
@@ -22,8 +23,6 @@ const STATUS: Record<string, { dot: string; label: string }> = {
   failed: { dot: 'bg-destructive', label: 'failed' },
 };
 
-const LEGEND = ['ok', 'simulated', 'denied', 'failed'] as const;
-
 function statusOf(status: string) {
   return STATUS[status] ?? { dot: 'bg-muted-foreground', label: humanizeEnum(status) };
 }
@@ -37,12 +36,19 @@ function json(value: unknown): string {
 }
 
 const MAX_SCALAR = 28;
+const MAX_ID = 14;
+
+function shortScalar(text: string): string {
+  if (/^(sub|re|in|ch|cus|pi|price|prod)_/i.test(text) && text.length > MAX_ID) {
+    return `${text.slice(0, MAX_ID)}…`;
+  }
+  return text.length > MAX_SCALAR ? `${text.slice(0, MAX_SCALAR)}…` : text;
+}
 
 function scalars(value: unknown, limit: number): string[] {
   if (value === null || value === undefined) return [];
   if (typeof value !== 'object') {
-    const text = String(value);
-    return [text.length > MAX_SCALAR ? `${text.slice(0, MAX_SCALAR)}…` : text];
+    return [shortScalar(String(value))];
   }
   const out: string[] = [];
   for (const item of Object.values(value as Record<string, unknown>)) {
@@ -53,16 +59,16 @@ function scalars(value: unknown, limit: number): string[] {
 }
 
 /**
- * `get_order(9832) → delivered, INR 8,999` instead of forty lines of JSON. The
+ * `get_subscription(sub_1S...) -> active` instead of forty lines of JSON. The
  * JSON is still one click away; it is just no longer the default, because three
  * open panes in a scrolling column hide the thing they are evidence for.
  */
 function summarize(execution: ToolExecutionDto): string {
   const args = scalars(execution.input, 2).join(', ');
-  const call = `${execution.toolName}(${args})`;
-  if (execution.status === 'failed') return `${call} → ${execution.errorCode ?? 'error'}`;
+  const call = args ? `${execution.toolName}(${args})` : `${execution.toolName}()`;
+  if (execution.status === 'failed') return `${call} -> ${execution.errorCode ?? 'error'}`;
   const result = scalars(execution.output, 3).join(', ');
-  return result ? `${call} → ${result}` : call;
+  return result ? `${call} -> ${result}` : call;
 }
 
 /** A tool call and the policy checks that gated it, in one card. */
@@ -286,15 +292,7 @@ export function TraceTimeline({ trace }: { trace: TraceDto }) {
         </div>
       ))}
 
-      <dl className="flex flex-wrap gap-x-4 gap-y-1 pt-4 text-muted-foreground text-xs">
-        {LEGEND.map((key) => (
-          <div className="flex items-center gap-1.5" key={key}>
-            <Dot status={key} />
-            <dt className="sr-only">{key}</dt>
-            <dd>{statusOf(key).label}</dd>
-          </div>
-        ))}
-      </dl>
+      <StateLegend className="pt-4" />
 
       <p className="text-muted-foreground text-xs tabular-nums">
         {trace.run.stepCount} steps · {formatDuration(trace.totals.durationMs)} ·{' '}

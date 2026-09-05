@@ -4,6 +4,7 @@ import { MessageBubble, MessageBubbleContent } from '@/components/agents/message
 import { EvaluationPanel } from '@/components/kora/evaluation-panel';
 import { HandoffPanel } from '@/components/kora/handoff-panel';
 import { TraceHeaderActions } from '@/components/kora/trace-header-actions';
+import { TraceProofCard } from '@/components/kora/trace-proof';
 import { TraceTimeline } from '@/components/kora/trace-timeline';
 import { TraceVerdict } from '@/components/kora/trace-verdict';
 import { ContextCards, type ContextCardItem } from '@/components/ops/context-cards';
@@ -103,6 +104,8 @@ export default async function TracePage({
       </header>
 
       <TraceVerdict trace={trace} />
+
+      <TraceProofCard trace={trace} />
 
       <div className="hidden gap-6 lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)_minmax(0,1fr)]">
         <div className="min-w-0">

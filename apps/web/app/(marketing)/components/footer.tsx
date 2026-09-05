@@ -9,18 +9,16 @@ const COLUMNS = [
   {
     heading: 'This page',
     links: [
-      ['Why we made this', '#why'],
-      ['How it works', '#how-it-works'],
-      ['Verification', '#verify'],
-      ['Integrations', '#integrations'],
+      ['Why Kora', '#different'],
+      ['Action to proof', '#action-to-proof'],
     ],
   },
   {
     heading: 'Console',
     links: [
-      ['Operator console', '/console'],
+      ['Operator console', '/ops'],
       ['Approval queue', '/ops/approvals'],
-      ['Evaluations', '/ops/evaluations'],
+      ['Connect Stripe', '/ops/connect'],
       ['Customer chat', '/chat'],
     ],
   },
@@ -33,10 +31,10 @@ export function Footer() {
         <div className="footer__brand">
           <Mark size={56} title="KORA" />
           <p className="t-body footer__blurb">
-            KORA resolves a customer request, then reads your business system back to confirm it
-            actually landed.
+            Kora handles refunds, cancellations and plan changes, then reads Stripe back to confirm
+            each one landed.
           </p>
-          <Pill href={CONTACT}>Talk to us</Pill>
+          <Pill href={CONTACT}>Connect Stripe</Pill>
         </div>
         <div className="footer__columns">
           {COLUMNS.map((col) => (

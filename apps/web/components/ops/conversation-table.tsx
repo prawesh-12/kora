@@ -5,8 +5,11 @@ import Link from 'next/link';
 import { useCallback, useMemo, useState } from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
 import { useTable } from '@tanstack/react-table';
+import { CopyId } from '@/components/kora/copy-id';
+import { Money } from '@/components/kora/money';
 import { StatePill, VerifiedPill } from '@/components/kora/status-pill';
 import { EmptyState } from '@/components/kora/states';
+import { Button } from '@/components/ui/button';
 import {
   DataGrid,
   DataGridContainer,
@@ -24,76 +27,98 @@ import {
   humanizeEnum,
 } from '@/lib/ops/format';
 
-/** Seven columns. Customer is the same value on every row and cost is stored in
- *  micro-dollars; both carry more in the row detail than in a column here. */
-const COLUMNS: ColumnDef<DataGridFeatures, ConversationSummaryDto>[] = [
-  {
-    id: 'startedAt',
-    accessorFn: (row) => row.startedAt,
-    header: ({ column }) => <DataGridColumnHeader column={column} title="Started" />,
-    size: 130,
-    cell: ({ row }) => (
-      <Link
-        className="underline underline-offset-4"
-        data-testid="trace-link"
-        href={`/ops/conversations/${row.original.conversationId}?runId=${row.original.runId}`}
-        title={formatAbsolute(row.original.startedAt)}
-      >
-        {formatRelative(row.original.startedAt)}
-      </Link>
-    ),
-  },
-  {
-    id: 'intent',
-    accessorFn: (row) => row.intent ?? '',
-    header: ({ column }) => <DataGridColumnHeader column={column} title="Intent" />,
-    size: 170,
-    cell: ({ row }) => humanizeEnum(row.original.intent),
-  },
-  {
-    id: 'state',
-    accessorFn: (row) => row.state ?? '',
-    header: ({ column }) => <DataGridColumnHeader column={column} title="State" />,
-    size: 150,
-    cell: ({ row }) => <StatePill state={row.original.state} />,
-  },
-  {
-    id: 'verified',
-    accessorFn: (row) => row.verifiedResolution,
-    header: ({ column }) => <DataGridColumnHeader column={column} title="Verified" />,
-    size: 110,
-    cell: ({ row }) => (
-      <VerifiedPill state={row.original.state} verified={row.original.verifiedResolution} />
-    ),
-  },
-  {
-    id: 'primaryFailureCode',
-    accessorFn: (row) => row.primaryFailureCode ?? '',
-    header: ({ column }) => <DataGridColumnHeader column={column} title="Primary failure" />,
-    size: 190,
-    cell: ({ row }) =>
-      row.original.primaryFailureCode ? (
-        <span className="font-mono text-xs">{row.original.primaryFailureCode}</span>
-      ) : (
-        EMPTY
-      ),
-  },
-  {
-    id: 'durationMs',
-    accessorFn: (row) => row.durationMs ?? 0,
-    header: ({ column }) => <DataGridColumnHeader column={column} title="Duration" />,
-    size: 110,
-    meta: { cellClassName: 'tabular-nums' },
-    cell: ({ row }) => formatDuration(row.original.durationMs),
-  },
-  {
-    id: 'escalated',
-    accessorFn: (row) => row.escalated,
-    header: ({ column }) => <DataGridColumnHeader column={column} title="Escalated" />,
-    size: 120,
-    cell: ({ row }) => (row.original.escalated ? (row.original.escalationStatus ?? 'open') : EMPTY),
-  },
-];
+/** Seven columns. Values that are constant per row (customer, ids, cost) live in
+ *  the row detail below the grid rather than a column each. */
+function useColumns(onDetail: (row: ConversationSummaryDto) => void) {
+  return useMemo<ColumnDef<DataGridFeatures, ConversationSummaryDto>[]>(
+    () => [
+      {
+        id: 'startedAt',
+        accessorFn: (row) => row.startedAt,
+        header: ({ column }) => <DataGridColumnHeader column={column} title="Started" />,
+        size: 130,
+        cell: ({ row }) => (
+          <Link
+            className="underline underline-offset-4"
+            data-testid="trace-link"
+            href={`/ops/conversations/${row.original.conversationId}?runId=${row.original.runId}`}
+            title={formatAbsolute(row.original.startedAt)}
+          >
+            {formatRelative(row.original.startedAt)}
+          </Link>
+        ),
+      },
+      {
+        id: 'intent',
+        accessorFn: (row) => row.intent ?? '',
+        header: ({ column }) => <DataGridColumnHeader column={column} title="Intent" />,
+        size: 170,
+        cell: ({ row }) => humanizeEnum(row.original.intent),
+      },
+      {
+        id: 'state',
+        accessorFn: (row) => row.state ?? '',
+        header: ({ column }) => <DataGridColumnHeader column={column} title="State" />,
+        size: 150,
+        cell: ({ row }) => <StatePill state={row.original.state} />,
+      },
+      {
+        id: 'verified',
+        accessorFn: (row) => row.verifiedResolution,
+        header: ({ column }) => <DataGridColumnHeader column={column} title="Verified" />,
+        size: 110,
+        cell: ({ row }) => (
+          <VerifiedPill state={row.original.state} verified={row.original.verifiedResolution} />
+        ),
+      },
+      {
+        id: 'primaryFailureCode',
+        accessorFn: (row) => row.primaryFailureCode ?? '',
+        header: ({ column }) => <DataGridColumnHeader column={column} title="Primary failure" />,
+        size: 190,
+        cell: ({ row }) =>
+          row.original.primaryFailureCode ? (
+            <span className="tnum font-mono text-xs">{row.original.primaryFailureCode}</span>
+          ) : (
+            EMPTY
+          ),
+      },
+      {
+        id: 'durationMs',
+        accessorFn: (row) => row.durationMs ?? 0,
+        header: ({ column }) => <DataGridColumnHeader column={column} title="Duration" />,
+        size: 110,
+        meta: { cellClassName: 'tabular-nums' },
+        cell: ({ row }) => formatDuration(row.original.durationMs),
+      },
+      {
+        id: 'escalated',
+        accessorFn: (row) => row.escalated,
+        header: ({ column }) => <DataGridColumnHeader column={column} title="Escalated" />,
+        size: 120,
+        cell: ({ row }) =>
+          row.original.escalated ? (row.original.escalationStatus ?? 'open') : EMPTY,
+      },
+      {
+        id: 'detail',
+        header: () => <span className="sr-only">Details</span>,
+        size: 90,
+        enableSorting: false,
+        cell: ({ row }) => (
+          <Button
+            aria-expanded={false}
+            onClick={() => onDetail(row.original)}
+            size="sm"
+            variant="ghost"
+          >
+            Details
+          </Button>
+        ),
+      },
+    ],
+    [onDetail],
+  );
+}
 
 /**
  * The grid's own pagination is off. This list pages by keyset over an
@@ -115,6 +140,7 @@ export function ConversationTable({
   const [cursor, setCursor] = useState<string | null>(page.nextCursor);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [detail, setDetail] = useState<ConversationSummaryDto | null>(null);
 
   const fetchMore = useCallback(async () => {
     if (!cursor || busy) return;
@@ -140,7 +166,7 @@ export function ConversationTable({
     }
   }, [apiQuery, busy, cursor]);
 
-  const columns = useMemo(() => COLUMNS, []);
+  const columns = useColumns(useCallback((row: ConversationSummaryDto) => setDetail(row), []));
   const table = useTable({
     features: dataGridFeatures,
     columns,
@@ -182,6 +208,46 @@ export function ConversationTable({
         <p className="text-destructive text-sm" role="alert">
           {error}
         </p>
+      ) : null}
+
+      {detail ? (
+        <div className="rounded-[10px] border p-4" data-testid="run-detail">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <Link
+              className="underline underline-offset-4"
+              href={`/ops/conversations/${detail.conversationId}?runId=${detail.runId}`}
+            >
+              Open the trace
+            </Link>
+            <Button onClick={() => setDetail(null)} size="sm" variant="ghost">
+              Close
+            </Button>
+          </div>
+          <dl className="grid gap-x-8 gap-y-2 pt-3 text-sm sm:grid-cols-2">
+            <div>
+              <dt className="text-muted-foreground text-xs">Customer</dt>
+              <dd>{detail.customer ?? EMPTY}</dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground text-xs">Run cost</dt>
+              <dd>
+                <Money amountMinor={Math.round(detail.costUsdMicros / 10_000)} currency="USD" />
+              </dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground text-xs">Run id</dt>
+              <dd>
+                <CopyId id={detail.runId} />
+              </dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground text-xs">Conversation id</dt>
+              <dd>
+                <CopyId id={detail.conversationId} />
+              </dd>
+            </div>
+          </dl>
+        </div>
       ) : null}
 
       <p className="text-muted-foreground text-xs">

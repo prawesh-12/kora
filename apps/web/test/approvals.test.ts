@@ -38,7 +38,7 @@ interface ApprovalSeed {
 async function seedApproval(spec: ApprovalSeed): Promise<{ id: string; conversationId: string }> {
   const [run] = await seedRuns(spec.tenantId, [
     {
-      intent: 'DAMAGED_ORDER',
+      intent: 'REFUND_REQUEST',
       outcome: 'escalated',
       finalState: 'AWAITING_APPROVAL',
       durationMs: 500,

@@ -56,17 +56,21 @@ export default async function ApprovalsPage({
     ...(max !== undefined ? { maxValueMinor: max } : {}),
   });
 
-  const items: QueueItem[] = await Promise.all(
-    approvals.map(async (approval) => {
-      const detail = await loadApprovalDetail(approval.id);
-      return {
-        ...approval,
-        conversation: detail?.messages ?? [],
-        order: detail?.order ?? null,
-        customer: detail?.customer ?? null,
-      };
-    }),
-  );
+  const items: QueueItem[] = (
+    await Promise.all(
+      approvals.map(async (approval) => {
+        const detail = await loadApprovalDetail(approval.id);
+        return {
+          ...approval,
+          conversation: detail?.messages ?? [],
+          order: detail?.order ?? null,
+          customer: detail?.customer ?? null,
+        };
+      }),
+    )
+  )
+    // Money at risk leads, highest first. Nothing at risk sorts last.
+    .sort((a, b) => (b.amountMinor ?? -1) - (a.amountMinor ?? -1));
 
   const tools = [...new Set(approvals.map((a) => a.toolName))].sort();
   const bandQuery = [

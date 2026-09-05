@@ -41,10 +41,12 @@ const MODE: Record<string, { label: string; className: string }> = {
 export function OpsShell({
   operatorEmail,
   deploymentMode,
+  tenant,
   children,
 }: {
   operatorEmail: string;
   deploymentMode: string;
+  tenant: string;
   children: ReactNode;
 }) {
   const mode = MODE[deploymentMode] ?? {
@@ -108,6 +110,12 @@ export function OpsShell({
             <AnimatedSidebarTrigger />
           </div>
           <span className="font-medium text-sm md:hidden">Kora operations</span>
+          <span
+            className="tnum hidden font-mono text-muted-foreground text-xs sm:inline"
+            title={tenant}
+          >
+            {tenant}
+          </span>
           <span
             className={cn(
               'ml-auto rounded-md border px-2 py-0.5 text-xs uppercase tracking-[0.06em]',

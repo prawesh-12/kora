@@ -1,5 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 72 72" role="img" aria-label="KORA">
-  <title>KORA</title>
-  <rect width="72" height="72" fill="#0C0C0D"/>
-  <path d="M17 37 L30 50 L55 22" fill="none" stroke="#6FA82B" stroke-width="9" stroke-linecap="square"/>
+<!-- TODO(plan): brand identity is a designer task. Wordmark initial plus signal rule only. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Kora">
+  <title>Kora</title>
+  <rect width="64" height="64" rx="12" fill="#FCFCFD"/>
+  <rect x="0" y="0" width="64" height="64" rx="12" fill="none" stroke="#E4E7EC" stroke-width="2"/>
+  <text x="32" y="42" text-anchor="middle" font-family="Geist, system-ui, sans-serif" font-weight="700" font-size="32" fill="#111418">K</text>
+  <rect x="14" y="48" width="36" height="4" fill="#3B4CCA"/>
 </svg>

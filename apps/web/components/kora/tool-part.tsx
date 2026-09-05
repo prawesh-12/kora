@@ -13,18 +13,34 @@ export interface ToolPartData {
  * tool arguments belong in the operator trace and never appear here.
  */
 const PLAIN_LANGUAGE: Record<string, { title: string; outcome: string }> = {
-  get_order: { title: 'Looked up your order', outcome: 'Found your order and its delivery date.' },
-  get_customer: { title: 'Checked your account', outcome: 'Confirmed your account details.' },
+  get_subscription: {
+    title: 'Looking up your subscription',
+    outcome: 'Found your subscription and its current plan.',
+  },
+  get_customer: { title: 'Checking your account', outcome: 'Confirmed your account details.' },
+  get_invoice: { title: 'Checking your bill', outcome: 'Found the bill behind this charge.' },
+  preview_change: {
+    title: 'Working out the new amount',
+    outcome: 'Previewed what the plan change costs before touching anything.',
+  },
   search_knowledge: {
-    title: 'Checked our returns policy',
-    outcome: 'Read the current policy for damaged items.',
+    title: 'Checking our billing policy',
+    outcome: 'Read the current policy for this request.',
   },
   check_policy: {
-    title: 'Checked what we can offer',
-    outcome: 'Confirmed what is allowed for this order.',
+    title: 'Checking what we can do',
+    outcome: 'Confirmed what is allowed for this request.',
   },
+  create_refund: { title: 'Issuing the refund', outcome: 'Refund confirmed.' },
+  cancel_subscription: {
+    title: 'Cancelling your subscription',
+    outcome: 'Cancellation scheduled.',
+  },
+  change_plan: { title: 'Changing your plan', outcome: 'Your plan is updated.' },
+  create_ticket: { title: 'Opening a ticket', outcome: 'Opened a ticket so this is tracked.' },
+  get_order: { title: 'Looking up your order', outcome: 'Found your order and its delivery date.' },
   create_replacement: {
-    title: 'Arranged a replacement',
+    title: 'Arranging a replacement',
     outcome: 'Created a replacement for the damaged item.',
   },
 };

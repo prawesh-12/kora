@@ -38,11 +38,11 @@ export function TaskRows({
               'flex w-full items-center gap-4 rounded-lg border bg-card px-3 py-2.5 text-left transition-colors',
               'hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
               item.selected === true && 'border-primary bg-muted',
-              item.urgent === true && 'border-warning/60',
+              item.urgent === true && 'approval-urgent-pulse border-warning/60',
             )}
           >
             {item.amount === undefined ? null : (
-              <span className="w-28 shrink-0 font-semibold text-foreground text-lg tabular-nums">
+              <span className="tnum w-28 shrink-0 font-mono font-semibold text-foreground text-lg">
                 {item.amount}
               </span>
             )}
