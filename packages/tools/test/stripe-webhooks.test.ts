@@ -276,6 +276,31 @@ describe('processStripeWebhook', () => {
     expect(store.confirmed).toHaveLength(1);
   });
 
+  it('records the stop date from the subscription item, where the period now lives', async () => {
+    const store = fakeStore(EXECUTION);
+    const body = JSON.stringify({
+      id: 'evt_sub_period',
+      type: 'customer.subscription.deleted',
+      data: {
+        object: {
+          id: 'sub_test_1',
+          status: 'canceled',
+          items: { data: [{ current_period_end: 1780000000 }, { current_period_end: 1790000000 }] },
+        },
+      },
+    });
+    const result = await processStripeWebhook({
+      rawBody: body,
+      signature: sign(body),
+      secret: SECRET,
+      store,
+    });
+
+    expect(result.outcome).toBe('confirmed');
+    const observed = store.confirmed[0]?.observed as { currentPeriodEnd: number | null };
+    expect(observed.currentPeriodEnd).toBe(1790000000);
+  });
+
   it('notes a handled event with no matching run instead of crashing', async () => {
     const store = fakeStore(null);
     const body = refundEvent('evt_orphan_1', 'succeeded');

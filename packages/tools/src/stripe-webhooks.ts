@@ -210,6 +210,26 @@ async function reconcileRefund(
   return 'noted';
 }
 
+/**
+ * The billing period moved from the subscription to its items in this API
+ * version, so the top-level field is absent. The stop date is the evidence the
+ * run is confirmed against, and an empty one leaves the trace unable to say when
+ * the subscription actually ends.
+ */
+function periodEndOf(subscription: Record<string, unknown>): number | null {
+  const items = (
+    subscription.items as { data?: Array<{ current_period_end?: unknown }> } | undefined
+  )?.data;
+  let latest: number | null = null;
+  for (const item of items ?? []) {
+    const end = item.current_period_end;
+    if (typeof end === 'number' && (latest === null || end > latest)) latest = end;
+  }
+  if (latest !== null) return latest;
+  const top = subscription.current_period_end;
+  return typeof top === 'number' ? top : null;
+}
+
 async function reconcileSubscription(
   event: StripeWebhookEvent,
   store: StripeWebhookStore,
@@ -227,7 +247,7 @@ async function reconcileSubscription(
     status,
     cancelAtPeriodEnd: subscription.cancel_at_period_end,
     cancelAt: subscription.cancel_at,
-    currentPeriodEnd: subscription.current_period_end,
+    currentPeriodEnd: periodEndOf(subscription as Record<string, unknown>),
   };
   const canceled = event.type === 'customer.subscription.deleted' || status === 'canceled';
   const scheduled =
