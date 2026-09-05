@@ -1,44 +1,37 @@
-import { Geist } from 'next/font/google';
 import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
 import './marketing.css';
 
-/**
- * Geist for display, matching the product's Ledger type system. The hero
- * headline sets its own serif stack locally; that exception lives only on the
- * landing page. The mono comes from the root layout, already loaded there.
- */
-const display = Geist({
-  subsets: ['latin'],
-  variable: '--font-inter-tight',
-  display: 'swap',
-  preload: true,
-});
+// Geist and Geist Mono are loaded once in the root layout as --font-geist and
+// --font-geist-mono. This route reads those variables rather than loading a
+// second copy. The hero serif is a local stack in marketing.css.
 
 export const SITE_URL = process.env.KORA_APP_URL ?? 'http://localhost:3000';
 
+const TITLE = 'Kora — refunds and cancellations, proven in Stripe';
+
 const DESCRIPTION =
-  'KORA resolves customer requests end to end, then reads your business system back to confirm the refund landed. Policy runs in code, not a prompt.';
+  'Kora performs refunds, cancellations and plan changes on Stripe, then reads each one back from Stripe before it tells anyone the money moved.';
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
-  title: 'KORA — support that proves it worked',
+  title: TITLE,
   description: DESCRIPTION,
   alternates: { canonical: '/' },
   openGraph: {
     type: 'website',
     url: '/',
-    siteName: 'KORA',
-    title: 'KORA — support that proves it worked',
+    siteName: 'Kora',
+    title: TITLE,
     description: DESCRIPTION,
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'KORA — support that proves it worked',
+    title: TITLE,
     description: DESCRIPTION,
   },
 };
 
 export default function MarketingLayout({ children }: { children: ReactNode }) {
-  return <div className={`marketing ${display.variable}`}>{children}</div>;
+  return <div className="marketing">{children}</div>;
 }

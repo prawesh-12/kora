@@ -1,25 +1,22 @@
-import { CONTACT } from './nav';
-import { Mark, Pill } from './primitives';
+import { CONNECT } from './nav';
+import { ActionLink, Wordmark } from './primitives';
 
-/**
- * Every link here goes somewhere that exists: an anchor on this page or a route
- * in the app. Columns the product cannot fill yet are not here at all.
- */
+/** Every link goes to an anchor on this page or a route in the app. */
 const COLUMNS = [
   {
     heading: 'This page',
     links: [
-      ['Why Kora', '#different'],
-      ['Action to proof', '#action-to-proof'],
+      ['How it works', '#how'],
+      ['From action to proof', '#proof'],
     ],
   },
   {
-    heading: 'Console',
+    heading: 'Product',
     links: [
       ['Operator console', '/ops'],
-      ['Approval queue', '/ops/approvals'],
-      ['Connect Stripe', '/ops/connect'],
+      ['Approvals', '/ops/approvals'],
       ['Customer chat', '/chat'],
+      ['Connect Stripe', CONNECT],
     ],
   },
 ] as const;
@@ -28,22 +25,27 @@ export function Footer() {
   return (
     <footer className="footer">
       <div className="mk-container footer__grid">
-        <div className="footer__brand">
-          <Mark size={56} title="KORA" />
+        <div>
+          <Wordmark />
           <p className="t-body footer__blurb">
-            Kora handles refunds, cancellations and plan changes, then reads Stripe back to confirm
-            each one landed.
+            Kora handles refunds, cancellations, plan changes and billing questions on Stripe
+            Billing, and reads Stripe back before it tells anyone the money moved.
           </p>
-          <Pill href={CONTACT}>Connect Stripe</Pill>
+          <p className="t-meta footer__blurb">Stripe test mode. One restricted key per tenant.</p>
+          <div style={{ marginTop: 24 }}>
+            <ActionLink href={CONNECT} tone="quiet">
+              Connect Stripe
+            </ActionLink>
+          </div>
         </div>
-        <div className="footer__columns">
+        <div className="footer__cols">
           {COLUMNS.map((col) => (
-            <nav className="footer__col" key={col.heading} aria-label={col.heading}>
-              <h2 className="t-meta footer__heading">{col.heading}</h2>
+            <nav aria-label={col.heading} className="footer__col" key={col.heading}>
+              <h2 className="footer__heading">{col.heading}</h2>
               <ul>
                 {col.links.map(([label, href]) => (
                   <li key={href}>
-                    <a className="t-meta footer__link" href={href}>
+                    <a className="footer__link" href={href}>
                       {label}
                     </a>
                   </li>
