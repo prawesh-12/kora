@@ -17,10 +17,27 @@ const DENIED_REPLY =
   'A colleague has reviewed this and we are not able to complete it automatically. ' +
   'Someone will be in touch with you shortly.';
 
-function orderIdOf(proposedInput: unknown): string | null {
-  if (!proposedInput || typeof proposedInput !== 'object') return null;
-  const value = (proposedInput as Record<string, unknown>).orderId;
-  return typeof value === 'string' ? value : null;
+const RESUME_BY_TOOL: Record<string, string> = {
+  create_refund: 'refund',
+  cancel_subscription: 'cancellation',
+  change_plan: 'plan change',
+};
+
+/**
+ * The resumed turn is a fresh turn, so the message has to carry enough for the
+ * agent to reach the same action again. Naming the subscription is what does
+ * that: without it the run has nothing to look up and hands straight back to a
+ * person, which is how an approved refund quietly never happens.
+ */
+function resumeMessageFor(toolName: string, proposedInput: unknown): string {
+  const input = (proposedInput ?? {}) as Record<string, unknown>;
+  const subscriptionId = input.subscriptionId;
+  const action = RESUME_BY_TOOL[toolName];
+
+  if (action === undefined || typeof subscriptionId !== 'string' || subscriptionId.length === 0) {
+    return 'Please go ahead with the action a colleague has just approved.';
+  }
+  return `Please go ahead with the ${action} for subscription ${subscriptionId}, which a colleague has just approved.`;
 }
 
 export async function POST(
@@ -58,10 +75,7 @@ export async function POST(
       return Response.json({ approval: toQueuedApprovalDto(decided), turn: null });
     }
 
-    const orderId = orderIdOf(decided.proposedInput);
-    const resumeMessage = orderId
-      ? `Please go ahead with the replacement for the damaged item on order ${orderId}.`
-      : 'Please go ahead with the action a colleague has just approved.';
+    const resumeMessage = resumeMessageFor(decided.toolName, decided.proposedInput);
 
     // A human has signed off, so this turn runs with the approval gate lifted. The
     // pipeline recognises the approved row for the conversation. See docs/decisions.md.
