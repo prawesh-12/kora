@@ -19,7 +19,7 @@ x-app-env: &app-env
   KORA_APP_URL: ${KORA_APP_URL:-http://localhost:3000}
   BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:3000}
   BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?set BETTER_AUTH_SECRET}
-  KORA_TENANT_ID: ${KORA_TENANT_ID:-ten_acme}
+  KORA_TENANT_ID: ${KORA_TENANT_ID:-ten_kora}
   KORA_MODEL_PROVIDER: ${KORA_MODEL_PROVIDER:-mock}
   KORA_MODEL_AGENT: ${KORA_MODEL_AGENT:-mock-agent}
   KORA_MODEL_CLASSIFIER: ${KORA_MODEL_CLASSIFIER:-mock-classifier}
@@ -27,8 +27,6 @@ x-app-env: &app-env
   KORA_MODEL_JUDGE: ${KORA_MODEL_JUDGE:-mockjudge-v1}
   OPENAI_API_KEY: ${OPENAI_API_KEY:-}
   ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
-  ACME_BASE_URL: ${ACME_BASE_URL:-http://acme:4001}
-  ACME_API_KEY: ${ACME_API_KEY:?set ACME_API_KEY}
   KORA_DEPLOYMENT_MODE: ${KORA_DEPLOYMENT_MODE:-human_approval}
   LOG_LEVEL: ${LOG_LEVEL:-info}
 
@@ -67,22 +65,3 @@ services:
       resources:
         limits:
           memory: 768M
-
-  acme:
-    image: ${KORA_IMAGE_REPO:-kora}/mock-commerce:${KORA_IMAGE_TAG:-latest}
-    build:
-      context: ../..
-      dockerfile: services/mock-commerce/Dockerfile
-    restart: unless-stopped
-    environment: *app-env
-    ports:
-      - '${KORA_ACME_PORT:-4001}:4001'
-    healthcheck:
-      test: ['CMD', 'node', '-e', "fetch('http://127.0.0.1:4001/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
-      interval: 10s
-      timeout: 5s
-      retries: 6
-    deploy:
-      resources:
-        limits:
-          memory: 256M

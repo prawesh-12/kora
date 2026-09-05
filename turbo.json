@@ -1,6 +1,6 @@
 {
   "$schema": "https://turbo.build/schema.json",
-  "globalPassThroughEnv": ["DATABASE_URL", "DATABASE_APP_URL", "REDIS_URL", "KORA_*", "ACME_*"],
+  "globalPassThroughEnv": ["DATABASE_URL", "DATABASE_APP_URL", "REDIS_URL", "KORA_*", "STRIPE_*"],
   "tasks": {
     "build": { "dependsOn": ["^build"], "outputs": ["dist/**", ".next/**", "!.next/cache/**"] },
     "typecheck": { "dependsOn": ["^build"] },

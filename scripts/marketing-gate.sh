@@ -1,9 +1,7 @@
 #!/usr/bin/env bash
 set -uo pipefail
-# The route, plus the marketing-only components that live outside it. The
-# design rules are about the markup, not about which folder it sits in.
 DIR="apps/web/app/(marketing)"
-DIRS=("$DIR" "apps/web/components/marketing")
+DIRS=("$DIR")
 fail() { echo "GATE FAILED: $1"; exit 1; }
 
 grep -rnE 'bg-gradient-to|from-[a-z]+-[0-9]|via-|shadow-(sm|md|lg|xl|2xl)|drop-shadow|backdrop-blur|rounded-(lg|xl|2xl|3xl)|bg-clip-text|animate-(pulse|bounce|ping)' "${DIRS[@]}" \

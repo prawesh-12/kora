@@ -33,8 +33,6 @@ jobs:
             dockerfile: apps/web/Dockerfile
           - name: worker
             dockerfile: services/worker/Dockerfile
-          - name: mock-commerce
-            dockerfile: services/mock-commerce/Dockerfile
     steps:
       - uses: actions/checkout@v4
 

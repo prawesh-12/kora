@@ -1,23 +1,16 @@
 import { now, serverEnv } from '@kora/core';
 import { closeDb, emit, sql, withTenant } from '@kora/db';
+import { setBillingProvider, setTenantStripeKey } from '@kora/tools';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { wireEnqueue } from '../src/enqueue.js';
 import { REPEATABLE } from '../src/queues.js';
 import { type WorkerHandle, startWorker } from '../src/index.js';
+import { stubBilling } from './support/billing.js';
 
 const TENANT = serverEnv().KORA_TENANT_ID;
-const ACME = serverEnv().ACME_BASE_URL;
 
 let handle: WorkerHandle | null = null;
 const conversationIds: string[] = [];
-
-async function acmeUp(): Promise<boolean> {
-  try {
-    return (await fetch(`${ACME}/health`, { signal: AbortSignal.timeout(2000) })).ok;
-  } catch {
-    return false;
-  }
-}
 
 async function drainQueues(): Promise<void> {
   if (!handle) return;
@@ -36,14 +29,7 @@ async function until(check: () => Promise<boolean>, timeoutMs = 30_000): Promise
 
 async function runOneTurn(): Promise<{ runId: string; conversationId: string }> {
   const { runAgentTurn } = await import('@kora/ai');
-  await fetch(`${ACME}/admin/reset`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${serverEnv().ACME_API_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ orderIds: ['9832'] }),
-  });
+  setBillingProvider(stubBilling());
 
   const conversation = await withTenant(TENANT).conversations.create({
     externalCustomerId: 'cus_014',
@@ -53,14 +39,14 @@ async function runOneTurn(): Promise<{ runId: string; conversationId: string }> 
   const result = await runAgentTurn({
     tenantId: TENANT,
     conversationId: conversation.id,
-    message: 'My coffee machine from order 9832 arrived broken. I want a replacement.',
+    message: 'Please refund my last payment on subscription sub_recent.',
     deploymentMode: 'full',
   });
   return { runId: result.runId, conversationId: conversation.id };
 }
 
 beforeAll(async () => {
-  if (!(await acmeUp())) throw new Error('the acme mock commerce service is not running');
+  await setTenantStripeKey(TENANT, 'sk_test_worker');
   handle = await startWorker();
   await drainQueues();
 });
@@ -70,6 +56,7 @@ beforeEach(async () => {
 });
 
 afterAll(async () => {
+  setBillingProvider(null);
   await handle?.stop();
   if (conversationIds.length > 0) {
     await sql()`DELETE FROM conversations WHERE id IN ${sql()(conversationIds)}`;

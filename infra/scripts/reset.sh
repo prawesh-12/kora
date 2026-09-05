@@ -8,7 +8,5 @@ bash "$ROOT/infra/scripts/up.sh"
 cd "$ROOT"
 pnpm kora migrate
 pnpm kora seed
-pnpm --filter @kora/mock-commerce migrate
-pnpm --filter @kora/mock-commerce seed
 pnpm kora ingest config/knowledge
 echo "infra: reset complete"

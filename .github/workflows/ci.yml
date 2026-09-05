@@ -101,27 +101,12 @@ jobs:
         run: |
           bash infra/scripts/migrate-job.sh
           pnpm kora seed
-          pnpm --filter @kora/mock-commerce migrate
-          pnpm --filter @kora/mock-commerce seed
-
-      # `start`, not `dev`. Watch mode reloads whenever a workspace file changes and
-      # restarts the service in the middle of a test run.
-      - name: start the acme mock commerce service
-        run: |
-          pnpm --filter @kora/mock-commerce start &
-          for _ in $(seq 1 60); do
-            curl -fsS http://localhost:4001/health >/dev/null && exit 0
-            sleep 1
-          done
-          echo "acme did not come up" >&2
-          exit 1
 
       - name: ingest the knowledge base
         run: pnpm kora ingest config/knowledge
 
       # Stage 2. `pnpm test` runs the packages one at a time on purpose: they all share
-      # this one Postgres and the one acme mock service, and several suites truncate or
-      # reset the same acme rows.
+      # this one Postgres, and several suites reset the same rows.
       - name: unit and integration tests
         run: pnpm test
 
@@ -208,18 +193,6 @@ jobs:
         run: |
           bash infra/scripts/migrate-job.sh
           pnpm kora seed
-          pnpm --filter @kora/mock-commerce migrate
-          pnpm --filter @kora/mock-commerce seed
-
-      - name: start the acme mock commerce service
-        run: |
-          pnpm --filter @kora/mock-commerce start &
-          for _ in $(seq 1 60); do
-            curl -fsS http://localhost:4001/health >/dev/null && exit 0
-            sleep 1
-          done
-          echo "acme did not come up" >&2
-          exit 1
 
       - run: pnpm kora ingest config/knowledge
 

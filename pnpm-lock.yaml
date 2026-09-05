@@ -276,24 +276,6 @@ importers:
         specifier: ^4.4.3
         version: 4.4.3
 
-  services/mock-commerce:
-    dependencies:
-      '@hono/node-server':
-        specifier: ^2.1.1
-        version: 2.1.1(hono@4.13.5)
-      '@kora/core':
-        specifier: workspace:*
-        version: link:../../packages/core
-      hono:
-        specifier: ^4.13.5
-        version: 4.13.5
-      postgres:
-        specifier: ^3.4.9
-        version: 3.4.9
-      zod:
-        specifier: ^4.4.3
-        version: 4.4.3
-
   services/worker:
     dependencies:
       '@kora/ai':
@@ -308,6 +290,9 @@ importers:
       '@kora/evaluation':
         specifier: workspace:*
         version: link:../../packages/evaluation
+      '@kora/tools':
+        specifier: workspace:*
+        version: link:../../packages/tools
       bullmq:
         specifier: ^6.2.2
         version: 6.2.2(ioredis@6.0.0)

@@ -12,7 +12,6 @@ const ALLOWED: Record<string, string[]> = {
   '@kora/tools': ['@kora/core', '@kora/db'],
   '@kora/ai': ['@kora/core', '@kora/db', '@kora/tools'],
   '@kora/evaluation': ['@kora/core', '@kora/db', '@kora/tools'],
-  '@kora/mock-commerce': ['@kora/core'],
   '@kora/worker': ['@kora/core', '@kora/db', '@kora/tools', '@kora/ai', '@kora/evaluation'],
   web: ['@kora/core', '@kora/db', '@kora/tools', '@kora/ai', '@kora/evaluation'],
 };

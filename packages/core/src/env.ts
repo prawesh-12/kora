@@ -30,10 +30,6 @@ const serverSchema = z.object({
   OPENAI_API_KEY: z.string().optional(),
   ANTHROPIC_API_KEY: z.string().optional(),
 
-  ACME_BASE_URL: z.string().url().default('http://localhost:4001'),
-  ACME_API_KEY: z.string().min(1).default('acme-dev-key'),
-  ACME_FAULT_RATE: z.coerce.number().min(0).max(1).default(0),
-  ACME_PORT: z.coerce.number().int().positive().default(4001),
 
   KORA_MAX_STEPS: z.coerce.number().int().positive().default(8),
   KORA_RUN_DEADLINE_MS: z.coerce.number().int().positive().default(45000),
