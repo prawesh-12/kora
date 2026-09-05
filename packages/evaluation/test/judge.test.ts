@@ -169,13 +169,13 @@ describe('the judge cannot overturn a critical deterministic result', () => {
       policyChecks: [
         {
           id: 'pck_1',
-          tenantId: 'ten_acme',
+          tenantId: 'ten_kora',
           runId: 'run_1',
           stepId: null,
-          policyKey: 'acme_damaged_order',
+          policyKey: 'kora_refund',
           policyVersion: '1.0.0',
-          ruleId: 'outside_return_window',
-          action: 'create_replacement',
+          ruleId: 'refund_outside_window',
+          action: 'create_refund',
           decision: 'deny',
           reason: 'outside the window',
           facts: {},

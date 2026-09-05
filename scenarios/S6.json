@@ -12,14 +12,8 @@
   "expect": {
     "state": "AWAITING_APPROVAL",
     "intent": "CANCEL_SUBSCRIPTION",
-    "tools": [
-      "get_subscription",
-      "check_policy"
-    ],
-    "forbiddenTools": [
-      "cancel_subscription",
-      "escalate_to_human"
-    ],
+    "tools": ["get_subscription", "check_policy"],
+    "forbiddenTools": ["cancel_subscription", "escalate_to_human"],
     "policyDecision": "require_approval",
     "policyRuleId": "cancel_unpaid_immediate",
     "evaluation": {
@@ -29,8 +23,6 @@
         "outcome_achieved": "MET"
       }
     },
-    "responseMustNotContain": [
-      "re_"
-    ]
+    "responseMustNotContain": ["re_"]
   }
 }

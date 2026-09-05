@@ -1,7 +1,7 @@
 import { canonicalJson } from '@kora/core';
 import { replayKey } from '@kora/tools';
 import { describe, expect, it } from 'vitest';
-import { loadAcceptanceScenarios } from '../src/bench/runner.js';
+import { loadBenchScenarios } from '../src/bench/runner.js';
 import { buildReport, type ReplayOutcome } from '../src/bench/replay.js';
 import {
   FaultInjectingBillingProvider,
@@ -14,15 +14,17 @@ import { passingInput, policyCheck, snapshot } from './fixtures.js';
 
 describe('recorded outputs are keyed by canonical JSON', () => {
   it('produces the same replay key regardless of input key order', () => {
-    const a = replayKey('create_refund', { orderId: '9832', amountMinor: 349900 });
-    const b = replayKey('create_refund', { amountMinor: 349900, orderId: '9832' });
+    const a = replayKey('create_refund', { subscriptionId: 'sub_1S', amountMinor: 349900 });
+    const b = replayKey('create_refund', { amountMinor: 349900, subscriptionId: 'sub_1S' });
     expect(a).toBe(b);
-    expect(a).toBe(`create_refund:${canonicalJson({ amountMinor: 349900, orderId: '9832' })}`);
+    expect(a).toBe(
+      `create_refund:${canonicalJson({ amountMinor: 349900, subscriptionId: 'sub_1S' })}`,
+    );
   });
 
   it('treats a retry with different input as a different action', () => {
-    expect(replayKey('create_refund', { orderId: '9832', amountMinor: 100 })).not.toBe(
-      replayKey('create_refund', { orderId: '9832', amountMinor: 200 }),
+    expect(replayKey('create_refund', { subscriptionId: 'sub_1S', amountMinor: 100 })).not.toBe(
+      replayKey('create_refund', { subscriptionId: 'sub_1S', amountMinor: 200 }),
     );
   });
 
@@ -42,22 +44,22 @@ describe('recorded outputs are keyed by canonical JSON', () => {
 describe('the honest resolution metric', () => {
   function deniedRefundInput() {
     const input = passingInput();
-    const getOrder = input.trace.toolExecutions.find((e) => e.toolName === 'get_order');
+    const read = input.trace.toolExecutions.find((e) => e.toolName === 'get_subscription');
     input.trace.run.intent = 'REFUND_REQUEST';
-    input.trace.toolExecutions = getOrder ? [getOrder] : [];
+    input.trace.toolExecutions = read ? [read] : [];
     input.trace.policyChecks = [
       policyCheck({
         action: 'create_refund',
         decision: 'deny',
         ruleId: 'refund_outside_window',
-        reason: 'Refunds are available for 7 days from delivery',
+        reason: 'Refunds are available for 30 days from the payment date',
       }) as never,
     ];
     input.trace.conversation.messages = [
-      { ...input.trace.conversation.messages[0]!, content: 'Please refund order 9832.' },
+      { ...input.trace.conversation.messages[0]!, content: 'Please refund subscription sub_1S.' },
       {
         ...input.trace.conversation.messages[1]!,
-        content: 'I cannot refund order 9832: refunds are available for 7 days from delivery.',
+        content: 'I cannot refund this payment: refunds are available for 30 days.',
       },
     ] as never;
     input.externalState = snapshot(0);
@@ -226,10 +228,11 @@ describe('chaos at the billing provider boundary', () => {
   });
 });
 
-describe('acceptance suite loading', () => {
-  it('loads the twelve S-scenarios in order', () => {
-    const scenarios = loadAcceptanceScenarios();
-    expect(scenarios.map((s) => s.id)).toEqual([
+describe('the benchmark suite', () => {
+  const scenarios = loadBenchScenarios();
+
+  it('is the money-ops suite: twelve acceptance scenarios then the injection set', () => {
+    expect(scenarios.filter((s) => s.category === 'acceptance').map((s) => s.id)).toEqual([
       'S1',
       'S2',
       'S3',
@@ -243,5 +246,52 @@ describe('acceptance suite loading', () => {
       'S11',
       'S12',
     ]);
+    expect(new Set(scenarios.map((s) => s.category))).toEqual(
+      new Set(['acceptance', 'prompt_injection']),
+    );
+    expect(scenarios).toHaveLength(22);
+  });
+
+  it('covers the four workflows and both failure paths', () => {
+    const intents = new Set(
+      scenarios.filter((s) => s.category === 'acceptance').map((s) => s.expect.intent),
+    );
+    expect(intents).toContain('REFUND_REQUEST');
+    expect(intents).toContain('CANCEL_SUBSCRIPTION');
+    expect(intents).toContain('CHANGE_PLAN');
+    expect(intents).toContain('BILLING_QUESTION');
+
+    const byId = new Map(scenarios.map((s) => [s.id, s]));
+    // S11 is an unverified write, S12 an upstream failure. Both must escalate
+    // and neither may be reported as a resolution.
+    for (const id of ['S11', 'S12']) {
+      expect(byId.get(id)?.expect.state).toBe('NEEDS_HUMAN');
+      expect(byId.get(id)?.expect.evaluation?.verifiedResolution).toBe(false);
+    }
+  });
+
+  it('gives every policy outcome a scenario', () => {
+    const decisions = scenarios
+      .filter((s) => s.category === 'acceptance')
+      .map((s) => s.expect.policyDecision);
+    expect(decisions).toContain('allow');
+    expect(decisions).toContain('deny');
+    expect(decisions).toContain('require_approval');
+    expect(decisions).toContain(null);
+  });
+
+  it('keeps ten distinct injection attacks, none of which may write', () => {
+    const injections = scenarios.filter((s) => s.category === 'prompt_injection');
+    expect(injections).toHaveLength(10);
+    expect(new Set(injections.map((s) => s.name)).size).toBe(10);
+    for (const s of injections) {
+      expect(s.expect.forbiddenTools).toContain('create_refund');
+      expect(s.expect.policyDecision).toBe('deny');
+      expect(s.expect.evaluation?.verifiedResolution).toBe(false);
+    }
+  });
+
+  it('filters to one category', () => {
+    expect(loadBenchScenarios('prompt_injection')).toHaveLength(10);
   });
 });

@@ -256,7 +256,6 @@ async function main(): Promise<number> {
           faultRate: flag('fault-rate', 0.2),
           repeat: flag('repeat', 3),
           category: rest.find((a) => a.startsWith('--category='))?.split('=')[1],
-          ...(rest.includes('--suite=acceptance') ? { suite: 'acceptance' as const } : {}),
         });
 
         console.log(renderChaos(results));

@@ -16,11 +16,8 @@ import {
 /** The reconstructed point-in-time state, in the shape the checks expect. */
 function externalStateOf(state: ReplayCandidate['state']): ExternalStateSnapshot {
   return {
-    orders: state.orders as ExternalStateSnapshot['orders'],
-    replacementsByOrder: state.replacementsByOrder as ExternalStateSnapshot['replacementsByOrder'],
-    refundsByOrder: state.refundsByOrder as ExternalStateSnapshot['refundsByOrder'],
-    cancellationsByOrder:
-      state.cancellationsByOrder as ExternalStateSnapshot['cancellationsByOrder'],
+    refunds: state.refunds,
+    subscriptions: state.subscriptions,
     fetchedAt: new Date(0),
   };
 }
@@ -64,7 +61,7 @@ async function outcomeOf(
 
 /**
  * Replays one conversation against a version, in simulation mode, with every tool
- * call served from what the original run recorded. Nothing reaches Acme.
+ * call served from what the original run recorded. Nothing reaches Stripe.
  */
 async function replayOne(
   args: ReplayArgs,

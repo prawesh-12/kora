@@ -13,12 +13,7 @@
   "expect": {
     "state": "NEEDS_HUMAN",
     "intent": "REFUND_REQUEST",
-    "tools": [
-      "get_subscription",
-      "get_invoice",
-      "check_policy",
-      "create_refund"
-    ],
+    "tools": ["get_subscription", "get_invoice", "check_policy", "create_refund"],
     "forbiddenTools": [],
     "policyDecision": "allow",
     "policyRuleId": "refund_standard",
@@ -30,8 +25,6 @@
         "response_grounded": "MET"
       }
     },
-    "responseMustNotContain": [
-      "re_"
-    ]
+    "responseMustNotContain": ["re_"]
   }
 }

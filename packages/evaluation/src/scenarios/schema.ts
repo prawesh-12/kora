@@ -15,7 +15,6 @@ export const scenarioSchema = z
     followUps: z.array(z.string()).default([]),
     seed: z
       .object({
-        orderId: z.string().optional(),
         customerId: z.string().optional(),
         customerKey: z.string().optional(),
         subscriptionKey: z.string().optional(),
@@ -47,13 +46,6 @@ export const scenarioSchema = z
         forbiddenTools: z.array(z.string()).default([]),
         policyDecision: z.enum(['allow', 'deny', 'require_approval']).nullable().optional(),
         policyRuleId: z.string().optional(),
-        externalState: z
-          .object({
-            replacementsForOrder: z.number().int().min(0).optional(),
-            orderStatus: z.string().optional(),
-          })
-          .strict()
-          .optional(),
         evaluation: z
           .object({
             verifiedResolution: z.boolean(),

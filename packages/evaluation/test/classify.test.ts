@@ -23,11 +23,16 @@ describe('classification order', () => {
     // unsupported. An engineer sent to the prompt would be looking in the wrong file.
     const base = passingInput();
     const messages = [...base.trace.conversation.messages];
-    messages[1] = { ...messages[1]!, content: 'Your replacement reference is REP-0000.' };
+    messages[1] = { ...messages[1]!, content: 'Your refund reference is re_9999.' };
     const input = withTrace({
       retrievals: [{ stepId: 'stp_r', query: 'q', filters: {}, chunks: [] }],
       toolExecutions: [
-        toolExecution({ id: 'tex_0', toolName: 'get_order', verified: null, verifyObserved: null }),
+        toolExecution({
+          id: 'tex_0',
+          toolName: 'get_subscription',
+          verified: null,
+          verifyObserved: null,
+        }),
         toolExecution({
           id: 'tex_1',
           toolName: 'search_knowledge',
@@ -84,7 +89,7 @@ describe('each code fires on its own cause', () => {
         input: 'x',
         seed: {},
         faults: [],
-        expect: { tools: [], forbiddenTools: ['create_replacement'] },
+        expect: { tools: [], forbiddenTools: ['create_refund'] },
       },
     } as unknown as EvaluationInput;
     expect(codes(input)).toContain('TOOL_SELECTION_FAILURE');
@@ -109,7 +114,7 @@ describe('each code fires on its own cause', () => {
       ],
     });
     const found = classify(input).find((f) => f.code === 'ARGUMENT_FAILURE');
-    expect(found?.detail).toBe('create_replacement');
+    expect(found?.detail).toBe('create_refund');
   });
 
   it('POLICY_FAILURE when a denied action executed anyway', () => {
@@ -127,7 +132,7 @@ describe('each code fires on its own cause', () => {
       ],
     });
     const found = classify(input).find((f) => f.code === 'TOOL_EXECUTION_FAILURE');
-    expect(found?.detail).toBe('create_replacement / upstream_timeout');
+    expect(found?.detail).toBe('create_refund / upstream_timeout');
   });
 
   it('OUTCOME_FAILURE when the write was never verified', () => {
@@ -140,7 +145,7 @@ describe('each code fires on its own cause', () => {
   it('HALLUCINATION when the reply names an id no tool returned', () => {
     const base = passingInput();
     const messages = [...base.trace.conversation.messages];
-    messages[1] = { ...messages[1]!, content: 'Reference REP-0000.' };
+    messages[1] = { ...messages[1]!, content: 'Reference re_9999.' };
     const input = withTrace({ conversation: { ...base.trace.conversation, messages } });
     expect(codes(input)).toContain('HALLUCINATION');
   });

@@ -1,57 +1,50 @@
 import { logger, now } from '@kora/core';
 import type { AssembledTrace } from '@kora/db';
-import {
-  type CancellationResponse,
-  type OrderResponse,
-  type RefundResponse,
-  type ReplacementResponse,
-  acmeReader,
-} from '@kora/tools';
+import { billingProvider } from '@kora/tools';
+import type { RefundRecord, SubscriptionRecord } from './deps.js';
 import type { ExternalStateSnapshot } from './types.js';
 
 /**
- * Reads the affected entities back out of Acme after a run has finished.
+ * Reads the refunds and subscriptions a run touched back out of the billing
+ * provider once the run has finished.
  *
  * This is the part most teams skip and it is the whole point: the transcript tells
- * you what the agent said, the business system tells you what actually happened.
+ * you what the agent said, Stripe tells you what actually happened.
  */
 export async function snapshotExternalState(args: {
+  tenantId: string;
   trace: AssembledTrace;
-  extraOrderIds?: string[];
 }): Promise<ExternalStateSnapshot> {
-  const orderIds = new Set<string>(args.extraOrderIds ?? []);
+  const refundIds = new Set<string>();
+  const subscriptionIds = new Set<string>();
 
   for (const execution of args.trace.toolExecutions) {
-    const input = execution.input as { orderId?: string } | null;
-    if (input?.orderId) orderIds.add(input.orderId);
-    const output = execution.output as { orderId?: string; id?: string } | null;
-    if (output?.orderId) orderIds.add(output.orderId);
+    const input = execution.input as { subscriptionId?: string } | null;
+    if (input?.subscriptionId) subscriptionIds.add(input.subscriptionId);
+
+    const output = execution.output as {
+      refundId?: string;
+      id?: string;
+      subscription?: { id?: string };
+    } | null;
+    if (output?.refundId) refundIds.add(output.refundId);
+    if (output?.subscription?.id) subscriptionIds.add(output.subscription.id);
+    // `cancel_subscription` returns the subscription itself, `create_ticket` a
+    // ticket. Only the Stripe prefix says which one this is.
+    if (output?.id?.startsWith('sub_')) subscriptionIds.add(output.id);
   }
 
-  const orders: Record<string, OrderResponse> = {};
-  const replacementsByOrder: Record<string, ReplacementResponse[]> = {};
-  const refundsByOrder: Record<string, RefundResponse[]> = {};
-  const cancellationsByOrder: Record<string, CancellationResponse[]> = {};
+  const refunds: Record<string, RefundRecord> = {};
+  const subscriptions: Record<string, SubscriptionRecord> = {};
 
   try {
-    for (const orderId of orderIds) {
-      const order = await acmeReader.getOrderOrNull(orderId);
-      if (order) orders[orderId] = order;
-      replacementsByOrder[orderId] = await acmeReader.listReplacements(orderId);
-      refundsByOrder[orderId] = await acmeReader.listRefunds(orderId);
-      cancellationsByOrder[orderId] = await acmeReader.listCancellations(orderId);
-    }
+    const provider = billingProvider(args.tenantId);
+    for (const id of refundIds) refunds[id] = await provider.getRefund(id);
+    for (const id of subscriptionIds) subscriptions[id] = await provider.getSubscription(id);
   } catch (e) {
     logger().warn({ err: e }, 'external state snapshot failed');
-    return {
-      orders,
-      replacementsByOrder,
-      refundsByOrder,
-      cancellationsByOrder,
-      fetchedAt: now(),
-      error: (e as Error).message,
-    };
+    return { refunds, subscriptions, fetchedAt: now(), error: (e as Error).message };
   }
 
-  return { orders, replacementsByOrder, refundsByOrder, cancellationsByOrder, fetchedAt: now() };
+  return { refunds, subscriptions, fetchedAt: now() };
 }

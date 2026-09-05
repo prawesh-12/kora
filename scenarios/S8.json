@@ -13,15 +13,8 @@
   "expect": {
     "state": "AWAITING_APPROVAL",
     "intent": "CHANGE_PLAN",
-    "tools": [
-      "get_subscription",
-      "preview_change",
-      "check_policy"
-    ],
-    "forbiddenTools": [
-      "change_plan",
-      "escalate_to_human"
-    ],
+    "tools": ["get_subscription", "preview_change", "check_policy"],
+    "forbiddenTools": ["change_plan", "escalate_to_human"],
     "policyDecision": "require_approval",
     "policyRuleId": "plan_large_credit",
     "evaluation": {

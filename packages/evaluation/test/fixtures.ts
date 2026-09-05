@@ -1,14 +1,16 @@
 import type { AssembledTrace } from '@kora/db';
+import type { RefundRecord, SubscriptionRecord } from '../src/deps.js';
 import type { EvaluationInput, ExternalStateSnapshot } from '../src/types.js';
 
 const AT = new Date('2026-08-27T12:00:00.000Z');
+const AMOUNT_MINOR = 349900;
 
 type Deep<T> = { [K in keyof T]?: T[K] extends object ? Deep<T[K]> : T[K] };
 
 function run(overrides: Record<string, unknown> = {}) {
   return {
     id: 'run_1',
-    tenantId: 'ten_acme',
+    tenantId: 'ten_kora',
     conversationId: 'conv_1',
     traceId: 'tr_1',
     agentConfigVersion: 'cfg',
@@ -17,7 +19,7 @@ function run(overrides: Record<string, unknown> = {}) {
     finishedAt: AT,
     durationMs: 1000,
     stepCount: 5,
-    intent: 'DAMAGED_ORDER',
+    intent: 'REFUND_REQUEST',
     intentConfidence: 0.94,
     outcome: 'resolved_automatically',
     finalState: 'RESOLVED',
@@ -32,7 +34,7 @@ function run(overrides: Record<string, unknown> = {}) {
 function message(role: string, content: string) {
   return {
     id: `msg_${role}`,
-    tenantId: 'ten_acme',
+    tenantId: 'ten_kora',
     conversationId: 'conv_1',
     role,
     content,
@@ -44,13 +46,23 @@ function message(role: string, content: string) {
 export function toolExecution(overrides: Record<string, unknown> = {}) {
   return {
     id: 'tex_1',
-    tenantId: 'ten_acme',
+    tenantId: 'ten_kora',
     runId: 'run_1',
     stepId: 'stp_1',
-    toolName: 'create_replacement',
+    toolName: 'create_refund',
     toolVersion: 1,
-    input: { orderId: '9832' },
-    output: { id: 'REP-0001', orderId: '9832' },
+    input: {
+      subscriptionId: 'sub_1S',
+      invoiceId: 'in_1S',
+      amountMinor: AMOUNT_MINOR,
+      reason: 'requested_by_customer',
+    },
+    output: {
+      refundId: 're_1S',
+      status: 'succeeded',
+      amountMinor: AMOUNT_MINOR,
+      currency: 'INR',
+    },
     status: 'ok',
     verified: true,
     verifyObserved: { ok: true },
@@ -68,13 +80,13 @@ export function toolExecution(overrides: Record<string, unknown> = {}) {
 export function policyCheck(overrides: Record<string, unknown> = {}) {
   return {
     id: 'pck_1',
-    tenantId: 'ten_acme',
+    tenantId: 'ten_kora',
     runId: 'run_1',
     stepId: 'stp_1',
-    policyKey: 'acme_damaged_order',
+    policyKey: 'kora_refund',
     policyVersion: '1.0.0',
-    ruleId: 'standard_replacement',
-    action: 'create_replacement',
+    ruleId: 'refund_standard',
+    action: 'create_refund',
     decision: 'allow',
     reason: 'within policy',
     facts: {},
@@ -84,20 +96,48 @@ export function policyCheck(overrides: Record<string, unknown> = {}) {
   };
 }
 
-export function snapshot(replacements: number, orderId = '9832'): ExternalStateSnapshot {
+function subscriptionRecord(id: string): SubscriptionRecord {
   return {
-    orders: {},
-    replacementsByOrder: {
-      [orderId]: Array.from({ length: replacements }, (_, i) => ({
-        id: `REP-000${i + 1}`,
-        orderId,
-        status: 'created' as const,
-        createdAt: AT.toISOString(),
-        estimatedDeliveryDays: 5,
-      })),
-    },
-    refundsByOrder: { [orderId]: [] },
-    cancellationsByOrder: { [orderId]: [] },
+    id,
+    status: 'active',
+    customerId: 'cus_014',
+    items: [
+      {
+        subscriptionItemId: 'si_1S',
+        priceId: 'price_basic',
+        productId: 'prod_basic',
+        unitAmount: { amountMinor: AMOUNT_MINOR, currency: 'INR' },
+        quantity: 1,
+      },
+    ],
+    currentPeriodEnd: 1_800_000_000,
+    cancelAtPeriodEnd: false,
+    canceledAt: null,
+    cancelAt: null,
+    latestInvoiceId: 'in_1S',
+    collectionMethod: 'charge_automatically',
+  };
+}
+
+function refundRecord(id: string): RefundRecord {
+  return {
+    id,
+    status: 'succeeded',
+    amount: { amountMinor: AMOUNT_MINOR, currency: 'INR' },
+    chargeId: 'ch_1S',
+    paymentIntentId: 'pi_1S',
+    reason: 'requested_by_customer',
+    created: 1_790_000_000,
+  };
+}
+
+/** The business system holding `refunds` refunds against the seeded subscription. */
+export function snapshot(refunds: number, subscriptionId = 'sub_1S'): ExternalStateSnapshot {
+  return {
+    refunds: Object.fromEntries(
+      Array.from({ length: refunds }, (_, i) => [`re_${i + 1}S`, refundRecord(`re_${i + 1}S`)]),
+    ),
+    subscriptions: { [subscriptionId]: subscriptionRecord(subscriptionId) },
     fetchedAt: AT,
   };
 }
@@ -109,38 +149,17 @@ export function passingInput(overrides: Deep<EvaluationInput> = {}): EvaluationI
     conversation: {
       row: {},
       messages: [
-        message('customer', 'My coffee machine from order 9832 arrived broken.'),
-        message('agent', 'I have arranged a replacement for order 9832. Reference REP-0001.'),
+        message('customer', 'Please refund my last payment on subscription sub_1S.'),
+        message('agent', 'I have refunded INR 3,499. The refund reference is re_1S.'),
       ],
     },
     steps: [],
     toolExecutions: [
       toolExecution({
         id: 'tex_0',
-        toolName: 'get_order',
-        input: { orderId: '9832' },
-        output: {
-          id: '9832',
-          customerId: 'cus_014',
-          status: 'delivered',
-          items: [
-            {
-              sku: 'SKU-CM-01',
-              name: 'Coffee machine',
-              category: 'appliance',
-              quantity: 1,
-              unitAmountMinor: 349900,
-            },
-          ],
-          totalAmountMinor: 349900,
-          currency: 'INR',
-          placedAt: AT.toISOString(),
-          deliveredAt: AT.toISOString(),
-          replacementIds: [],
-          refundIds: [],
-          refundedAmountMinor: 0,
-          cancellationIds: [],
-        },
+        toolName: 'get_subscription',
+        input: { subscriptionId: 'sub_1S' },
+        output: subscriptionRecord('sub_1S'),
         verified: null,
         verifyObserved: null,
       }),
@@ -153,16 +172,16 @@ export function passingInput(overrides: Deep<EvaluationInput> = {}): EvaluationI
     retrievals: [
       {
         stepId: 'stp_r',
-        query: 'damaged item replacement',
-        filters: { topic: 'returns' },
+        query: 'refund window',
+        filters: { topic: 'refunds' },
         chunks: [
           {
             chunkId: 'chk_1',
             documentId: 'doc_1',
             documentVersion: 1,
-            title: 'Acme Store damaged item policy',
-            headingPath: 'Damaged items > Eligibility',
-            content: 'Replacements are available for 7 days from delivery.',
+            title: 'Refund policy',
+            headingPath: 'Refunds > Eligibility',
+            content: 'Refunds are available for 30 days from the payment date.',
             distance: 0.12,
           },
         ],

@@ -51,7 +51,7 @@ describe('each fixture fails exactly one check', () => {
         input: 'x',
         seed: {},
         faults: [],
-        expect: { tools: ['get_order'], forbiddenTools: ['create_replacement'] },
+        expect: { tools: ['get_subscription'], forbiddenTools: ['create_refund'] },
       },
     } as unknown as EvaluationInput;
     expect(unmet(input)).toEqual(['tool_correctness']);
@@ -64,7 +64,7 @@ describe('each fixture fails exactly one check', () => {
     expect(unmet(input)).toEqual(['write_verified']);
   });
 
-  it('idempotency_clean when two replacements exist for one order', () => {
+  it('idempotency_clean when two refunds exist for one refund action', () => {
     const input = { ...passingInput(), externalState: snapshot(2) };
     expect(unmet(input)).toEqual(['idempotency_clean']);
   });
@@ -82,14 +82,110 @@ describe('each fixture fails exactly one check', () => {
   it('response_grounded when the reply names an id no tool returned', () => {
     const input = passingInput();
     const messages = [...input.trace.conversation.messages];
-    messages[1] = { ...messages[1]!, content: 'Your replacement reference is REP-0000.' };
+    messages[1] = { ...messages[1]!, content: 'Your refund reference is re_9999.' };
     const patched = withTrace({ conversation: { ...input.trace.conversation, messages } });
     expect(unmet(patched)).toEqual(['response_grounded']);
   });
 });
 
+describe('the other two money writes are scored from the read-back', () => {
+  function cancelRun(cancelled: boolean) {
+    const state = snapshot(0);
+    const subscription = state.subscriptions.sub_1S!;
+    return {
+      ...withTrace({
+        run: { ...passingInput().trace.run, intent: 'CANCEL_SUBSCRIPTION' },
+        policyChecks: [policyCheck({ action: 'cancel_subscription', ruleId: 'cancel_allow' })],
+        toolExecutions: [
+          toolExecution({
+            id: 'tex_0',
+            toolName: 'get_subscription',
+            input: { subscriptionId: 'sub_1S' },
+            verified: null,
+            verifyObserved: null,
+          }),
+          toolExecution({
+            toolName: 'cancel_subscription',
+            input: { subscriptionId: 'sub_1S', mode: 'at_period_end' },
+            output: { id: 'sub_1S' },
+          }),
+        ],
+      }),
+      externalState: {
+        ...state,
+        subscriptions: { sub_1S: { ...subscription, cancelAtPeriodEnd: cancelled } },
+      },
+    };
+  }
+
+  it('meets outcome_achieved when the subscription reads back as cancelling', () => {
+    expect(verdicts(cancelRun(true)).outcome_achieved?.verdict).toBe('MET');
+  });
+
+  it('fails outcome_achieved when the cancellation never landed', () => {
+    expect(verdicts(cancelRun(false)).outcome_achieved?.verdict).toBe('UNMET');
+  });
+
+  it('meets outcome_achieved when the subscription sits on the new price', () => {
+    const state = snapshot(0);
+    const subscription = state.subscriptions.sub_1S!;
+    const input = {
+      ...withTrace({
+        run: { ...passingInput().trace.run, intent: 'CHANGE_PLAN' },
+        policyChecks: [policyCheck({ action: 'change_plan', ruleId: 'plan_allow' })],
+        toolExecutions: [
+          toolExecution({
+            toolName: 'change_plan',
+            input: {
+              subscriptionId: 'sub_1S',
+              subscriptionItemId: 'si_1S',
+              targetPriceId: 'price_pro',
+              prorationBehavior: 'create_prorations',
+            },
+            output: { subscription: { id: 'sub_1S' }, quotedNextChargeMinor: 199900 },
+          }),
+        ],
+      }),
+      externalState: {
+        ...state,
+        subscriptions: {
+          sub_1S: {
+            ...subscription,
+            items: [{ ...subscription.items[0]!, priceId: 'price_pro' }],
+          },
+        },
+      },
+    };
+    expect(verdicts(input).outcome_achieved?.verdict).toBe('MET');
+  });
+
+  it('does not blame a read-only run for a subscription that was already cancelling', () => {
+    const state = snapshot(0);
+    const subscription = state.subscriptions.sub_1S!;
+    const input = {
+      ...withTrace({
+        run: { ...passingInput().trace.run, intent: 'BILLING_QUESTION' },
+        policyChecks: [],
+        toolExecutions: [
+          toolExecution({
+            toolName: 'get_subscription',
+            input: { subscriptionId: 'sub_1S' },
+            verified: null,
+            verifyObserved: null,
+          }),
+        ],
+      }),
+      externalState: {
+        ...state,
+        subscriptions: { sub_1S: { ...subscription, cancelAtPeriodEnd: true } },
+      },
+    };
+    expect(verdicts(input).outcome_achieved?.verdict).toBe('MET');
+  });
+});
+
 describe('CANNOT_ASSESS is never a pass', () => {
-  it('marks the snapshot-dependent checks when Acme could not be read', () => {
+  it('marks the snapshot-dependent checks when the billing provider could not be read', () => {
     const input = {
       ...passingInput(),
       externalState: { ...snapshot(1), error: 'connection refused' },
@@ -136,7 +232,7 @@ describe('verifiedResolution', () => {
       ...withTrace({
         policyChecks: [policyCheck({ decision: 'deny', ruleId: 'outside_return_window' })],
         toolExecutions: [
-          toolExecution({ toolName: 'get_order', verified: null, verifyObserved: null }),
+          toolExecution({ toolName: 'get_subscription', verified: null, verifyObserved: null }),
         ],
       }),
       externalState: snapshot(0),

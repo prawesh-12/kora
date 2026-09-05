@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { ConfigError } from '@kora/core';
+import { STRIPE_WRITE_TOOLS } from '@kora/tools';
 import { parse as parseYaml } from 'yaml';
 import { z } from 'zod';
 import type { AssembledTrace } from '../deps.js';
@@ -72,11 +73,7 @@ export function applicableCriteria(rubric: Rubric, trace: AssembledTrace): Crite
   const escalated = trace.escalation !== null;
   const resolved = trace.run.outcome === 'resolved_automatically';
   const writeAttempted = trace.toolExecutions.some(
-    (e) =>
-      e.toolName !== 'get_order' &&
-      e.toolName !== 'get_customer' &&
-      e.toolName !== 'search_knowledge' &&
-      e.toolName !== 'check_policy',
+    (e) => STRIPE_WRITE_TOOLS.includes(e.toolName) || e.toolName === 'create_ticket',
   );
 
   const applies = (when: Applicability): boolean => {

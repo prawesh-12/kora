@@ -1,31 +1,5 @@
 import { sql } from '@kora/db';
-import { acmeAdmin, acmeReader } from '@kora/tools';
-
-const ALL_ORDERS = ['9832', '9833', '9834', '9835', '9836', '9837', '9838', '9839', '9840', '9841'];
-
-export function acmeIsUp(): Promise<boolean> {
-  return acmeAdmin.health();
-}
-
-/**
- * Resets only the entities a scenario touches, so one scenario's reset does not
- * wipe another's fixture.
- */
-export function resetAcmeOrders(orderIds: string[] = ALL_ORDERS): Promise<void> {
-  return acmeAdmin.reset(orderIds);
-}
-
-export function replacementsForOrder(orderId: string) {
-  return acmeReader.listReplacements(orderId);
-}
-
-export function orderStatus(orderId: string): Promise<string | null> {
-  return acmeAdmin.orderStatus(orderId);
-}
-
-export function acmeRequestLog(path: string) {
-  return acmeAdmin.requestLog(path);
-}
+import { STRIPE_WRITE_TOOLS } from '@kora/tools';
 
 export async function knowledgeIsPopulated(tenantId: string): Promise<boolean> {
   const rows = await sql()<{ n: string }[]>`
@@ -52,16 +26,16 @@ export async function clearIdempotency(tenantId: string): Promise<void> {
 }
 
 /**
- * Write requests that actually reached Acme. Read straight from the service's own
- * request log rather than from anything Kora recorded: the whole point of the
- * shadow assertion is that Kora's own view might be wrong.
+ * Money writes that actually executed. Read from the execution rows rather than
+ * from what a scenario expected: the whole point of the shadow assertion is that
+ * Kora's own view of what it did might be wrong.
  */
-export async function acmeWritePosts(since: Date): Promise<number> {
+export async function moneyWrites(tenantId: string, since: Date): Promise<number> {
   const rows = await sql()<{ n: string }[]>`
-    SELECT count(*) AS n FROM acme_request_log
-    WHERE method = 'POST'
-      AND reached_business_logic = true
-      AND path NOT LIKE '/admin/%'
-      AND created_at >= ${since.toISOString()}::timestamptz`;
+    SELECT count(*) AS n FROM tool_executions
+    WHERE tenant_id = ${tenantId}
+      AND tool_name = ANY(${STRIPE_WRITE_TOOLS})
+      AND status = 'ok'
+      AND started_at >= ${since.toISOString()}::timestamptz`;
   return Number(rows[0]?.n ?? 0);
 }

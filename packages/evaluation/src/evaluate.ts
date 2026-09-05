@@ -1,6 +1,7 @@
 import { logger, now } from '@kora/core';
 import { assembleTrace, withTenant } from '@kora/db';
 import type { AssembledTrace } from '@kora/db';
+import { STRIPE_WRITE_TOOLS } from '@kora/tools';
 import { CHECKS } from './checks/index.js';
 import { type Failure, classifyFailures } from './classify.js';
 import { type JudgeCaller, combineChecks, judgeRun } from './judge/judge.js';
@@ -32,7 +33,7 @@ export function verifiedResolutionOf(trace: AssembledTrace, checks: CheckResult[
   // actually happened. A `replayed` write landed too: the run that owned the
   // idempotency claim did the work and the verification, and this run proved it
   // did not duplicate it.
-  const WRITE_INTENTS = ['DAMAGED_ORDER', 'REFUND_REQUEST', 'CANCEL_ORDER'];
+  const WRITE_INTENTS = ['REFUND_REQUEST', 'CANCEL_SUBSCRIPTION', 'CHANGE_PLAN'];
   if (trace.run.intent && WRITE_INTENTS.includes(trace.run.intent)) {
     // Nothing executes in simulation or shadow mode, so `simulated` is the
     // strongest claim a write can make there: the action was allowed and reached
@@ -42,7 +43,7 @@ export function verifiedResolutionOf(trace: AssembledTrace, checks: CheckResult[
       trace.run.deploymentMode === 'simulation' || trace.run.deploymentMode === 'shadow';
     const landed = trace.toolExecutions.some(
       (e) =>
-        ['create_replacement', 'create_refund', 'cancel_order'].includes(e.toolName) &&
+        STRIPE_WRITE_TOOLS.includes(e.toolName) &&
         ((e.status === 'ok' && e.verified === true) ||
           e.status === 'replayed' ||
           (pretend && e.status === 'simulated')),
@@ -69,10 +70,10 @@ export interface EvaluateRunArgs {
   /**
    * Replay only: the business state as it was during the original run.
    *
-   * Without this the checks read Acme as it looks *now*, and a replayed run gets
-   * marked wrong because some later run created a replacement on the same order.
-   * Blocking live reads inside the pipeline is not enough on its own; evaluation
-   * reads the business system too.
+   * Without this the checks read Stripe as it looks *now*, and a replayed run
+   * gets marked wrong because some later run refunded the same charge. Blocking
+   * live reads inside the pipeline is not enough on its own; evaluation reads the
+   * business system too.
    */
   externalState?: ExternalStateSnapshot;
 }
@@ -105,11 +106,7 @@ export async function evaluateRun(args: EvaluateRunArgs): Promise<EvaluationReco
 
   const trace = await assembleTrace(args.tenantId, args.runId);
   const externalState =
-    args.externalState ??
-    (await snapshotExternalState({
-      trace,
-      ...(args.scenario?.seed.orderId ? { extraOrderIds: [args.scenario.seed.orderId] } : {}),
-    }));
+    args.externalState ?? (await snapshotExternalState({ tenantId: args.tenantId, trace }));
 
   const deterministic = runChecks({ trace, externalState, scenario: args.scenario });
 

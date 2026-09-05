@@ -28,33 +28,39 @@ function outcome(over: Partial<ReplayOutcome> = {}): ReplayOutcome {
 }
 
 describe('point-in-time reconstruction', () => {
-  it('rebuilds the order and the write from the original tool outputs', () => {
+  it('rebuilds the subscription and the refund from the original tool outputs', () => {
     const state = reconstructState(passingInput().trace);
     expect(isNotReplayable(state)).toBe(false);
     if (isNotReplayable(state)) return;
 
-    expect(state.orders['9832']).toBeDefined();
-    expect(state.replacementsByOrder['9832']).toHaveLength(1);
+    expect(state.subscriptions.sub_1S).toBeDefined();
+    expect(state.refunds.re_1S?.status).toBe('succeeded');
     expect(Object.keys(state.toolOutputs).length).toBeGreaterThan(0);
   });
 
   it('refuses a run whose write output was never recorded', () => {
     const input = withTrace({
       toolExecutions: [
-        toolExecution({ id: 'tex_0', toolName: 'get_order', verified: null, verifyObserved: null }),
+        toolExecution({
+          id: 'tex_0',
+          toolName: 'get_subscription',
+          output: { id: 'sub_1S' },
+          verified: null,
+          verifyObserved: null,
+        }),
         toolExecution({ output: null }),
       ],
     });
     const state = reconstructState(input.trace);
     expect(isNotReplayable(state)).toBe(true);
     if (isNotReplayable(state)) {
-      expect(state.reason).toContain('create_replacement');
+      expect(state.reason).toContain('create_refund');
     }
   });
 
-  it('refuses a run whose get_order output was never recorded', () => {
+  it('refuses a run whose get_subscription output was never recorded', () => {
     const input = withTrace({
-      toolExecutions: [toolExecution({ toolName: 'get_order', output: {}, verified: null })],
+      toolExecutions: [toolExecution({ toolName: 'get_subscription', output: {}, verified: null })],
     });
     expect(isNotReplayable(reconstructState(input.trace))).toBe(true);
   });
@@ -70,15 +76,15 @@ describe('point-in-time reconstruction', () => {
     const state = reconstructState(passingInput().trace);
     if (isNotReplayable(state)) throw new Error('should be replayable');
     const keys = Object.keys(state.toolOutputs);
-    expect(keys.some((k) => k.startsWith('get_order:'))).toBe(true);
-    expect(keys.some((k) => k.startsWith('create_replacement:'))).toBe(true);
+    expect(keys.some((k) => k.startsWith('get_subscription:'))).toBe(true);
+    expect(keys.some((k) => k.startsWith('create_refund:'))).toBe(true);
   });
 });
 
 describe('stratified sampling', () => {
   const items = [
-    ...Array.from({ length: 80 }, (_, i) => ({ id: `s${i}`, intent: 'ORDER_STATUS' })),
-    ...Array.from({ length: 15 }, (_, i) => ({ id: `d${i}`, intent: 'DAMAGED_ORDER' })),
+    ...Array.from({ length: 80 }, (_, i) => ({ id: `s${i}`, intent: 'BILLING_QUESTION' })),
+    ...Array.from({ length: 15 }, (_, i) => ({ id: `d${i}`, intent: 'CANCEL_SUBSCRIPTION' })),
     ...Array.from({ length: 5 }, (_, i) => ({ id: `r${i}`, intent: 'REFUND_REQUEST' })),
   ];
 
@@ -88,9 +94,9 @@ describe('stratified sampling', () => {
     for (const p of picked) counts.set(p.intent, (counts.get(p.intent) ?? 0) + 1);
 
     expect(picked).toHaveLength(12);
-    // A random sample of this traffic would be almost all order-status lookups.
+    // A random sample of this traffic would be almost all billing questions.
     expect(counts.get('REFUND_REQUEST')).toBeGreaterThanOrEqual(4);
-    expect(counts.get('DAMAGED_ORDER')).toBeGreaterThanOrEqual(4);
+    expect(counts.get('CANCEL_SUBSCRIPTION')).toBeGreaterThanOrEqual(4);
   });
 
   it('returns everything when the limit is not binding', () => {
@@ -134,7 +140,7 @@ describe('the report', () => {
   });
 
   it('never hides a run it could not replay', () => {
-    const report = buildReport([outcome()], [{ runId: 'run_x', reason: 'no order output' }]);
+    const report = buildReport([outcome()], [{ runId: 'run_x', reason: 'no refund output' }]);
     expect(report.notReplayable).toHaveLength(1);
     expect(report.compared).toBe(1);
   });

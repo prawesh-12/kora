@@ -1,4 +1,5 @@
 import type { AssembledTrace } from '@kora/db';
+import { STRIPE_WRITE_TOOLS } from '@kora/tools';
 import type { EvaluationRecord, ScenarioSpec } from '../types.js';
 
 export interface Assertion {
@@ -16,20 +17,17 @@ interface AssertArgs {
   trace: AssembledTrace;
   evaluation: EvaluationRecord;
   finalMessage: string;
-  replacementCount: number;
-  replacementDetail: string;
-  orderStatus: string | null;
 }
 
 function check(name: string, passed: boolean, detail: string): Assertion {
   return { name, passed, detail };
 }
 
-const WRITE_ACTIONS = ['create_replacement', 'create_refund', 'cancel_order'];
+const WRITE_ACTIONS = STRIPE_WRITE_TOOLS;
 
 /**
- * Which write the scenario is actually about. Hardcoding `create_replacement`
- * made every refund and cancellation scenario report "policy never reached".
+ * Which write the scenario is actually about. Hardcoding one of them made every
+ * scenario about the other two report "policy never reached".
  */
 function writeActionOf(args: AssertArgs): string | null {
   // What the scenario says should happen comes first. A forbidden tool is what
@@ -117,7 +115,7 @@ export function assertScenario(args: AssertArgs): Assertion[] {
         check(
           'policy never reached for the write',
           write === undefined,
-          write ? `found a ${write.decision} check` : 'no create_replacement policy check',
+          write ? `found a ${write.decision} check` : 'no policy check for a money write',
         ),
       );
     } else {
@@ -138,26 +136,6 @@ export function assertScenario(args: AssertArgs): Assertion[] {
         );
       }
     }
-  }
-
-  if (expected.externalState?.replacementsForOrder !== undefined) {
-    out.push(
-      check(
-        'replacements in the business system',
-        args.replacementCount === expected.externalState.replacementsForOrder,
-        `expected ${expected.externalState.replacementsForOrder}, found ${args.replacementCount} ${args.replacementDetail}`,
-      ),
-    );
-  }
-
-  if (expected.externalState?.orderStatus) {
-    out.push(
-      check(
-        'order status in the business system',
-        args.orderStatus === expected.externalState.orderStatus,
-        `expected ${expected.externalState.orderStatus}, found ${args.orderStatus}`,
-      ),
-    );
   }
 
   if (scenario.expectedToolErrorCode) {

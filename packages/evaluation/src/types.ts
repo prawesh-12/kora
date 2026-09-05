@@ -1,19 +1,12 @@
 import type { FailureCode } from '@kora/core';
-import type {
-  AssembledTrace,
-  CancellationResponse,
-  OrderResponse,
-  RefundResponse,
-  ReplacementResponse,
-} from './deps.js';
+import type { AssembledTrace, RefundRecord, SubscriptionRecord } from './deps.js';
 
+/** The refunds and subscriptions a run touched, read back from the billing provider. */
 export interface ExternalStateSnapshot {
-  orders: Record<string, OrderResponse>;
-  replacementsByOrder: Record<string, ReplacementResponse[]>;
-  refundsByOrder: Record<string, RefundResponse[]>;
-  cancellationsByOrder: Record<string, CancellationResponse[]>;
+  refunds: Record<string, RefundRecord>;
+  subscriptions: Record<string, SubscriptionRecord>;
   fetchedAt: Date;
-  /** Set when Acme could not be read. Checks that need it return CANNOT_ASSESS. */
+  /** Set when the provider could not be read. Checks that need it return CANNOT_ASSESS. */
   error?: string;
 }
 
@@ -23,7 +16,6 @@ export interface ScenarioExpectation {
   tools?: string[];
   forbiddenTools?: string[];
   policyDecision?: string | null;
-  externalState?: { replacementsForOrder?: number; orderStatus?: string };
   evaluation?: {
     verifiedResolution: boolean;
     checks: Record<string, 'MET' | 'UNMET' | 'CANNOT_ASSESS'>;
@@ -39,7 +31,6 @@ export interface ScenarioSpec {
   input: string;
   followUps?: string[];
   seed: {
-    orderId?: string;
     customerId?: string;
     customerKey?: string;
     subscriptionKey?: string;

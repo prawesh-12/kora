@@ -1,4 +1,5 @@
 import { FAILURE_CODES, type FailureCode } from '@kora/core';
+import { STRIPE_WRITE_TOOLS } from '@kora/tools';
 import type { EvaluationInput } from './types.js';
 
 export interface Failure {
@@ -87,21 +88,17 @@ export function classifyFailures(input: EvaluationInput): Failure[] {
   }
   const writeBeforeContext = trace.toolExecutions.find(
     (e, i) =>
-      e.toolName !== 'get_order' &&
-      e.toolName !== 'get_customer' &&
-      e.toolName !== 'search_knowledge' &&
-      e.toolName !== 'check_policy' &&
-      e.toolName !== 'escalate_to_human' &&
+      STRIPE_WRITE_TOOLS.includes(e.toolName) &&
       e.status === 'ok' &&
       !trace.toolExecutions
         .slice(0, i)
-        .some((p) => p.toolName === 'get_order' && p.status === 'ok'),
+        .some((p) => p.toolName === 'get_subscription' && p.status === 'ok'),
   );
   if (writeBeforeContext) {
     add(
       'TOOL_SELECTION_FAILURE',
       writeBeforeContext.toolName,
-      'a write executed before the order was fetched',
+      'a money write executed before the subscription was fetched',
     );
   }
 

@@ -1,22 +1,20 @@
 import { logger } from '@kora/core';
 import { assembleTrace } from '@kora/db';
-import { replayKey } from '@kora/tools';
-import type { AssembledTrace } from '../deps.js';
+import { STRIPE_WRITE_TOOLS, replayKey } from '@kora/tools';
+import type { AssembledTrace, RefundRecord, SubscriptionRecord } from '../deps.js';
 
 /**
  * The business state as it was when the original run happened, rebuilt from that
  * run's own tool outputs.
  *
- * Replaying against today's state produces confident, meaningless comparisons: an
- * order that has since been refunded looks like the new version made a different
+ * Replaying against today's state produces confident, meaningless comparisons: a
+ * charge that has since been refunded looks like the new version made a different
  * decision when all that changed is the world. A run the trace cannot reconstruct
  * is marked `not_replayable` and skipped, never silently included.
  */
 export interface PointInTimeState {
-  orders: Record<string, unknown>;
-  replacementsByOrder: Record<string, unknown[]>;
-  refundsByOrder: Record<string, unknown[]>;
-  cancellationsByOrder: Record<string, unknown[]>;
+  refunds: Record<string, RefundRecord>;
+  subscriptions: Record<string, SubscriptionRecord>;
   /** Keyed by `toolName:canonicalInput`, so a repeated call returns what it returned. */
   toolOutputs: Record<string, unknown>;
   /**
@@ -35,17 +33,41 @@ export interface NotReplayable {
   reason: string;
 }
 
-const WRITE_TOOLS = ['create_replacement', 'create_refund', 'cancel_order', 'create_ticket'];
+const WRITE_TOOLS = [...STRIPE_WRITE_TOOLS, 'create_ticket'];
 
 /** Upstream conditions the recorded outputs cannot bring back. */
 const TRANSIENT_CODES = ['UPSTREAM_TIMEOUT', 'UPSTREAM_5XX', 'VERIFY_FAILED', 'DEADLINE_EXCEEDED'];
 
+interface WriteOutput {
+  id?: string;
+  refundId?: string;
+  status?: string;
+  amountMinor?: number;
+  currency?: string;
+  subscription?: SubscriptionRecord;
+}
+
+/**
+ * A refund as the original run recorded it. The tool stores only what it needed,
+ * so the fields Stripe would have held but the trace never saw stay empty rather
+ * than being invented.
+ */
+function refundFrom(output: WriteOutput): RefundRecord {
+  return {
+    id: output.refundId ?? '',
+    status: (output.status ?? 'succeeded') as RefundRecord['status'],
+    amount: { amountMinor: output.amountMinor ?? 0, currency: output.currency ?? '' },
+    chargeId: null,
+    paymentIntentId: null,
+    reason: null,
+    created: 0,
+  };
+}
+
 export function reconstructState(trace: AssembledTrace): PointInTimeState | NotReplayable {
   const state: PointInTimeState = {
-    orders: {},
-    replacementsByOrder: {},
-    refundsByOrder: {},
-    cancellationsByOrder: {},
+    refunds: {},
+    subscriptions: {},
     toolOutputs: {},
     approvalDecisions: trace.approvals
       .filter((a) => a.status === 'approved' || a.status === 'denied')
@@ -64,33 +86,34 @@ export function reconstructState(trace: AssembledTrace): PointInTimeState | NotR
     const key = replayKey(execution.toolName, execution.input);
     state.toolOutputs[key] = execution.output;
 
-    if (execution.toolName === 'get_order') {
-      const order = execution.output as { id?: string } | null;
-      if (!order?.id) {
+    if (execution.toolName === 'get_subscription') {
+      const subscription = execution.output as SubscriptionRecord | null;
+      if (!subscription?.id) {
         return {
           runId: trace.run.id,
-          reason: 'get_order succeeded but its output was not recorded',
+          reason: 'get_subscription succeeded but its output was not recorded',
         };
       }
-      state.orders[order.id] = order;
+      state.subscriptions[subscription.id] = subscription;
     }
 
     if (WRITE_TOOLS.includes(execution.toolName)) {
-      const output = execution.output as { id?: string; orderId?: string } | null;
-      if (!output?.id) {
+      const output = execution.output as WriteOutput | null;
+      // `create_refund` returns a refund id rather than an `id`, and `change_plan`
+      // returns the subscription nested. A write with none of the three recorded
+      // nothing, and replay cannot rebuild what it did.
+      const writtenId = output?.id ?? output?.refundId ?? output?.subscription?.id;
+      if (!writtenId) {
         return {
           runId: trace.run.id,
           reason: `${execution.toolName} succeeded but its output was not recorded`,
         };
       }
-      const orderId = output.orderId ?? '';
-      const bucket =
-        execution.toolName === 'create_refund'
-          ? state.refundsByOrder
-          : execution.toolName === 'cancel_order'
-            ? state.cancellationsByOrder
-            : state.replacementsByOrder;
-      bucket[orderId] = [...(bucket[orderId] ?? []), output];
+      if (output?.refundId) state.refunds[output.refundId] = refundFrom(output);
+      const subscription =
+        output?.subscription ??
+        (output?.id?.startsWith('sub_') ? (execution.output as SubscriptionRecord) : null);
+      if (subscription) state.subscriptions[subscription.id] = subscription;
     }
   }
 

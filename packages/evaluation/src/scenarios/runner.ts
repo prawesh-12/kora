@@ -7,19 +7,15 @@ import {
   serverEnv,
 } from '@kora/core';
 import { assembleTrace, withTenant } from '@kora/db';
-import { setBillingProvider } from '@kora/tools';
+import { STRIPE_WRITE_TOOLS, setBillingProvider } from '@kora/tools';
+import { withInjectedFaults } from '../bench/billing-chaos.js';
 import { evaluateRun } from '../evaluate.js';
 import type { ScenarioSpec } from '../types.js';
 import { type Assertion, assertScenario } from './assert.js';
 import {
-  acmeIsUp,
   clearIdempotency,
-  acmeWritePosts,
-  acmeRequestLog,
   knowledgeIsPopulated,
-  orderStatus,
-  replacementsForOrder,
-  resetAcmeOrders,
+  moneyWrites,
   setKnowledgeStatus,
 } from './reset.js';
 import { createScenarioStub, subscriptionIdForKey } from './stripe-stub.js';
@@ -102,7 +98,6 @@ export async function runScenario(
   const { runAgentTurn } = deps;
   const startedAt = Date.now();
   const repos = withTenant(tenantId);
-  const touchedOrders = scenario.seed.orderId ? [scenario.seed.orderId] : [];
 
   const base: ScenarioOutcome = {
     id: scenario.id,
@@ -119,25 +114,17 @@ export async function runScenario(
   };
 
   try {
-    // Money-ops scenarios run against an in-memory billing stub behind the
-    // same provider interface production uses. The stub is fresh per scenario
-    // so refunds, cancellations, and plan changes never leak across runs.
+    // Every scenario runs against an in-memory billing stub behind the same
+    // provider interface production uses. The stub is fresh per scenario so
+    // refunds, cancellations, and plan changes never leak across runs, and it is
+    // wrapped in the fault injector when the pass is a chaos pass.
     // The fixture key resolves to a real subscription id appended to the
     // message, the way a conversation already knowing its customer would.
-    const stripeSuite = scenario.id.startsWith('S');
-    if (stripeSuite) {
-      setBillingProvider(createScenarioStub(scenario.seed));
-    }
-    const subRef = stripeSuite ? subscriptionIdForKey(scenario.seed.subscriptionKey) : null;
+    setBillingProvider(withInjectedFaults(createScenarioStub(scenario.seed)));
+    const subRef = subscriptionIdForKey(scenario.seed.subscriptionKey);
     const messageHasRef = /(?:sub|in|re|price)_[A-Za-z0-9]+/.test(scenario.input);
     const input =
       subRef && !messageHasRef ? `${scenario.input} My subscription is ${subRef}.` : scenario.input;
-    // A scenario with no seeded order resets nothing. Passing an empty list used
-    // to mean "reset everything", which wiped the fixture out from under whatever
-    // was running concurrently, and the per-order lock cannot help because such a
-    // scenario holds no order's chain. That is one intermittent benchmark failure
-    // per few runs, and it looks exactly like a real regression.
-    if (touchedOrders.length > 0) await resetAcmeOrders(touchedOrders);
     await setKnowledgeStatus(tenantId, scenario.emptyKnowledge ? 'superseded' : 'active');
 
     const faults: Record<string, string> = {};
@@ -170,8 +157,8 @@ export async function runScenario(
 
     if (scenario.repeatTurn) {
       // A real double submit races: both turns start before either has written,
-      // so the idempotency claim is what stops the second replacement, not the
-      // order already having one.
+      // so the idempotency claim is what stops the second refund, not the money
+      // having moved already.
       const [first, second] = await withTimeout(
         Promise.all([turn(), turn()]),
         HARD_CAP_MS,
@@ -201,12 +188,11 @@ export async function runScenario(
         // repeating themselves. Re-sending the original message wrote it to the
         // transcript twice.
         // Same shape as the approval decision route: a person saying go ahead,
-        // naming the order so the resumed turn has something to act on.
-        const orderId = scenario.seed.orderId;
+        // naming the subscription so the resumed turn has something to act on.
         result = await withTimeout(
           resume(
-            orderId
-              ? `Please go ahead with the action a colleague has just approved for order ${orderId}.`
+            subRef
+              ? `Please go ahead with the action a colleague has just approved for ${subRef}.`
               : 'Please go ahead with the action a colleague has just approved.',
           ),
           HARD_CAP_MS,
@@ -223,33 +209,15 @@ export async function runScenario(
       ...(deps.judge ? { judge: deps.judge } : {}),
     });
 
-    const orderId = scenario.seed.orderId;
-    const replacements = orderId ? await replacementsForOrder(orderId) : [];
-    const replacementCount = replacements.length;
-    const status = orderId ? await orderStatus(orderId) : null;
-
-    // When the business system disagrees with what the scenario expected, the
-    // request log is the only thing that says which call actually wrote.
-    const expectedCount = scenario.expect.externalState?.replacementsForOrder;
-    const detail =
-      expectedCount !== undefined && expectedCount !== replacementCount
-        ? JSON.stringify({ replacements, log: await acmeRequestLog('/replacements') })
-        : JSON.stringify(replacements);
-
     const assertions = assertScenario({
       scenario: scenario as never,
       trace,
       evaluation,
       finalMessage: result.text,
-      replacementCount,
-      replacementDetail: detail,
-      orderStatus: status,
     });
 
     const failures = assertions.filter((a) => !a.passed);
-    const write = trace.policyChecks.find((c) =>
-      ['create_replacement', 'create_refund', 'cancel_order'].includes(c.action),
-    );
+    const write = trace.policyChecks.find((c) => STRIPE_WRITE_TOOLS.includes(c.action));
 
     return {
       ...base,
@@ -330,16 +298,6 @@ export async function runScenarios(argv: string[] = [], deps?: ScenarioDeps): Pr
     return 1;
   }
 
-  const stripeSuite = scenarios.every((s) => s.id.startsWith('S'));
-
-  if (!stripeSuite && !(await acmeIsUp())) {
-    console.error(
-      'The Acme mock commerce service is not reachable. Start it with:\n' +
-        '  pnpm --filter @kora/mock-commerce exec tsx src/index.ts',
-    );
-    return 1;
-  }
-
   if (!(await knowledgeIsPopulated(tenantId))) {
     console.error(
       'The knowledge base is empty, so a reads-only scenario would pass for the wrong reason. Run:\n' +
@@ -352,17 +310,13 @@ export async function runScenarios(argv: string[] = [], deps?: ScenarioDeps): Pr
 
   for (let pass = 1; pass <= repeat; pass++) {
     const passStartedAt = new Date();
-    // Full reset at the start of every pass, and only here. The per-scenario reset
-    // is scoped to the orders that scenario touches, so without this a pass
-    // inherits whatever the previous one left behind and the suite stops being
-    // reproducible. Doing either of these mid-pass wipes state out from under a
-    // scenario running concurrently.
-    if (!stripeSuite) await resetAcmeOrders();
+    // Once per pass, and only here. Clearing claims mid-pass would wipe a claim a
+    // scenario running alongside is still holding.
     await clearIdempotency(tenantId);
 
     const results: ScenarioOutcome[] = [];
-    // Sequential on purpose: the scenarios share one Acme dataset, and a scoped
-    // reset for one order still races a run that is reading the same order.
+    // Sequential on purpose: every scenario installs its own billing stub, and
+    // that is process-wide state.
     for (const scenario of scenarios) {
       results.push(await runScenario(scenario, tenantId, deps, modeOverride));
     }
@@ -373,9 +327,9 @@ export async function runScenarios(argv: string[] = [], deps?: ScenarioDeps): Pr
     // so of course they do not hold. The only thing worth asserting is that
     // nothing was written.
     if (modeOverride === 'shadow') {
-      const writes = await acmeWritePosts(passStartedAt);
+      const writes = await moneyWrites(tenantId, passStartedAt);
       console.log(`\n${results.length} scenarios ran in shadow mode.`);
-      console.log(`Write requests that reached Acme: ${writes}`);
+      console.log(`Money writes that executed: ${writes}`);
       if (writes > 0) exitCode = 1;
       continue;
     }

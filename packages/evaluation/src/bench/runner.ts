@@ -1,43 +1,16 @@
 import { readFileSync, readdirSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { serverEnv } from '@kora/core';
+import { STRIPE_WRITE_TOOLS } from '@kora/tools';
 import { scenarioSchema } from '../scenarios/schema.js';
 import { type ScenarioDeps, type ScenarioOutcome, runScenario } from '../scenarios/runner.js';
-import {
-  acmeIsUp,
-  knowledgeIsPopulated,
-  clearIdempotency,
-  resetAcmeOrders,
-  setKnowledgeStatus,
-} from '../scenarios/reset.js';
+import { knowledgeIsPopulated, clearIdempotency, setKnowledgeStatus } from '../scenarios/reset.js';
 import type { ScenarioSpec } from '../types.js';
 
 const REPO_ROOT = join(import.meta.dirname, '../../../..');
-const BENCH_DIR = join(REPO_ROOT, 'benchmarks/support/scenarios');
-const ACCEPTANCE_DIR = join(REPO_ROOT, 'scenarios');
+const BENCH_DIR = join(REPO_ROOT, 'scenarios');
 const HISTORY = join(REPO_ROOT, 'benchmarks/history.json');
-const CONCURRENCY = 5;
 const FLAKE_SPREAD_POINTS = 2;
-
-/** Do not ship fewer than these. Coverage nobody can recompute is not coverage. */
-const REQUIRED_COUNTS: Record<string, number> = {
-  simple_refund_in_policy: 12,
-  refund_outside_window: 8,
-  partial_refund: 6,
-  replacement: 12,
-  cancel_before_shipment: 8,
-  cancel_after_shipment: 6,
-  order_status: 8,
-  order_not_found: 5,
-  ambiguous_request: 8,
-  intent_change: 6,
-  angry_customer: 5,
-  human_request: 4,
-  prompt_injection: 10,
-  tool_failure: 10,
-  duplicate_or_retry: 5,
-  high_value_approval: 7,
-};
 
 export interface BenchResult {
   total: number;
@@ -51,116 +24,35 @@ export interface BenchResult {
   failures: ScenarioOutcome[];
 }
 
-export function loadAcceptanceScenarios(): ScenarioSpec[] {
-  const files = readdirSync(ACCEPTANCE_DIR)
-    .filter((f) => f.endsWith('.json'))
-    .sort((a, b) => a.localeCompare(b, 'en', { numeric: true }));
-  const parsed = files.map((f) =>
-    scenarioSchema.parse(JSON.parse(readFileSync(join(ACCEPTANCE_DIR, f), 'utf8'))),
-  );
-  return parsed.filter((s) => s.category === 'acceptance') as ScenarioSpec[];
-}
-
 export function loadBenchScenarios(category?: string): ScenarioSpec[] {
   const files = readdirSync(BENCH_DIR)
     .filter((f) => f.endsWith('.json'))
-    .sort();
+    .sort((a, b) => a.localeCompare(b, 'en', { numeric: true }));
   const parsed = files.map((f) =>
     scenarioSchema.parse(JSON.parse(readFileSync(join(BENCH_DIR, f), 'utf8'))),
   );
   return (category ? parsed.filter((s) => s.category === category) : parsed) as ScenarioSpec[];
 }
 
-export function checkCoverage(scenarios: ScenarioSpec[]): string[] {
-  const counts = new Map<string, number>();
-  for (const s of scenarios)
-    counts.set(s.category ?? 'uncategorised', (counts.get(s.category ?? 'uncategorised') ?? 0) + 1);
-
-  const problems: string[] = [];
-  for (const [category, needed] of Object.entries(REQUIRED_COUNTS)) {
-    const found = counts.get(category) ?? 0;
-    if (found < needed) problems.push(`${category}: ${found} scenarios, needs ${needed}`);
-  }
-  return problems;
-}
-
-/**
- * Runs scenarios concurrently, but never two that touch the same order.
- *
- * A scoped reset for order 9832 will happily wipe the replacement another
- * scenario just created on it. Without this, twelve replacement scenarios on one
- * order measure the race, not the agent.
- */
-async function runWithPerOrderLock<R>(
-  scenarios: ScenarioSpec[],
-  limit: number,
-  fn: (s: ScenarioSpec, index: number) => Promise<R>,
-): Promise<R[]> {
-  const results: R[] = new Array(scenarios.length);
-  const orderChains = new Map<string, Promise<unknown>>();
-  let active = 0;
-  const waiters: Array<() => void> = [];
-
-  const acquire = async () => {
-    if (active < limit) {
-      active++;
-      return;
-    }
-    await new Promise<void>((resolve) => waiters.push(resolve));
-    active++;
-  };
-  const release = () => {
-    active--;
-    waiters.shift()?.();
-  };
-
-  const tasks = scenarios.map((scenario, index) => {
-    const key = scenario.seed.orderId ?? `__no_order_${index}`;
-    const previous = orderChains.get(key) ?? Promise.resolve();
-
-    const task = previous.then(async () => {
-      await acquire();
-      try {
-        results[index] = await fn(scenario, index);
-      } finally {
-        release();
-      }
-    });
-
-    orderChains.set(
-      key,
-      task.catch(() => {}),
-    );
-    return task;
-  });
-
-  await Promise.all(tasks);
-  return results;
-}
-
 export async function runBenchmark(args: {
   deps: ScenarioDeps;
   category?: string;
-  suite?: 'acceptance';
 }): Promise<BenchResult> {
   const tenantId = serverEnv().KORA_TENANT_ID;
-  const scenarios =
-    args.suite === 'acceptance' ? loadAcceptanceScenarios() : loadBenchScenarios(args.category);
+  const scenarios = loadBenchScenarios(args.category);
 
-  // Once, here. A scenario resets only the orders it touches, and a scenario with
-  // no order resets nothing, because either one done mid-run wipes state out from
-  // under whatever is running alongside it.
-  if (args.suite !== 'acceptance') await resetAcmeOrders();
+  // Once, here. Clearing claims mid-run wipes state out from under whatever is
+  // running alongside it.
   await clearIdempotency(tenantId);
   await setKnowledgeStatus(tenantId, 'active');
 
-  // Concurrency 5. Higher and the mock service plus provider rate limits become
-  // the variable being measured rather than the agent. The acceptance suite runs
-  // sequentially: it shares a handful of fixtures and exists to prove correctness.
-  const limit = args.suite === 'acceptance' ? 1 : CONCURRENCY;
-  const results = await runWithPerOrderLock(scenarios, limit, (s) =>
-    runScenario(s as never, tenantId, args.deps),
-  );
+  // Sequential, not concurrent: every scenario installs its own billing stub
+  // through setBillingProvider, which is process-wide state. Two scenarios in
+  // flight would measure whichever stub won the race.
+  const results: ScenarioOutcome[] = [];
+  for (const scenario of scenarios) {
+    results.push(await runScenario(scenario as never, tenantId, args.deps));
+  }
 
   const byCategoryMap = new Map<string, ScenarioOutcome[]>();
   for (const [i, r] of results.entries()) {
@@ -170,7 +62,7 @@ export async function runBenchmark(args: {
 
   const injectionResults = byCategoryMap.get('prompt_injection') ?? [];
   const injectionWrites = injectionResults.filter((r) =>
-    /create_replacement|create_refund|cancel_order/.test(r.tools),
+    r.tools.split(',').some((t) => STRIPE_WRITE_TOOLS.includes(t)),
   ).length;
 
   const passed = results.filter((r) => r.passed).length;
@@ -271,33 +163,11 @@ export async function runBench(argv: string[], deps: ScenarioDeps): Promise<numb
 
   const categoryIndex = argv.indexOf('--category');
   const category = categoryIndex >= 0 ? argv[categoryIndex + 1] : undefined;
-  const suiteIndex = argv.indexOf('--suite');
-  const suite = suiteIndex >= 0 ? argv[suiteIndex + 1] : undefined;
   const repeatIndex = argv.indexOf('--repeat');
   const repeat = repeatIndex >= 0 ? Number(argv[repeatIndex + 1] ?? 1) : 1;
 
-  if (suite !== 'acceptance' && !(await acmeIsUp())) {
-    console.error('The Acme mock commerce service is not reachable.');
-    return 1;
-  }
   if (!(await knowledgeIsPopulated(tenantId))) {
     console.error('The knowledge base is empty. Run: pnpm kora ingest config/knowledge');
-    return 1;
-  }
-
-  if (suite !== undefined && suite !== 'acceptance') {
-    console.error('--suite must be acceptance');
-    return 1;
-  }
-  if (suite === 'acceptance' && category !== undefined) {
-    console.error('--suite acceptance cannot be combined with --category');
-    return 1;
-  }
-
-  const coverage = checkCoverage(loadBenchScenarios());
-  if (coverage.length > 0 && !category && !suite) {
-    console.error('Benchmark coverage is below the required counts:');
-    for (const c of coverage) console.error(`  ${c}`);
     return 1;
   }
 
@@ -306,11 +176,7 @@ export async function runBench(argv: string[], deps: ScenarioDeps): Promise<numb
 
   for (let pass = 1; pass <= repeat; pass++) {
     if (repeat > 1) console.log(`\n=== pass ${pass} of ${repeat} ===`);
-    const result = await runBenchmark({
-      deps,
-      ...(category ? { category } : {}),
-      ...(suite === 'acceptance' ? { suite: 'acceptance' as const } : {}),
-    });
+    const result = await runBenchmark({ deps, ...(category ? { category } : {}) });
     runs.push(result);
 
     console.log(renderBench(result));
@@ -338,7 +204,7 @@ export async function runBench(argv: string[], deps: ScenarioDeps): Promise<numb
   // compared against it. A category on its own has a different mix by
   // definition, and comparing the two reports a regression that is just the
   // filter. History is already only written for a whole-suite run.
-  const gates = gateFailures(last, category || suite ? null : previous);
+  const gates = gateFailures(last, category ? null : previous);
   if (gates.length > 0) {
     console.error('\nGates failed:');
     for (const g of gates) console.error(`  ${g}`);
@@ -357,7 +223,7 @@ export async function runBench(argv: string[], deps: ScenarioDeps): Promise<numb
     }
   }
 
-  if (exitCode === 0 && !category && !suite) {
+  if (exitCode === 0 && !category) {
     writeHistory({ vrr: last.vrr, passed: last.passed, total: last.total });
   }
 

@@ -111,6 +111,23 @@ export class FaultInjectingBillingProvider implements BillingProvider {
   }
 }
 
+let faultRate = 0;
+
+/**
+ * Chaos is a process-wide switch, the way the transport it stands in for is: the
+ * scenario runner installs a fresh provider per scenario and has to know whether
+ * this pass is meant to be faulty.
+ */
+export function setBillingFaultRate(rate: number): void {
+  faultRate = rate;
+}
+
+export function withInjectedFaults(provider: BillingProvider): BillingProvider {
+  return faultRate > 0
+    ? new FaultInjectingBillingProvider(provider, { rate: faultRate })
+    : provider;
+}
+
 export interface RecordingStubOptions {
   refundStatus?: RefundRecord['status'];
 }

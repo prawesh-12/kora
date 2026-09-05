@@ -1,3 +1,4 @@
+import { STRIPE_WRITE_TOOLS } from '@kora/tools';
 import type { Check, CheckResult, EvaluationInput, Verdict } from '../types.js';
 
 function result(id: string, critical: boolean, verdict: Verdict, evidence: string): CheckResult {
@@ -8,9 +9,21 @@ function succeeded(status: string): boolean {
   return status === 'ok' || status === 'replayed';
 }
 
-/** How many of each write the run actually performed, per order. */
-function writesDuringRun(input: EvaluationInput): Map<string, Map<string, number>> {
-  const counts = new Map<string, Map<string, number>>();
+const WRITE_ACTIONS = STRIPE_WRITE_TOOLS;
+
+/** What a write acted on. Every money write names a subscription or an invoice. */
+function targetOf(input: unknown): string {
+  const i = input as { subscriptionId?: string; invoiceId?: string } | null;
+  return i?.subscriptionId ?? i?.invoiceId ?? 'an unnamed target';
+}
+
+/**
+ * How many times the run performed each logical write, where a logical write is
+ * the tool plus what it acted on. Two refunds on one subscription inside one run
+ * are two refunds for one customer request, whatever the amounts were.
+ */
+function writesDuringRun(input: EvaluationInput): Map<string, number> {
+  const counts = new Map<string, number>();
   const pretend =
     input.trace.run.deploymentMode === 'simulation' || input.trace.run.deploymentMode === 'shadow';
 
@@ -19,30 +32,68 @@ function writesDuringRun(input: EvaluationInput): Map<string, Map<string, number
     // nothing executes, that is the only thing there is to count.
     const performed = e.status === 'ok' || (pretend && e.status === 'simulated');
     if (!WRITE_ACTIONS.includes(e.toolName) || !performed) continue;
-    const orderId = (e.input as { orderId?: string })?.orderId;
-    if (!orderId) continue;
-    const perOrder = counts.get(orderId) ?? new Map<string, number>();
-    perOrder.set(e.toolName, (perOrder.get(e.toolName) ?? 0) + 1);
-    counts.set(orderId, perOrder);
+    const key = `${e.toolName} on ${targetOf(e.input)}`;
+    counts.set(key, (counts.get(key) ?? 0) + 1);
   }
   return counts;
 }
 
-/** What the business system should show, for the action the run was about. */
+/**
+ * What the run asked a subscription write to do, whether or not the call came
+ * back. A write that failed but landed anyway is exactly what the read-back is
+ * for, so the attempt counts, not only the success.
+ */
+function subscriptionWrites(input: EvaluationInput, toolName: string) {
+  const attempts = input.trace.toolExecutions.filter((e) => e.toolName === toolName);
+  return {
+    subscriptionIds: new Set(
+      attempts
+        .map((e) => (e.input as { subscriptionId?: string })?.subscriptionId)
+        .filter((id): id is string => Boolean(id)),
+    ),
+    priceIds: new Set(
+      attempts
+        .map((e) => (e.input as { targetPriceId?: string })?.targetPriceId)
+        .filter((id): id is string => Boolean(id)),
+    ),
+  };
+}
+
+/**
+ * What the billing provider should show, for the action the run was about.
+ *
+ * A refund only counts once Stripe says `succeeded`: `pending` is not money back
+ * in the customer's hands. Cancellations and plan changes leave no new object
+ * behind, so they are counted as the subscription the run wrote to now reading
+ * back the way the run asked. Scoping it to what the run wrote matters: a
+ * customer asking a question about a subscription they cancelled last month must
+ * not be scored as a cancellation this run performed.
+ */
 function entitiesFor(input: EvaluationInput, action: string | null): number {
-  const s = input.externalState;
-  const sum = (record: Record<string, unknown[]>) =>
-    Object.values(record).reduce((n, list) => n + list.length, 0);
+  const { refunds, subscriptions } = input.externalState;
+  const refunded = () => Object.values(refunds).filter((r) => r.status === 'succeeded').length;
+  const cancelled = () => {
+    const asked = subscriptionWrites(input, 'cancel_subscription').subscriptionIds;
+    return Object.values(subscriptions).filter(
+      (s) => asked.has(s.id) && (s.cancelAtPeriodEnd || s.status === 'canceled'),
+    ).length;
+  };
+  const moved = () => {
+    const prices = subscriptionWrites(input, 'change_plan').priceIds;
+    return Object.values(subscriptions).filter((s) =>
+      s.items.some((item) => prices.has(item.priceId)),
+    ).length;
+  };
 
   switch (action) {
     case 'create_refund':
-      return sum(s.refundsByOrder);
-    case 'cancel_order':
-      return sum(s.cancellationsByOrder);
-    case 'create_replacement':
-      return sum(s.replacementsByOrder);
+      return refunded();
+    case 'cancel_subscription':
+      return cancelled();
+    case 'change_plan':
+      return moved();
     default:
-      return sum(s.replacementsByOrder) + sum(s.refundsByOrder) + sum(s.cancellationsByOrder);
+      return refunded() + cancelled() + moved();
   }
 }
 
@@ -55,8 +106,6 @@ function writeActionOf(input: EvaluationInput): string | null {
   );
 }
 
-const WRITE_ACTIONS = ['create_replacement', 'create_refund', 'cancel_order'];
-
 function decisionForWrite(input: EvaluationInput): string | null {
   const gating = input.trace.policyChecks.filter((c) => !c.advisory);
   const check =
@@ -67,12 +116,17 @@ function decisionForWrite(input: EvaluationInput): string | null {
 
 /**
  * Did the business state end up the way this intent and this policy decision say
- * it should have? Read from Acme, not from the transcript.
+ * it should have? Read from the billing provider, not from the transcript.
  */
 export const outcomeAchieved: Check = (input) => {
   const id = 'outcome_achieved';
   if (input.externalState.error) {
-    return result(id, true, 'CANNOT_ASSESS', `could not read Acme: ${input.externalState.error}`);
+    return result(
+      id,
+      true,
+      'CANNOT_ASSESS',
+      `could not read the billing provider: ${input.externalState.error}`,
+    );
   }
 
   const decision = decisionForWrite(input);
@@ -81,9 +135,11 @@ export const outcomeAchieved: Check = (input) => {
   const what =
     action === 'create_refund'
       ? 'refund'
-      : action === 'cancel_order'
+      : action === 'cancel_subscription'
         ? 'cancellation'
-        : 'replacement';
+        : action === 'change_plan'
+          ? 'plan change'
+          : 'money write';
 
   if (decision === null) {
     // The write was never proposed. The correct outcome is that nothing was written.
@@ -195,7 +251,7 @@ export const toolCorrectness: Check = (input) => {
 export const writeVerified: Check = (input) => {
   const id = 'write_verified';
   const writes = input.trace.toolExecutions.filter(
-    (e) => e.status === 'ok' && (e.toolName === 'create_replacement' || e.verifyObserved !== null),
+    (e) => e.status === 'ok' && (WRITE_ACTIONS.includes(e.toolName) || e.verifyObserved !== null),
   );
   if (writes.length === 0) {
     return result(id, true, 'MET', 'no write executed, so there is nothing to verify');
@@ -222,36 +278,33 @@ export const writeVerified: Check = (input) => {
 export const idempotencyClean: Check = (input) => {
   const id = 'idempotency_clean';
   if (input.externalState.error) {
-    return result(id, true, 'CANNOT_ASSESS', `could not read Acme: ${input.externalState.error}`);
+    return result(
+      id,
+      true,
+      'CANNOT_ASSESS',
+      `could not read the billing provider: ${input.externalState.error}`,
+    );
   }
 
   const problems: string[] = [];
+  const performed = writesDuringRun(input);
 
-  for (const [orderId, perOrder] of writesDuringRun(input)) {
-    for (const [action, count] of perOrder) {
-      if (count > 1) problems.push(`${count} successful ${action} rows for order ${orderId}`);
-      const actual = entitiesFor(
-        { ...input, externalState: scopeTo(input.externalState, orderId) },
-        action,
-      );
-      if (actual > 1) problems.push(`${actual} entities exist for ${action} on order ${orderId}`);
-    }
+  for (const [action, count] of performed) {
+    if (count > 1) problems.push(`${count} successful ${action} in this run`);
+  }
+
+  // A run that only replayed someone else's claim performed no refund of its own,
+  // so the refund it can see is not evidence of a duplicate.
+  const refundActions = [...performed.keys()].filter((k) => k.startsWith('create_refund')).length;
+  const refundsSeen = Object.keys(input.externalState.refunds).length;
+  if (refundActions > 0 && refundsSeen > refundActions) {
+    problems.push(`${refundsSeen} refund(s) exist for ${refundActions} refund action(s)`);
   }
 
   return problems.length === 0
     ? result(id, true, 'MET', 'at most one entity per logical action')
     : result(id, true, 'UNMET', problems.join('; '));
 };
-
-function scopeTo(state: EvaluationInput['externalState'], orderId: string) {
-  const pick = <T>(record: Record<string, T[]>) => ({ [orderId]: record[orderId] ?? [] });
-  return {
-    ...state,
-    replacementsByOrder: pick(state.replacementsByOrder),
-    refundsByOrder: pick(state.refundsByOrder),
-    cancellationsByOrder: pick(state.cancellationsByOrder),
-  };
-}
 
 /** Was a person brought in exactly when one was needed, and not otherwise? */
 export const escalationCorrect: Check = (input) => {
@@ -298,7 +351,7 @@ export const escalationCorrect: Check = (input) => {
   );
 };
 
-const REPLACEMENT_ID = /\bREP-\d+\b/g;
+const STRIPE_ID = /\b(?:re|sub|in|ch|pi)_[A-Za-z0-9]+/g;
 const ORDER_ID = /\b\d{4,}\b/g;
 const MONEY = /(?:INR|Rs\.?|₹)\s?([\d,]+(?:\.\d{1,2})?)/gi;
 
@@ -314,8 +367,8 @@ export const responseGrounded: Check = (input) => {
   const haystack = input.trace.toolExecutions
     .map((e) => JSON.stringify(e.output ?? null))
     .join('\n');
-  // An order number the customer typed may be repeated back to them. A
-  // replacement id may not: that would claim an action that never happened.
+  // A number the customer typed may be repeated back to them. A Stripe id may
+  // not: that would claim an action that never happened.
   const customerText = input.trace.conversation.messages
     .filter((m) => m.role === 'customer')
     .map((m) => m.content)
@@ -324,10 +377,10 @@ export const responseGrounded: Check = (input) => {
   const normalised = echoable.replace(/[,\s]/g, '');
   const unsupported: string[] = [];
 
-  for (const ref of final.content.match(REPLACEMENT_ID) ?? []) {
+  for (const ref of final.content.match(STRIPE_ID) ?? []) {
     if (!haystack.includes(ref)) unsupported.push(ref);
   }
-  for (const ref of final.content.replace(REPLACEMENT_ID, ' ').match(ORDER_ID) ?? []) {
+  for (const ref of final.content.replace(STRIPE_ID, ' ').match(ORDER_ID) ?? []) {
     if (!echoable.includes(ref)) unsupported.push(ref);
   }
   for (const match of final.content.matchAll(MONEY)) {

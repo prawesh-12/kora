@@ -81,11 +81,21 @@ describe('the refund rules are unchanged by the bundle', () => {
   const cases: Array<[string, Partial<PolicyFacts> & { action: string }]> = [
     [
       'refund_standard',
-      { action: 'create_refund', amountMinor: 349900, exceedsRefundable: false, daysSinceCharge: 5 },
+      {
+        action: 'create_refund',
+        amountMinor: 349900,
+        exceedsRefundable: false,
+        daysSinceCharge: 5,
+      },
     ],
     [
       'refund_high_value',
-      { action: 'create_refund', amountMinor: 500000, exceedsRefundable: false, daysSinceCharge: 5 },
+      {
+        action: 'create_refund',
+        amountMinor: 500000,
+        exceedsRefundable: false,
+        daysSinceCharge: 5,
+      },
     ],
     [
       'refund_outside_window',

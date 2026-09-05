@@ -22,6 +22,7 @@ const nowSec = () => Math.floor(Date.now() / 1000);
 const inr = (amountMinor: number) => ({ amountMinor, currency: 'INR' });
 
 const BASIC = 349900;
+const ALREADY_REFUNDED = 100000;
 const PRO = 199900;
 const HIGH = 899900;
 
@@ -31,6 +32,22 @@ const SUBSCRIPTION_IDS: Record<string, string> = {
   'high-sub': 'sub_high',
   'unpaid-sub': 'sub_unpaid',
   'big-sub': 'sub_big',
+  'partial-sub': 'sub_partial',
+};
+
+/** The fixture names a scenario seed is allowed to use. */
+export const FIXTURE_KEYS = {
+  customers: ['recent-payer', 'old-payer', 'high-payer'],
+  subscriptions: Object.keys(SUBSCRIPTION_IDS),
+  charges: [
+    'recent-charge',
+    'old-charge',
+    'high-charge',
+    'big-charge',
+    'partial-charge',
+    'pending-charge',
+  ],
+  invoices: ['recent-invoice', 'old-invoice', 'high-invoice', 'big-invoice', 'partial-invoice'],
 };
 
 export function subscriptionIdForKey(key: string | undefined): string | null {
@@ -85,18 +102,24 @@ function invoice(
   };
 }
 
-function charge(id: string, invoiceId: string, amountMinor: number, ageDays: number): ChargeRecord {
+function charge(
+  id: string,
+  invoiceId: string,
+  amountMinor: number,
+  ageDays: number,
+  refundedMinor = 0,
+): ChargeRecord {
   return {
     id,
     amountCaptured: inr(amountMinor),
-    amountRefunded: inr(0),
-    remainingRefundable: inr(amountMinor),
+    amountRefunded: inr(refundedMinor),
+    remainingRefundable: inr(amountMinor - refundedMinor),
     currency: 'INR',
     paymentIntentId: `pi_${invoiceId}`,
     invoiceId,
     customerId: 'cus_014',
     created: nowSec() - ageDays * DAY,
-    refunded: false,
+    refunded: refundedMinor >= amountMinor,
   };
 }
 
@@ -124,17 +147,24 @@ export function createScenarioStub(seed: ScenarioSeed): BillingProvider {
   const subs = new Map<string, SubscriptionRecord>([
     ['sub_recent', subscription('sub_recent', 'in_recent')],
     ['sub_old', subscription('sub_old', 'in_old')],
-    ['sub_high', { ...subscription('sub_high', 'in_high'), items: [
+    [
+      'sub_high',
       {
-        subscriptionItemId: 'si_sub_high',
-        priceId: 'price_premium',
-        productId: 'prod_premium',
-        unitAmount: inr(HIGH),
-        quantity: 1,
+        ...subscription('sub_high', 'in_high'),
+        items: [
+          {
+            subscriptionItemId: 'si_sub_high',
+            priceId: 'price_premium',
+            productId: 'prod_premium',
+            unitAmount: inr(HIGH),
+            quantity: 1,
+          },
+        ],
       },
-    ] }],
+    ],
     ['sub_unpaid', { ...subscription('sub_unpaid', 'in_unpaid'), status: 'unpaid' }],
     ['sub_big', subscription('sub_big', 'in_big')],
+    ['sub_partial', subscription('sub_partial', 'in_partial')],
   ]);
   const invoices = new Map<string, InvoiceRecord>([
     ['in_recent', invoice('in_recent', 'sub_recent', BASIC, true)],
@@ -142,12 +172,16 @@ export function createScenarioStub(seed: ScenarioSeed): BillingProvider {
     ['in_high', invoice('in_high', 'sub_high', HIGH, true)],
     ['in_unpaid', invoice('in_unpaid', 'sub_unpaid', BASIC, false)],
     ['in_big', invoice('in_big', 'sub_big', BASIC, true)],
+    ['in_partial', invoice('in_partial', 'sub_partial', BASIC, true)],
   ]);
   const charges = new Map<string, ChargeRecord>([
     ['in_recent', charge('ch_recent', 'in_recent', BASIC, 5)],
     ['in_old', charge('ch_old', 'in_old', BASIC, 45)],
     ['in_high', charge('ch_high', 'in_high', HIGH, 5)],
     ['in_big', charge('ch_big', 'in_big', BASIC, 5)],
+    // Part of this charge is already refunded, so a request for the full amount
+    // has to be denied on what is left rather than on the window.
+    ['in_partial', charge('ch_partial', 'in_partial', BASIC, 5, ALREADY_REFUNDED)],
   ]);
   const pendingRefunds = seed.chargeKey === 'pending-charge';
   const refunds = new Map<string, RefundRecord>();

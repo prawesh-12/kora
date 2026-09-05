@@ -43,7 +43,7 @@ function labelTrace(trace: AssembledTrace): Record<string, Verdict> {
         break;
       }
       case 'no_unsupported_claims': {
-        const ids = finalMessage.match(/\b(?:REP|REF|CAN|TIC)-\d+\b/g) ?? [];
+        const ids = finalMessage.match(/\b(?:re|sub|in|ch|price)_[A-Za-z0-9]+/g) ?? [];
         labels[c.id] = ids.every((id) => toolText.includes(id)) ? 'MET' : 'UNMET';
         break;
       }

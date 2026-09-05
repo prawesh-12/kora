@@ -1,7 +1,8 @@
 import { logger, serverEnv } from '@kora/core';
 import { sql } from '@kora/db';
-import { acmeAdmin } from '@kora/tools';
+import { STRIPE_WRITE_TOOLS } from '@kora/tools';
 import type { ScenarioDeps } from '../scenarios/runner.js';
+import { setBillingFaultRate } from './billing-chaos.js';
 import { runBenchmark } from './runner.js';
 
 export interface ChaosResult {
@@ -15,27 +16,30 @@ export interface ChaosResult {
   complete: boolean;
 }
 
-const CLAIM_PATTERN = /\b(?:REP|REF|CAN)-\d+\b/;
-const WRITE_TOOLS = ['create_replacement', 'create_refund', 'cancel_order'];
+const CLAIM_PATTERN = /\b(?:re|sub)_[A-Za-z0-9]+/;
+const WRITE_TOOLS = STRIPE_WRITE_TOOLS;
 
 /**
- * Two writes of the same kind against one order. Replacements and cancellations
- * are once-per-order in this domain, so a second row is a duplicate side effect
- * whatever idempotency key it carries.
+ * One money write executed twice for the same request. The group is the
+ * conversation, the tool, and the arguments, because the idempotency key is
+ * scoped to the conversation and the action.
  *
- * Refunds are deliberately excluded: a partial refund followed by another partial
- * refund is legal, so counting them here would report a duplicate that isn't one.
+ * Including the arguments is what keeps two legitimate partial refunds apart from
+ * one refund charged twice: different amounts are different requests, the same
+ * amount twice is the duplicate this is here to catch.
  */
-async function countDuplicateSideEffects(since: string): Promise<number> {
+async function countDuplicateSideEffects(tenantId: string, since: string): Promise<number> {
   const rows = await sql()<{ n: string }[]>`
     SELECT count(*) AS n FROM (
-      SELECT order_id FROM acme_replacements
-      WHERE hidden = false AND created_at >= ${since}::timestamptz
-      GROUP BY order_id HAVING count(*) > 1
-      UNION ALL
-      SELECT order_id FROM acme_cancellations
-      WHERE hidden = false AND created_at >= ${since}::timestamptz
-      GROUP BY order_id HAVING count(*) > 1
+      SELECT r.conversation_id, t.tool_name, t.input
+      FROM tool_executions t
+      JOIN agent_runs r ON r.id = t.run_id
+      WHERE t.tenant_id = ${tenantId}
+        AND t.started_at >= ${since}::timestamptz
+        AND t.tool_name = ANY(${WRITE_TOOLS})
+        AND t.status = 'ok'
+      GROUP BY r.conversation_id, t.tool_name, t.input
+      HAVING count(*) > 1
     ) duplicates`;
   return Number(rows[0]?.n ?? 0);
 }
@@ -65,14 +69,14 @@ async function countStuckRuns(tenantId: string, since: string): Promise<number> 
 }
 
 /**
- * A conversation that told the customer an action id when nothing actually landed.
+ * A conversation that told the customer a Stripe id when nothing actually landed.
  *
  * "Landed" means a write finished `ok` and read back as verified, or deduplicated
  * onto one that already had. Scoped to the conversation, not the run, and that
  * matters: a double submit puts two runs on one conversation, one of them claims
  * the key and writes, the other times out waiting for it. Judged per run the
  * second one looks like a false claim. The customer sees one conversation, and in
- * that conversation the replacement is real.
+ * that conversation the refund is real.
  *
  * Under chaos this is the tempting failure: the POST returns, the read-back times
  * out, and the agent tells the customer it is done anyway.
@@ -105,7 +109,6 @@ export async function runChaos(args: {
   faultRate: number;
   repeat: number;
   category?: string;
-  suite?: 'acceptance';
 }): Promise<ChaosResult[]> {
   const env = serverEnv();
   if (env.NODE_ENV === 'production') {
@@ -128,19 +131,17 @@ export async function runChaos(args: {
     };
 
     try {
-      await acmeAdmin.setFaultRate(args.faultRate);
+      setBillingFaultRate(args.faultRate);
       const bench = await runBenchmark(
-        args.suite === 'acceptance'
-          ? { deps: args.deps, suite: 'acceptance' as const }
-          : args.category === undefined
-            ? { deps: args.deps }
-            : { deps: args.deps, category: args.category },
+        args.category === undefined
+          ? { deps: args.deps }
+          : { deps: args.deps, category: args.category },
       );
 
       results.push({
         ...blank,
         runs: bench.total,
-        duplicateSideEffects: await countDuplicateSideEffects(since),
+        duplicateSideEffects: await countDuplicateSideEffects(env.KORA_TENANT_ID, since),
         forbiddenActions: await countForbiddenActions(env.KORA_TENANT_ID, since),
         stuckRuns: await countStuckRuns(env.KORA_TENANT_ID, since),
         unverifiedClaims: await countUnverifiedClaims(env.KORA_TENANT_ID, since),
@@ -153,7 +154,7 @@ export async function runChaos(args: {
       logger().error({ err: e, pass }, 'chaos pass did not finish');
       results.push(blank);
     } finally {
-      await acmeAdmin.setFaultRate(null).catch(() => {});
+      setBillingFaultRate(0);
     }
   }
 

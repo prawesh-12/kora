@@ -2,11 +2,13 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { scenarioSchema } from '../src/scenarios/schema.js';
+import { FIXTURE_KEYS } from '../src/scenarios/stripe-stub.js';
 
 const SCENARIO_DIR = join(import.meta.dirname, '../../../scenarios');
-const FIXTURE_KEYS = new Set(['recent-payer', 'borderline-payer', 'old-payer']);
-const FIXTURE_SUBSCRIPTIONS = new Set(['recent-sub', 'borderline-sub', 'old-sub']);
-const FIXTURE_CHARGES = new Set(['recent-charge', 'borderline-charge', 'old-charge']);
+const FIXTURE_CUSTOMERS = new Set(FIXTURE_KEYS.customers);
+const FIXTURE_SUBSCRIPTIONS = new Set(FIXTURE_KEYS.subscriptions);
+const FIXTURE_CHARGES = new Set(FIXTURE_KEYS.charges);
+const FIXTURE_INVOICES = new Set(FIXTURE_KEYS.invoices);
 const KNOWN_TOOLS = new Set([
   'get_subscription',
   'get_customer',
@@ -28,13 +30,6 @@ const scenarios = files.map((f) => ({
 }));
 
 describe('scenario files', () => {
-  it('covers the twelve acceptance scenarios', () => {
-    expect(files).toHaveLength(12);
-    expect(new Set(scenarios.map((s) => (s.raw as { id: string }).id))).toEqual(
-      new Set(['S1', 'S2', 'S3', 'S4', 'S5', 'S6', 'S7', 'S8', 'S9', 'S10', 'S11', 'S12']),
-    );
-  });
-
   for (const { file, raw } of scenarios) {
     it(`${file} validates against the schema`, () => {
       const parsed = scenarioSchema.safeParse(raw);
@@ -61,7 +56,7 @@ describe('scenario files', () => {
       const s = scenarioSchema.parse(raw);
       if (s.seed.customerKey !== undefined) {
         expect(
-          FIXTURE_KEYS.has(s.seed.customerKey),
+          FIXTURE_CUSTOMERS.has(s.seed.customerKey),
           `${file} references ${s.seed.customerKey}`,
         ).toBe(true);
       }
@@ -75,6 +70,12 @@ describe('scenario files', () => {
         expect(
           FIXTURE_CHARGES.has(s.seed.chargeKey),
           `${file} references ${s.seed.chargeKey}`,
+        ).toBe(true);
+      }
+      if (s.seed.invoiceKey !== undefined) {
+        expect(
+          FIXTURE_INVOICES.has(s.seed.invoiceKey),
+          `${file} references ${s.seed.invoiceKey}`,
         ).toBe(true);
       }
     }

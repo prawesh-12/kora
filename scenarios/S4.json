@@ -13,15 +13,8 @@
   "expect": {
     "state": "AWAITING_APPROVAL",
     "intent": "REFUND_REQUEST",
-    "tools": [
-      "get_subscription",
-      "get_invoice",
-      "check_policy"
-    ],
-    "forbiddenTools": [
-      "create_refund",
-      "escalate_to_human"
-    ],
+    "tools": ["get_subscription", "get_invoice", "check_policy"],
+    "forbiddenTools": ["create_refund", "escalate_to_human"],
     "policyDecision": "require_approval",
     "policyRuleId": "refund_high_value",
     "evaluation": {
@@ -31,8 +24,6 @@
         "outcome_achieved": "MET"
       }
     },
-    "responseMustNotContain": [
-      "re_"
-    ]
+    "responseMustNotContain": ["re_"]
   }
 }
