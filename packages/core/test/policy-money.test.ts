@@ -36,7 +36,7 @@ function refund(overrides: Partial<PolicyFacts> = {}) {
 
 describe('money-ops bundle structure', () => {
   it('checks files in order and defaults to require_approval', () => {
-    expect(bundle.sources.map((s) => s.key)).toEqual(['refunds', 'cancellations', 'plan_changes']);
+    expect(bundle.sources.map((s) => s.key)).toEqual(['refunds', 'cancellations', 'plan-changes']);
     expect(bundle.default).toBe('require_approval');
     expect(bundle.rules.map((r) => r.id)).toEqual([
       'reads_always_allowed',
@@ -60,7 +60,7 @@ describe('money-ops bundle structure', () => {
       'cancellations',
     );
     expect(decide({ action: 'change_plan', prorationCreditMinor: 10 }).policyKey).toBe(
-      'plan_changes',
+      'plan-changes',
     );
   });
 

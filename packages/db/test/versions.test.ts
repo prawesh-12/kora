@@ -22,8 +22,8 @@ import { promote, rollback } from '../src/repositories/promotion-repo.js';
 const TENANT = 'ten_versions_test';
 const POLICY_DIR = join(import.meta.dirname, '../../../config/policies');
 
-const damagedOrder = readFileSync(join(POLICY_DIR, 'acme-damaged-order.yaml'), 'utf8');
-const refunds = readFileSync(join(POLICY_DIR, 'acme-refunds.yaml'), 'utf8');
+const refunds = readFileSync(join(POLICY_DIR, 'refunds.yaml'), 'utf8');
+const cancellations = readFileSync(join(POLICY_DIR, 'cancellations.yaml'), 'utf8');
 
 const baseVersion = {
   model: 'mock-agent',
@@ -63,8 +63,8 @@ afterAll(async () => {
 
 describe('policy versions are immutable', () => {
   it('publishing twice creates two versions and exactly one is active', async () => {
-    const first = await publishPolicy(TENANT, 'test_policy', damagedOrder);
-    const second = await publishPolicy(TENANT, 'test_policy', `${damagedOrder}\n# edited`);
+    const first = await publishPolicy(TENANT, 'test_policy', refunds);
+    const second = await publishPolicy(TENANT, 'test_policy', `${refunds}\n# edited`);
 
     expect(second.version).toBe(first.version + 1);
 
@@ -97,17 +97,17 @@ describe('policy versions are immutable', () => {
   });
 
   it('loads a bundle by version id, not by key', async () => {
-    const a = await publishPolicy(TENANT, 'bundle_a', damagedOrder);
-    const b = await publishPolicy(TENANT, 'bundle_b', refunds);
+    const a = await publishPolicy(TENANT, 'bundle_a', refunds);
+    const b = await publishPolicy(TENANT, 'bundle_b', cancellations);
     const bundle = await loadPolicyBundle(TENANT, [a.versionId, b.versionId]);
 
-    expect(bundle.sources.map((s) => s.key)).toEqual(['acme_damaged_order', 'acme_refunds']);
-    expect(bundle.rules.length).toBeGreaterThan(10);
+    expect(bundle.sources.map((s) => s.key)).toEqual(['refunds', 'cancellations']);
+    expect(bundle.rules.length).toBeGreaterThan(5);
   });
 
   it('keeps an old version loadable after a newer one is published', async () => {
-    const first = await publishPolicy(TENANT, 'history', damagedOrder);
-    await publishPolicy(TENANT, 'history', `${damagedOrder}\n# newer`);
+    const first = await publishPolicy(TENANT, 'history', refunds);
+    await publishPolicy(TENANT, 'history', `${refunds}\n# newer`);
 
     // A trace from before the change still resolves to the rules that ran.
     const old = await loadPolicyBundle(TENANT, [first.versionId]);
