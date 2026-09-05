@@ -21,11 +21,8 @@ interface Verdict {
   raw?: string;
 }
 
-/**
- * `insufficient facts: exceedsRemaining,` is the rule engine talking to itself.
- * The operator gets the sentence; the raw string survives in a title attribute
- * for anyone who needs to grep for it.
- */
+/** The engine emits identifiers like `exceedsRemaining`; the operator gets the
+ *  sentence and the raw string survives in a title attribute. */
 function humanizeMissingFacts(facts: string[]): string {
   const names = facts.map((fact) =>
     fact
@@ -38,11 +35,7 @@ function humanizeMissingFacts(facts: string[]): string {
 
 type Check = TraceDto['policyChecks'][number];
 
-/**
- * `default` is the engine's name for no rule matched, so the bundle default
- * applied. Printing "rule default" tells the operator there is a rule called
- * default, which there is not.
- */
+/** `default` is the engine's name for no rule matched, not the id of a rule. */
 function provenanceOf(check: Check): string {
   const rule = check.ruleId === 'default' ? 'no rule matched' : `rule ${check.ruleId}`;
   return `${rule} · policy ${check.policyKey} ${check.policyVersion}`;
@@ -53,16 +46,9 @@ function reasonOf(check: Check): string {
   return `No rule could decide this. The facts it needed were missing: ${humanizeMissingFacts(check.missingFacts)}.`;
 }
 
-/**
- * The one sentence the operator opened this page for. Everything below is the
- * evidence for it, which is why it sits above the columns rather than inside
- * one of them.
- */
 export function traceVerdict(trace: TraceDto): Verdict {
-  // A rule that held or refused one action is the headline only while it is
-  // still the reason the run is stopped. An approval that a person granted ends
-  // as a resolution, and a banner still saying "held for approval" over a
-  // finished run sends the operator looking for a decision nobody owes.
+  // A deny or hold is the headline only while it is still why the run is
+  // stopped: a granted approval ends as a resolution, not as "held".
   const resolved = trace.run.outcome === 'resolved_automatically';
   const waiting = (trace.run.finalState ?? trace.conversation.state) === 'AWAITING_APPROVAL';
 

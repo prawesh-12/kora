@@ -11,11 +11,8 @@ const MIN_GOLD_SET = 20;
 const AGREEMENT_GATE = 0.8;
 
 /**
- * Kappa is gated, but only once there are enough labels for it to mean anything.
- *
- * Kappa on twenty-five samples swings wildly with one disagreement, so gating
- * there would disable criteria at random. Below this the number is reported and
- * not acted on, which is the honest position rather than a false gate.
+ * Kappa swings wildly with one disagreement on a small sample, so below this many
+ * labels it is reported but not gated on.
  */
 const MIN_KAPPA_SAMPLE = 100;
 const KAPPA_GATE = 0.6;
@@ -37,12 +34,6 @@ export interface CriterionAgreement {
   n: number;
 }
 
-/**
- * Cohen's kappa over one criterion.
- *
- * Reported, never gated at this sample size. Kappa on twenty-five samples is too
- * noisy to gate on, and pretending otherwise is worse than not measuring.
- */
 export function cohensKappa(pairs: Array<[Verdict, Verdict]>): number {
   if (pairs.length === 0) return Number.NaN;
 
@@ -118,12 +109,7 @@ export function calibrationPasses(results: CriterionAgreement[]): boolean {
   );
 }
 
-/**
- * Criteria the judge does not agree with a person on well enough to keep.
- *
- * A criterion below the gate is disabled, not shipped with a warning. A warning
- * on a criterion nobody trusts is a criterion nobody trusts, still scoring runs.
- */
+/** Criteria below the gate are disabled rather than shipped with a warning. */
 export function criteriaBelowKappa(results: CriterionAgreement[]): CriterionAgreement[] {
   return results.filter(
     (r) => r.n >= MIN_KAPPA_SAMPLE && !Number.isNaN(r.kappa) && r.kappa < KAPPA_GATE,

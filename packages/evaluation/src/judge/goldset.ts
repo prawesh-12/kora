@@ -6,15 +6,9 @@ import type { Verdict } from '../types.js';
 import { applicableCriteria, loadRubric } from './rubric.js';
 
 /**
- * Labels one trace the way a person reading it would: from what the trace
- * actually contains, criterion by criterion.
- *
- * This is the honest limit of an offline gold set. A real gold set is labelled by
- * a human, and the whole point of calibration is to measure the judge against
- * that human. Here the labels come from the same evidence the judge reads, so
- * agreement measures whether the judge reads the trace consistently, not whether
- * it agrees with a person. Replace these labels by hand before trusting the
- * number for anything.
+ * These labels come from the same evidence the judge reads, so agreement measures
+ * whether the judge reads a trace consistently, not whether it agrees with a person.
+ * Replace them by hand before trusting the calibration number for anything.
  */
 function labelTrace(trace: AssembledTrace): Record<string, Verdict> {
   const rubric = loadRubric();

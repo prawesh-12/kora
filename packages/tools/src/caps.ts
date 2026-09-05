@@ -20,12 +20,10 @@ export async function loadCaps(tenantId: string): Promise<Caps> {
 }
 
 /**
- * What the tenant has already spent today, counted from what actually landed.
- * A denied or failed attempt has cost nothing, so it does not count against a cap.
- *
- * The amount comes from the `policy_checks` row for the same action, because that
- * is where the value was priced from records. Reading it back off the tool input
- * would let the model set its own cap.
+ * Counted from what actually landed: a denied or failed attempt cost nothing. The
+ * amount comes from the `policy_checks` row for the same action, because that is
+ * where the value was priced from records; reading it off the tool input would let
+ * the model set its own cap.
  */
 export async function spentToday(
   tenantId: string,
@@ -47,11 +45,7 @@ export async function spentToday(
   };
 }
 
-/**
- * The reason this action goes to a person, or `null` to let it run.
- * Exceeding a cap never fails the action: `limited` mode is a rung on the way to
- * autonomy, and a hard failure there just teaches operators to skip the rung.
- */
+/** The reason this action goes to a person, or `null` to let it run. */
 export function capExceeded(
   caps: Caps,
   spent: { actions: number; valueMinor: number },

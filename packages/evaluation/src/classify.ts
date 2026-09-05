@@ -12,15 +12,11 @@ export interface Failure {
 const LATENCY_BUDGET_MS = 45_000;
 
 /**
- * Walks the trace in root-cause order and collects every failure it finds.
- *
- * The order is the point. Failures cascade: retrieval returns nothing, so the
- * agent has no policy, so it answers from memory, so the answer is unsupported.
- * Reporting `HALLUCINATION` sends an engineer to the prompt. Reporting
- * `RETRIEVAL_FAILURE` sends them to the missing document.
- *
- * `FAILURE_CODES` in `@kora/core` is that order, and the array returned here is
- * sorted by it, so `failures[0]` is always the root.
+ * Failures cascade: retrieval returns nothing, so the agent has no policy, so it
+ * answers from memory, so the answer is unsupported. Reporting `HALLUCINATION`
+ * sends an engineer to the prompt; `RETRIEVAL_FAILURE` sends them to the missing
+ * document. `FAILURE_CODES` in `@kora/core` is that root-cause order, and the
+ * result is sorted by it, so `failures[0]` is always the root.
  */
 export function classifyFailures(input: EvaluationInput): Failure[] {
   const { trace } = input;
@@ -31,7 +27,7 @@ export function classifyFailures(input: EvaluationInput): Failure[] {
   const checks = new Map(input.checks?.map((c) => [c.id, c]) ?? []);
   const verdict = (id: string) => checks.get(id)?.verdict;
 
-  // 1. An illegal transition means the orchestrator is wrong, whatever else broke.
+  // An illegal transition means the orchestrator is wrong, whatever else broke.
   const illegalState = trace.steps.find((s) => s.kind === 'state' && s.status === 'failed');
   if (illegalState) {
     add(
@@ -41,7 +37,6 @@ export function classifyFailures(input: EvaluationInput): Failure[] {
     );
   }
 
-  // 2. Intent.
   const confidence = trace.run.intentConfidence;
   if (confidence !== null && confidence < 0.7) {
     add('INTENT_FAILURE', `confidence ${confidence}`, 'the classifier was below the threshold');
@@ -53,7 +48,6 @@ export function classifyFailures(input: EvaluationInput): Failure[] {
     );
   }
 
-  // 3 and 4. Retrieval, then knowledge.
   const retrievals = trace.retrievals;
   const searched = trace.toolExecutions.some((e) => e.toolName === 'search_knowledge');
   if (searched && retrievals.length > 0 && retrievals.every((r) => r.chunks.length === 0)) {
@@ -74,7 +68,6 @@ export function classifyFailures(input: EvaluationInput): Failure[] {
     }
   }
 
-  // 5. Tool selection.
   if (input.scenario) {
     const succeeded = trace.toolExecutions
       .filter((e) => e.status === 'ok' || e.status === 'replayed')
@@ -102,7 +95,6 @@ export function classifyFailures(input: EvaluationInput): Failure[] {
     );
   }
 
-  // 6. Arguments.
   const invalidByTool = new Map<string, number>();
   for (const e of trace.toolExecutions) {
     if (e.errorCode !== 'INVALID_INPUT' && e.status !== 'invalid_input') continue;
@@ -114,7 +106,6 @@ export function classifyFailures(input: EvaluationInput): Failure[] {
     }
   }
 
-  // 7. Policy. Always critical.
   if (verdict('policy_compliance') === 'UNMET') {
     add(
       'POLICY_FAILURE',
@@ -123,7 +114,6 @@ export function classifyFailures(input: EvaluationInput): Failure[] {
     );
   }
 
-  // 8. Tool execution.
   const terminal = trace.toolExecutions.filter(
     (e) => e.status === 'failed' && e.errorCode !== 'INVALID_INPUT',
   );
@@ -143,18 +133,15 @@ export function classifyFailures(input: EvaluationInput): Failure[] {
     );
   }
 
-  // 9. Outcome.
   if (verdict('outcome_achieved') === 'UNMET' || verdict('write_verified') === 'UNMET') {
     const which = verdict('write_verified') === 'UNMET' ? 'write_verified' : 'outcome_achieved';
     add('OUTCOME_FAILURE', which, checks.get(which)?.evidence ?? '');
   }
 
-  // 10. Hallucination.
   if (verdict('response_grounded') === 'UNMET') {
     add('HALLUCINATION', 'unsupported claim', checks.get('response_grounded')?.evidence ?? '');
   }
 
-  // 11. Escalation.
   if (verdict('escalation_correct') === 'UNMET') {
     add(
       'ESCALATION_FAILURE',
@@ -163,20 +150,17 @@ export function classifyFailures(input: EvaluationInput): Failure[] {
     );
   }
 
-  // 12. Latency.
   const durationMs = trace.run.durationMs ?? 0;
   if (durationMs > LATENCY_BUDGET_MS) {
     add('LATENCY_FAILURE', `${durationMs}ms`, `over the ${LATENCY_BUDGET_MS}ms budget`);
   }
 
-  // A failed run always has a code. An UNMET check with no cause found above is
-  // still a failure, and saying which check is more useful than saying nothing.
+  // A failed run always gets a code, even when nothing above matched.
   if (found.length === 0) {
     const unmet = (input.checks ?? []).find((c) => c.verdict === 'UNMET');
     if (unmet) add('OUTCOME_FAILURE', unmet.id, unmet.evidence);
   }
 
-  // Root cause first, symptom last. Callers read failures[0] as the primary.
   return found.sort((a, b) => FAILURE_CODES.indexOf(a.code) - FAILURE_CODES.indexOf(b.code));
 }
 

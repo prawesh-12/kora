@@ -25,9 +25,8 @@ const SCENARIO_DIR = join(REPO_ROOT, 'scenarios');
 const HARD_CAP_MS = 90_000;
 
 /**
- * The agent is injected rather than imported. `evaluation` sits outside the
- * runtime path on purpose: the evaluator reads traces after the fact, and making
- * it depend on the orchestrator would put it back inside the loop it audits.
+ * The agent is injected rather than imported: making the evaluator depend on the
+ * orchestrator would put it back inside the loop it audits.
  */
 export interface ScenarioDeps {
   runAgentTurn: RunAgentTurn;
@@ -114,12 +113,9 @@ export async function runScenario(
   };
 
   try {
-    // Every scenario runs against an in-memory billing stub behind the same
-    // provider interface production uses. The stub is fresh per scenario so
-    // refunds, cancellations, and plan changes never leak across runs, and it is
-    // wrapped in the fault injector when the pass is a chaos pass.
-    // The fixture key resolves to a real subscription id appended to the
-    // message, the way a conversation already knowing its customer would.
+    // A fresh stub per scenario, so writes never leak across runs. The fixture key
+    // resolves to a subscription id appended to the message, the way a conversation
+    // already knowing its customer would.
     setBillingProvider(withInjectedFaults(createScenarioStub(scenario.seed)));
     const subRef = subscriptionIdForKey(scenario.seed.subscriptionKey);
     const messageHasRef = /(?:sub|in|re|price)_[A-Za-z0-9]+/.test(scenario.input);
@@ -169,8 +165,7 @@ export async function runScenario(
       result = await withTimeout(turn(), HARD_CAP_MS, `scenario ${scenario.id}`);
     }
 
-    // A customer changing their mind mid-conversation is a second turn on the
-    // same conversation, and the run that matters is the last one.
+    // The run that matters is the last turn, so `result` is reassigned.
     for (const followUp of scenario.followUps ?? []) {
       result = await withTimeout(turn(followUp), HARD_CAP_MS, `scenario ${scenario.id} follow-up`);
     }
@@ -184,11 +179,8 @@ export async function runScenario(
         });
       }
       if (scenario.approval === 'approve') {
-        // Resumes the way the product does: an operator acting, not the customer
-        // repeating themselves. Re-sending the original message wrote it to the
-        // transcript twice.
-        // Same shape as the approval decision route: a person saying go ahead,
-        // naming the subscription so the resumed turn has something to act on.
+        // Resumes as an operator, not the customer: re-sending the original message
+        // would write it to the transcript twice.
         result = await withTimeout(
           resume(
             subRef
@@ -323,9 +315,8 @@ export async function runScenarios(argv: string[] = [], deps?: ScenarioDeps): Pr
 
     if (repeat > 1) console.log(`\n=== pass ${pass} of ${repeat} ===`);
 
-    // Shadow mode is not judged on the scenario expectations: nothing was written,
-    // so of course they do not hold. The only thing worth asserting is that
-    // nothing was written.
+    // Nothing is written in shadow mode, so the scenario expectations cannot hold.
+    // The only thing worth asserting is that nothing was written.
     if (modeOverride === 'shadow') {
       const writes = await moneyWrites(tenantId, passStartedAt);
       console.log(`\n${results.length} scenarios ran in shadow mode.`);

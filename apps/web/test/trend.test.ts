@@ -2,11 +2,8 @@ import { closeDb, vrrTrend } from '@kora/db';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { type RunSpec, daysAgo, dropTenant, seedRuns } from './support/seed';
 
-/**
- * The trend line renders one point per day. A chart with a single point is not a
- * chart, and it is worth knowing whether that is the query collapsing the range
- * or the data genuinely covering one day.
- */
+/** One point per day: a single-point line must mean one day of data, never the
+ *  query collapsing the range. */
 const TENANT = 'ten_trend_test';
 
 function runOn(day: number, verified: boolean): RunSpec {

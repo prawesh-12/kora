@@ -4,11 +4,9 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { closeDb, sql } from '../src/client.js';
 
 /**
- * Layer two, tested directly.
- *
  * These queries have **no WHERE clause on tenant_id at all**. That is the point:
  * application scoping is one forgotten clause away from a leak, and this asserts
- * that a leak at that layer still returns nothing.
+ * that row-level security still returns nothing when that happens.
  */
 const APP_URL = 'postgresql://kora_app:kora_app@localhost:5432/kora';
 

@@ -4,17 +4,10 @@ import { humanizeFailureDetail } from '@/lib/ops/format';
 import type { FailureBucketDto } from '@/lib/api/schemas';
 
 /**
- * A server component on purpose. `@kora/core` re-exports `secrets.ts`, which
- * imports `node:crypto`, so anything in the browser that reaches into core
- * fails the client build. The severity table is read here and the plain data
- * goes to the client chart.
- *
- * Severity picks the colour, count picks the length.
- *
- * These rows are links to the filtered conversation list, which is the reason
- * the breakdown exists at all. That drill path is why the bars are markup and
- * not an SVG chart: a rect is not a link, and a count of 2 has to stay clickable
- * next to a count of 622.
+ * A server component on purpose: `@kora/core` re-exports `secrets.ts`, which
+ * imports `node:crypto`, so reading the severity table in the browser fails the
+ * client build. The bars are markup rather than an SVG chart because each row
+ * has to be a link into the filtered conversation list.
  */
 export function FailureChart({ buckets, days }: { buckets: FailureBucketDto[]; days: number }) {
   const data = buckets.map((bucket) => ({

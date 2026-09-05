@@ -7,8 +7,6 @@ const IV_BYTES = 12;
 const SALT_BYTES = 16;
 
 /**
- * Business API credentials at rest.
- *
  * The key is derived per secret from a random salt, so two secrets with the same
  * plaintext do not produce the same ciphertext. Rotating `KORA_SECRET_KEY`
  * re-encrypts on next write rather than needing a redeploy.

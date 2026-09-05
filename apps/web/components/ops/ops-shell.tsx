@@ -19,10 +19,9 @@ import {
 } from '@/components/motion/animated-sidebar';
 
 /**
- * Every mode below `full` holds something back: simulation writes nothing,
- * shadow only proposes, human_approval and limited gate the risky calls. `full`
- * is the one where the agent acts on a real customer's order without asking, so
- * it is the one that has to be unmistakable.
+ * Every mode below `full` holds something back: simulation writes nothing, shadow
+ * only proposes, human_approval and limited gate the risky calls. `full` acts on
+ * real customer money unasked, so it is the one that has to be unmistakable.
  */
 const MODE: Record<string, { label: string; className: string }> = {
   simulation: { label: 'Simulation', className: 'border-info/40 bg-info/10 text-info-strong' },
@@ -57,9 +56,6 @@ export function OpsShell({
   const pathname = usePathname();
   const router = useRouter();
 
-  // Longest matching prefix, not any prefix. `/ops` is a prefix of every operator
-  // route, so `startsWith` lights up two items at once; exact matching lights up
-  // none on a detail route like /ops/conversations/conv_123.
   const activeHref = useMemo(() => activeNavHref(pathname), [pathname]);
 
   return (
@@ -86,8 +82,6 @@ export function OpsShell({
           </AnimatedSidebarGroup>
         </AnimatedSidebarContent>
         <AnimatedSidebarFooter>
-          {/* Flex with a gap and a shrink-0 avatar, so the circle reserves its own
-              space instead of sitting on top of the email. */}
           <div className="flex min-w-0 items-center gap-2 px-2">
             <span
               aria-hidden

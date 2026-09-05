@@ -1,10 +1,7 @@
 import { z } from 'zod';
 import { defineTool } from '../registry.js';
 
-/**
- * Terminal. The agent loop stops when this is called; the orchestrator writes the
- * escalation row and the handoff payload.
- */
+/** Terminal. The agent loop stops here; the orchestrator writes the escalation row. */
 export const escalateToHuman = defineTool({
   name: 'escalate_to_human',
   version: 1,

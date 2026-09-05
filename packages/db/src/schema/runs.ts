@@ -15,7 +15,6 @@ export const agentRuns = pgTable(
     agentConfigVersion: text('agent_config_version').notNull(),
     /** Set once at run start. In-flight runs finish on the version they began with. */
     agentVersionId: text('agent_version_id'),
-    /** Which rung of the deployment ladder produced this run. */
     deploymentMode: text('deployment_mode').notNull().default('full').$type<DeploymentMode>(),
     triggerMessageId: text('trigger_message_id'),
     startedAt: timestamp('started_at', { withTimezone: true }).notNull().defaultNow(),

@@ -174,10 +174,8 @@ async function selectOne(tenantId: string, id: string): Promise<QueuedApproval |
 }
 
 /**
- * Moves every overdue pending approval to `expired` and hands the conversation to a
- * person. Called on every read and every decision, so a stale pending row can never
- * reach the queue and a decision on an expired approval can never win. The CLI
- * sweep and the lazy path are the same function, so they cannot disagree.
+ * Called on every read and every decision, so a stale pending row can never reach the
+ * queue. The CLI sweep runs this same function, so the two cannot disagree.
  */
 export async function expireOverdueApprovals(
   tenantId: string,

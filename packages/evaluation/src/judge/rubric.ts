@@ -64,9 +64,8 @@ export function loadRubric(version = 'support-v1'): Rubric {
 }
 
 /**
- * Works out which criteria apply from the trace, in code, before the judge sees
- * anything. A judge asked to score `escalation_reason_valid` on a run that never
- * escalated will invent an answer rather than say it cannot.
+ * Decided in code before the judge sees anything: a judge asked to score
+ * `escalation_reason_valid` on a run that never escalated invents an answer.
  */
 export function applicableCriteria(rubric: Rubric, trace: AssembledTrace): Criterion[] {
   const hasPolicyCheck = trace.policyChecks.length > 0;

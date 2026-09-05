@@ -4,13 +4,9 @@ import { STRIPE_WRITE_TOOLS, replayKey } from '@kora/tools';
 import type { AssembledTrace, RefundRecord, SubscriptionRecord } from '../deps.js';
 
 /**
- * The business state as it was when the original run happened, rebuilt from that
- * run's own tool outputs.
- *
- * Replaying against today's state produces confident, meaningless comparisons: a
- * charge that has since been refunded looks like the new version made a different
- * decision when all that changed is the world. A run the trace cannot reconstruct
- * is marked `not_replayable` and skipped, never silently included.
+ * Business state as it was when the original run happened, rebuilt from that run's
+ * own tool outputs. Replaying against today's state would report a decision change
+ * when all that changed is the world.
  */
 export interface PointInTimeState {
   refunds: Record<string, RefundRecord>;
@@ -18,12 +14,8 @@ export interface PointInTimeState {
   /** Keyed by `toolName:canonicalInput`, so a repeated call returns what it returned. */
   toolOutputs: Record<string, unknown>;
   /**
-   * What a person decided on this conversation, per tool.
-   *
-   * The human's decision was part of the world the original run acted in, so it
-   * is reconstructed like any other state. Without it every run that only
-   * succeeded because someone approved it reads as a regression, and replay ends
-   * up measuring the absence of a human rather than the agent.
+   * Human decisions per tool. Without them, every run that only succeeded because
+   * someone approved it replays as a regression.
    */
   approvalDecisions: Array<{ toolName: string; status: string; note: string | null }>;
 }
@@ -47,11 +39,7 @@ interface WriteOutput {
   subscription?: SubscriptionRecord;
 }
 
-/**
- * A refund as the original run recorded it. The tool stores only what it needed,
- * so the fields Stripe would have held but the trace never saw stay empty rather
- * than being invented.
- */
+/** Fields the trace never recorded stay empty rather than being invented. */
 function refundFrom(output: WriteOutput): RefundRecord {
   return {
     id: output.refundId ?? '',
@@ -99,9 +87,8 @@ export function reconstructState(trace: AssembledTrace): PointInTimeState | NotR
 
     if (WRITE_TOOLS.includes(execution.toolName)) {
       const output = execution.output as WriteOutput | null;
-      // `create_refund` returns a refund id rather than an `id`, and `change_plan`
-      // returns the subscription nested. A write with none of the three recorded
-      // nothing, and replay cannot rebuild what it did.
+      // `create_refund` returns `refundId` rather than `id`, and `change_plan`
+      // returns the subscription nested.
       const writtenId = output?.id ?? output?.refundId ?? output?.subscription?.id;
       if (!writtenId) {
         return {
@@ -121,10 +108,9 @@ export function reconstructState(trace: AssembledTrace): PointInTimeState | NotR
     return { runId: trace.run.id, reason: 'the original run recorded no intent' };
   }
 
-  // A run whose outcome was driven by a transient upstream failure cannot be
-  // replayed: the recorded outputs are the successful ones, so the replay sails
-  // through and reports an improvement that is really a missing fault. Comparing
-  // it would measure the fault injector, not the agent.
+  // Only successful outputs are recorded, so a run disturbed by a transient
+  // upstream failure replays cleanly and reports an improvement that is really a
+  // missing fault.
   const disturbed = trace.toolExecutions.find(
     (e) => TRANSIENT_CODES.includes(e.errorCode ?? '') || e.verified === false,
   );
@@ -148,21 +134,14 @@ export interface ReplayCandidate {
   outcome: string | null;
   /** Every customer message in the conversation, so the replayed turn has its context. */
   messages: string[];
-  /**
-   * Which of those messages this run answered. A conversation of three turns is
-   * three runs, and comparing turn one against turn three is how a replay reports
-   * a regression that is really an off-by-one.
-   */
+  /** Which of those messages this run answered; each turn is a separate run. */
   turnIndex: number;
   state: PointInTimeState;
 }
 
 /**
- * Samples stratified by intent and outcome, not randomly.
- *
- * A random sample of production traffic is 80% order-status lookups, which tells
- * you nothing about refunds. Stratifying is the difference between a replay that
- * measures the agent and one that measures the traffic mix.
+ * Samples stratified rather than randomly: a random sample of production traffic
+ * measures the traffic mix instead of the agent.
  */
 export function stratify<T>(items: T[], keyOf: (item: T) => string, limit: number): T[] {
   if (items.length <= limit) return items;
@@ -271,13 +250,7 @@ export function buildReport(
   };
 }
 
-/**
- * Regressions above the aggregate, deliberately.
- *
- * A version with +4.4 points of verified resolution and six regressions is not
- * automatically better, and putting the headline first is how a reviewer stops
- * reading before the six.
- */
+/** Regressions print above the aggregate deliberately, so they are read first. */
 export function renderReplay(report: ReplayReport): string {
   const lines: string[] = [];
 
@@ -350,11 +323,8 @@ export async function loadCandidates(
       continue;
     }
 
-    // A run with no trigger message is a resume, not a turn: approving a
-    // high-value action continues the work in a new run without the customer
-    // saying anything. The turn that raised the approval already stands for that
-    // work, and replaying the continuation on its own would compare it against a
-    // customer message it never answered.
+    // A run with no trigger message is a resume after an approval, not a turn.
+    // The turn that raised the approval already stands for that work.
     if (trace.run.triggerMessageId === null) {
       notReplayable.push({
         runId,
@@ -370,10 +340,8 @@ export async function loadCandidates(
     }
 
     const customerMessages = trace.conversation.messages.filter((m) => m.role === 'customer');
-    // The customer message is written just before the run starts, so the turn
-    // this run answered is the last one at or before `startedAt`, not the first
-    // one after it. Getting this backwards compares turn one against turn two and
-    // reports a regression that is really an off-by-one.
+    // The customer message is written just before the run starts, so the turn this
+    // run answered is the last one at or before `startedAt`, not the first after.
     const turnIndex = customerMessages.findLastIndex(
       (m) => m.createdAt.getTime() <= trace.run.startedAt.getTime(),
     );

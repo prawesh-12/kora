@@ -51,11 +51,8 @@ export interface RunHandle {
     fn: (stepId: string) => Promise<T>,
   ): Promise<T>;
   /**
-   * Records a step that has already happened.
-   *
-   * `durationMs` is optional because most steps are markers with no span to
-   * measure. Leaving it out stores null, not zero: a zero duration is a claim
-   * that the step took no time, and the trace showed `0ms` on every row for it.
+   * `durationMs` is optional because most steps are markers with no span to measure.
+   * Leaving it out stores null, not zero: zero would claim the step took no time.
    */
   record(
     kind: RunStepKind,

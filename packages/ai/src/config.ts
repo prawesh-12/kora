@@ -71,9 +71,8 @@ function familyOf(modelId: string): string {
 }
 
 /**
- * Checked at config load, not at first use. A judge from the same family as the
- * agent systematically over-rewards its own outputs, and the failure mode is a
- * dashboard reading 94% for three months while the agent is quietly wrong.
+ * Checked at config load, not at first use: a judge from the same family as the
+ * agent over-rewards its own outputs.
  */
 export function assertJudgeFamily(): void {
   const env = serverEnv();
@@ -99,18 +98,12 @@ export interface ResolvedAgentConfig {
 }
 
 /**
- * Resolves the configuration a run will use, and pins it.
+ * The database is the source of truth once a version has been published; the file is
+ * the fallback for a checkout that has never run `pnpm kora agent:publish`, and the
+ * only reason `config/agent.yaml` is still read at runtime.
  *
- * The database is the source of truth once a version has been published. The
- * file is the fallback for a checkout that has never run `pnpm kora
- * agent:publish`, and it is the only reason `config/agent.yaml` is still read at
- * runtime. Which one was used is recorded on the result, so a trace never has to
- * be guessed at.
- */
-/**
- * `versionId` pins a specific version instead of the active one. Replay needs it:
- * the point is what the *new* configuration would have done, so the policy bundle
- * has to come from that version, not from whatever is live now.
+ * `versionId` pins a specific version instead of the active one, which replay needs:
+ * the policy bundle must come from that version, not from whatever is live now.
  */
 export async function resolveAgentConfig(
   tenantId: string,

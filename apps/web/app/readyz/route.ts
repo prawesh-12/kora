@@ -60,9 +60,7 @@ async function checkRedis(): Promise<string> {
 }
 
 /**
- * `mock` is the default provider and answers in-process, so probing it over the
- * network would be measuring nothing. A hosted provider gets one real call, which
- * the 10 second cache keeps down to six an hour rather than one per probe.
+ * `mock` answers in-process, so probing it over the network measures nothing.
  */
 async function checkModelProvider(): Promise<string> {
   const env = serverEnv();
@@ -104,9 +102,8 @@ async function measure(): Promise<Readiness> {
 }
 
 /**
- * One measurement per ten seconds, shared by every concurrent probe. Without the
- * cache a rate limited provider makes readiness flap, and every load balancer
- * probe turns into an outbound call of its own.
+ * One measurement per ten seconds, shared by every concurrent probe: otherwise a
+ * rate limited provider makes readiness flap and each probe costs an outbound call.
  */
 async function readiness(): Promise<Readiness> {
   const nowMs = now().getTime();

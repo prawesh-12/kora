@@ -14,21 +14,17 @@ export async function setKnowledgeStatus(tenantId: string, status: string): Prom
 }
 
 /**
- * Deletes every claim for the tenant. Only safe between passes, never during one:
- * scenarios run concurrently, and deleting a claim another scenario is holding is
- * how a benchmark manufactures the duplicate write it is meant to detect.
- *
- * A scenario does not need this. Each one opens a new conversation and the
- * idempotency key is scoped to the conversation, so nothing can collide.
+ * Only safe between passes: deleting a claim another scenario is holding manufactures
+ * the duplicate write the benchmark exists to detect. An individual scenario never
+ * needs it, since the key is scoped to its own new conversation.
  */
 export async function clearIdempotency(tenantId: string): Promise<void> {
   await sql()`DELETE FROM idempotency_keys WHERE tenant_id = ${tenantId}`;
 }
 
 /**
- * Money writes that actually executed. Read from the execution rows rather than
- * from what a scenario expected: the whole point of the shadow assertion is that
- * Kora's own view of what it did might be wrong.
+ * Read from the execution rows rather than from what a scenario expected: the shadow
+ * assertion exists because Kora's own view of what it did might be wrong.
  */
 export async function moneyWrites(tenantId: string, since: Date): Promise<number> {
   const rows = await sql()<{ n: string }[]>`

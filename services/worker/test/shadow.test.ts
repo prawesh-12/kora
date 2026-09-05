@@ -40,8 +40,7 @@ describe('agreement', () => {
   });
 
   it('does not compare amounts on a replacement, which carries none', () => {
-    // Acme stores no amount on a replacement, so a proposal that also carries no
-    // amount agrees. Pricing the proposal but not the record would report every
+    // Pricing the proposal when the record carries no amount would report every
     // matched replacement as a disagreement over nothing.
     const noAmount = {
       ...proposal,
@@ -124,8 +123,6 @@ describe('the disagreements list', () => {
   it('never lists a run nobody handled as a disagreement', async () => {
     const rows = await disagreementsByValue(TENANT);
 
-    // The table promised the most expensive disagreements and delivered rows
-    // where both sides were empty and every amount was zero.
     expect(rows.every((r) => r.agreement !== 'no_human_record')).toBe(true);
     expect(rows.every((r) => r.agreement !== 'match')).toBe(true);
     expect(rows).toHaveLength(2);

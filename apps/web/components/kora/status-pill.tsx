@@ -1,16 +1,5 @@
 import { cn } from '@/lib/utils';
 
-/**
- * One scale for every status in the product.
- *
- * Black used to mean pass. Black is the neutral surface everywhere else in this
- * palette, so it cannot also mean success, and three screens rendered the same
- * three verified states three unrelated ways.
- *
- * Built by hand rather than taken from a registry: it is a span with a token
- * class and a lookup table, and the badge primitive it wraps is already
- * installed. See docs/decisions.md.
- */
 export type Status = 'ok' | 'warn' | 'danger' | 'info' | 'muted';
 
 const STATUS_CLASS: Record<Status, string> = {
@@ -46,14 +35,8 @@ export function StatusPill({
   );
 }
 
-/**
- * Verified resolution: pass, fail, still waiting, or not judged yet. Never black
- * for pass.
- *
- * A run parked in AWAITING_APPROVAL has not failed at anything. It is waiting on
- * a person, and the evaluator scores it against a resolution that has not been
- * allowed to happen yet, so the honest word is pending.
- */
+/** A run in AWAITING_APPROVAL reads as pending, not fail: the evaluator scored it
+ *  against a resolution that has not been allowed to happen yet. */
 export function VerifiedPill({
   verified,
   state,

@@ -135,8 +135,6 @@ describe('step durations', () => {
     const rows = await sql()<{ kind: string; duration_ms: number | null }[]>`
       SELECT kind, duration_ms FROM run_steps WHERE run_id = ${run.runId} ORDER BY ordinal`;
 
-    // Zero is a claim that the step took no time, and it put `0ms` on every row
-    // of the trace. A marker has no span, so it stores null.
     expect(rows.every((r) => r.duration_ms === null)).toBe(true);
   });
 

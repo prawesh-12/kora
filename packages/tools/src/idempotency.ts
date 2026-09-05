@@ -13,12 +13,10 @@ export function deriveKey(args: {
   toolVersion: number;
   input: unknown;
 }): string {
-  // The input hash is part of the key on purpose. A retry with different
-  // arguments is a different action and must not deduplicate against the first.
-  //
-  // The key is scoped to the conversation rather than the run. Resuming after a
-  // human approval starts a new run, and so does a customer submitting twice;
-  // both must land on the same key or the second one writes again.
+  // The input hash is part of the key: a retry with different arguments is a
+  // different action and must not deduplicate against the first. The key is scoped
+  // to the conversation, not the run, because resuming after a human approval starts
+  // a new run that must still land on the same key.
   const material = [
     args.tenantId,
     args.conversationId,

@@ -25,10 +25,6 @@ function check(name: string, passed: boolean, detail: string): Assertion {
 
 const WRITE_ACTIONS = STRIPE_WRITE_TOOLS;
 
-/**
- * Which write the scenario is actually about. Hardcoding one of them made every
- * scenario about the other two report "policy never reached".
- */
 function writeActionOf(args: AssertArgs): string | null {
   // What the scenario says should happen comes first. A forbidden tool is what
   // must not happen, so reading the action from that list asks the wrong question.

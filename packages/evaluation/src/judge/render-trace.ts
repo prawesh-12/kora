@@ -1,24 +1,17 @@
 import type { AssembledTrace } from '../deps.js';
 
-/**
- * Fixed budget so a long conversation cannot score better for being long. The
- * judge sees the same shape every time, in the same order.
- */
+/** Fixed budget, so a long conversation cannot score better for being long. */
 const MAX_CHARS = 6000;
 
-// A trace assembled from a crashed run can be missing fields. The renderer must
-// never throw: a judge that cannot run is better than an evaluation that cannot.
+// A trace from a crashed run can be missing fields, and the renderer must never throw.
 function truncate(text: string | null | undefined, limit: number): string {
   if (!text) return '';
   return text.length <= limit ? text : `${text.slice(0, limit)}… (truncated)`;
 }
 
 /**
- * Renders a trace for the judge.
- *
- * Deliberately excludes the deterministic check results. A judge that can see
- * them anchors on them and stops being an independent signal, which is the only
- * thing it is for.
+ * Deliberately excludes the deterministic check results: a judge that can see them
+ * anchors on them and stops being an independent signal.
  */
 export function renderTraceForJudge(trace: AssembledTrace): string {
   const parts: string[] = [];

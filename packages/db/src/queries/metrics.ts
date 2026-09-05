@@ -134,13 +134,12 @@ export function vrrTrendSql(f: MetricsFilter): SQL {
 }
 
 /**
- * Only `failure_codes[1]` is counted. The classifier writes every code it finds in
- * root-cause order, so counting all of them would count one broken retrieval again
- * as a hallucination and again as a bad outcome, and the tallest bar would be the
- * symptom furthest from the fix.
+ * Only `failure_codes[1]` is counted: the classifier writes codes in root-cause order,
+ * so tallying all of them would count one broken retrieval again as a hallucination
+ * and make the tallest bar the symptom furthest from the fix.
  *
- * `top_detail` is recomputed from the trace rather than read back, because the
- * detail the classifier produced is not persisted alongside the code.
+ * `top_detail` is recomputed from the trace because the classifier's detail is not
+ * persisted alongside the code.
  */
 export function failureBreakdownSql(f: MetricsFilter): SQL {
   return sql`

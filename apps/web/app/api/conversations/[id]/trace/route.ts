@@ -4,10 +4,7 @@ import { requireOperator } from '@/lib/api/auth';
 import { handle, notFound } from '@/lib/api/errors';
 import { toEvaluationDto, toTraceDto } from '@/lib/api/schemas';
 
-/**
- * The path carries a conversation id, so the newest run for that conversation is
- * what an operator means when they open a trace. `?runId=` picks an older one.
- */
+// Defaults to the newest run for the conversation; `?runId=` picks an older one.
 export async function GET(
   req: Request,
   { params }: { params: Promise<{ id: string }> },

@@ -17,12 +17,9 @@ export async function currentOperator(): Promise<Operator | null> {
 }
 
 /**
- * The single gate every operator route goes through, so the rate limit is applied
- * here rather than remembered in each handler.
- *
- * Keyed on the operator, not the IP: an operator behind a shared address should
- * not be throttled by a colleague, and an unauthenticated caller never gets this
- * far. `/api/auth/*` has its own, tighter limit for the same reason in reverse.
+ * The single gate every operator route goes through. Rate limiting is keyed on
+ * the operator rather than the IP, so one operator behind a shared address is not
+ * throttled by a colleague; `/api/auth/*` is keyed by IP for the reverse reason.
  */
 export async function requireOperator(): Promise<Operator> {
   const operator = await currentOperator();

@@ -9,18 +9,14 @@ export interface PublishedPolicy {
   key: string;
 }
 
-/**
- * Compiles the YAML, then inserts a new version and closes the previous one's
- * effective window in the same transaction. It never mutates an existing row, and
- * a database trigger enforces that even against a hand-written UPDATE.
- */
+/** Versions are append-only; a database trigger enforces that against hand-written UPDATEs. */
 export async function publishPolicy(
   tenantId: string,
   key: string,
   yamlSource: string,
 ): Promise<PublishedPolicy> {
-  // Rejected before insert. A policy that does not compile is worse in the
-  // database than on disk, because nothing else reads the disk any more.
+  // Rejected before insert: nothing reads the YAML from disk any more, so an
+  // uncompilable policy in the database has no fallback.
   compilePolicyBundle([{ key, yaml: yamlSource }]);
 
   return db().transaction(async (tx) => {
@@ -67,11 +63,8 @@ export async function publishPolicy(
 }
 
 /**
- * Loads a bundle by version row id, not by key.
- *
- * That is what makes replay meaningful: an agent version pins exact policy rows,
- * so a run from three months ago can be re-evaluated against the rules that
- * actually applied to it rather than whatever is active today.
+ * By version row id rather than key, so replay re-evaluates an old run against the
+ * rules that applied to it rather than whatever is active today.
  */
 export async function loadPolicyBundle(
   tenantId: string,
@@ -117,8 +110,7 @@ export async function activePolicyVersionIds(tenantId: string, keys: string[]): 
   const byKey = new Map(rows.map((r) => [r.key, r.id]));
   const missing = keys.filter((k) => !byKey.has(k));
   if (missing.length > 0) {
-    // Fail closed. Falling back to the file would mean a run gated by rules that
-    // nothing recorded.
+    // Fail closed: falling back to the file would gate a run on rules nothing recorded.
     throw new ConfigError(`no active policy version for: ${missing.join(', ')}`, {
       code: 'NO_ACTIVE_POLICY',
       context: { missing },

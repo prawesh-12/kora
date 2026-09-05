@@ -7,12 +7,8 @@ import { EMPTY, formatDuration, formatUsd, humanizeEnum } from '@/lib/ops/format
 import { cn } from '@/lib/utils';
 import type { PolicyCheckDto, RunStepDto, ToolExecutionDto, TraceDto } from '@/lib/api/schemas';
 
-/**
- * "We chose not to" and "it failed" are the two things an operator most often
- * confuses in a trace. Every status therefore carries a dot AND a word, and the
- * legend below the timeline names each one. An undocumented colour is
- * decoration.
- */
+/** Every status carries a word as well as a colour: "denied" and "failed" are
+ *  the two an operator most often confuses. */
 const STATUS: Record<string, { dot: string; label: string }> = {
   ok: { dot: 'bg-success', label: 'executed' },
   replayed: { dot: 'bg-info', label: 'replayed' },
@@ -58,11 +54,8 @@ function scalars(value: unknown, limit: number): string[] {
   return out.slice(0, limit);
 }
 
-/**
- * `get_subscription(sub_1S...) -> active` instead of forty lines of JSON. The
- * JSON is still one click away; it is just no longer the default, because three
- * open panes in a scrolling column hide the thing they are evidence for.
- */
+/** One line, `get_subscription(sub_1S...) -> active`; the full JSON stays one
+ *  click away inside the card. */
 function summarize(execution: ToolExecutionDto): string {
   const args = scalars(execution.input, 2).join(', ');
   const call = args ? `${execution.toolName}(${args})` : `${execution.toolName}()`;
@@ -71,7 +64,6 @@ function summarize(execution: ToolExecutionDto): string {
   return result ? `${call} -> ${result}` : call;
 }
 
-/** A tool call and the policy checks that gated it, in one card. */
 interface Call {
   kind: 'tool';
   id: string;
@@ -120,8 +112,8 @@ function buildGroups(trace: TraceDto): Group[] {
     if (execution) {
       usedTools.add(execution.id);
       for (const check of checks) usedChecks.add(check.id);
-      // The check that blocked create_replacement belongs inside that card, not
-      // in a flat list five rows below it.
+      // A check that gated a tool belongs inside that tool's card, not in the
+      // flat list below it.
       current().items.push({ kind: 'tool', id: execution.id, execution, checks });
       continue;
     }

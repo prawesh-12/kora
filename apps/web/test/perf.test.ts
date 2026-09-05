@@ -18,8 +18,8 @@ import { type RunSpec, daysAgo, dropTenant, seedRuns } from './support/seed';
 
 const TENANT = 'ten_perf_test';
 
-// The plan asks for 25,000 to 50,000. Scaled down so the suite fits the machine it
-// runs on; the plans asserted below do not change shape with row count.
+// Scaled down so the suite fits the machine it runs on; the plans asserted below
+// do not change shape with row count.
 const ROWS = 5_000;
 const BUDGET_MS = 500;
 
@@ -84,10 +84,9 @@ async function timed<T>(label: string, fn: () => Promise<T>): Promise<T> {
 }
 
 /**
- * At 5,000 rows a sequential scan is often genuinely cheaper, so the planner picks
- * one and an EXPLAIN of the plain query proves nothing about the index. Turning
- * seqscan off for the transaction asks the planner the question that matters: is
- * there an index that *can* serve this shape at all?
+ * At 5,000 rows a sequential scan is often genuinely cheaper, so a plain EXPLAIN
+ * proves nothing about the index. Disabling seqscan asks the question that
+ * matters: is there an index that *can* serve this shape at all?
  */
 async function planWithoutSeqScan(query: ReturnType<typeof runAggregateSql>): Promise<string> {
   return db().transaction(async (tx) => {
@@ -127,9 +126,8 @@ describe(`metrics at ${ROWS} runs`, () => {
     await timed('approval queue', () => listApprovalQueue(TENANT, { status: 'all' }));
   });
 
-  // A range that covers every row is not a range: the planner correctly prefers the
-  // narrower `agent_runs_tenant_idx` when the date predicate excludes nothing. These
-  // plans use a slice of the window, which is the shape a real dashboard query has.
+  // A slice, not the whole window: with a date predicate that excludes nothing the
+  // planner correctly prefers the narrower `agent_runs_tenant_idx`.
   const SLICE = { tenantId: TENANT, from: START, to: new Date(START.getTime() + 200 * 60_000) };
 
   it('has an index that can serve the run aggregate', async () => {

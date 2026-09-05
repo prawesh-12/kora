@@ -17,10 +17,9 @@ export const agents = pgTable(
 );
 
 /**
- * Immutable once active. A partial unique index allows exactly one active version
- * per agent, and a trigger rejects any UPDATE to an active row other than
- * archiving it. Application-level protection is not enough: someone will
- * eventually run a migration or a manual query.
+ * Immutable once active, enforced in the database rather than the application: a
+ * partial unique index allows one active version per agent, and a trigger rejects
+ * any UPDATE to an active row other than archiving it.
  */
 export const agentVersions = pgTable(
   'agent_versions',

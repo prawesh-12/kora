@@ -40,11 +40,8 @@ export interface RetrieveArgs {
 }
 
 /**
- * Filters first in SQL, then orders by `cosineDistance` ascending.
- *
- * Ordering by `1 - cosineDistance` descending is logically identical and stops
- * Postgres using the HNSW index, which turns a correct query on 200 rows into a
- * sequential scan on two million.
+ * Orders by `cosineDistance` ascending. Ordering by `1 - cosineDistance` descending
+ * is logically identical but stops Postgres using the HNSW index.
  */
 export async function retrieve(args: RetrieveArgs): Promise<RetrievalResult> {
   const topK = args.topK ?? 5;
@@ -54,8 +51,6 @@ export async function retrieve(args: RetrieveArgs): Promise<RetrievalResult> {
   let chunks: RetrievedChunk[] = [];
   let error: string | undefined;
 
-  // Embedding plus the vector search. This is the number an operator wants when
-  // retrieval looks slow, so it is the span the step records.
   const startedAt = Date.now();
 
   try {
@@ -92,8 +87,7 @@ export async function retrieve(args: RetrieveArgs): Promise<RetrievalResult> {
 
     chunks = rows.map((r) => ({ ...r, distance: Number(r.distance) }));
   } catch (e) {
-    // Retrieval failure is recorded and returned empty. It never throws into the
-    // agent loop, and an empty result is a first-class outcome, not a fallback.
+    // Never throws into the agent loop: an empty result is a first-class outcome.
     error = (e as Error).message;
     logger().warn({ err: e, query: args.query }, 'retrieval failed');
   }

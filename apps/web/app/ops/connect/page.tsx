@@ -8,11 +8,8 @@ import { Button } from '@/components/ui/button';
 export const dynamic = 'force-dynamic';
 
 /**
- * First-run Connect Stripe screen. What Kora will do, the scopes it needs in
- * plain language, then the real state of the key and the fixtures.
- *
- * The key itself is set by the admin command, not here: a restricted key typed
- * into a browser form is a key in a browser history.
+ * The key is set by the admin command rather than a form here: a restricted key
+ * typed into a browser is a key in a browser history.
  */
 const SCOPES = [
   {

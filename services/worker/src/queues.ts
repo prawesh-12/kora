@@ -49,17 +49,12 @@ export function createQueues(connection: IORedis): Record<QueueName, Queue<Event
   };
 }
 
-/**
- * Repeatable jobs, replacing the CLI commands from M0 and M1. One code path, not
- * two: the CLI entry points stay only as a way to run the same job by hand.
- */
+/** The CLI entry points call these same jobs, so there is one code path, not two. */
 export const REPEATABLE: Array<{ name: string; queue: QueueName; pattern: string }> = [
   { name: 'cleanup-idempotency', queue: 'maintenance', pattern: '0 * * * *' },
   { name: 'expire-approvals', queue: 'maintenance', pattern: '* * * * *' },
   { name: 'replay-pending-events', queue: 'maintenance', pattern: '*/5 * * * *' },
   { name: 'purge-retention', queue: 'maintenance', pattern: '0 3 * * *' },
   { name: 'shadow-compare', queue: 'maintenance', pattern: '0 2 * * *' },
-  // Every minute: the goal is knowing within a minute, so a slower cadence
-  // would make the alerting a report rather than an alert.
   { name: 'evaluate-alerts', queue: 'maintenance', pattern: '* * * * *' },
 ];

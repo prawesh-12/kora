@@ -47,6 +47,7 @@ export async function handleStripeWebhookRequest(
   const tenantId = overrides?.tenantId ?? serverEnv().KORA_TENANT_ID;
   try {
     const secret = resolveWebhookSecret(overrides?.secret ?? serverEnv().STRIPE_WEBHOOK_SECRET);
+    // Stripe signs the exact bytes posted, so the body must not be parsed and re-serialized.
     const rawBody = await req.text();
     const signature = req.headers.get('stripe-signature');
     const store = overrides?.store ?? drizzleStripeWebhookStore(tenantId);

@@ -5,11 +5,8 @@ import type { RefundRecord, SubscriptionRecord } from './deps.js';
 import type { ExternalStateSnapshot } from './types.js';
 
 /**
- * Reads the refunds and subscriptions a run touched back out of the billing
- * provider once the run has finished.
- *
- * This is the part most teams skip and it is the whole point: the transcript tells
- * you what the agent said, Stripe tells you what actually happened.
+ * Read back after the run finishes: the transcript says what the agent said, the
+ * billing provider says what actually happened.
  */
 export async function snapshotExternalState(args: {
   tenantId: string;

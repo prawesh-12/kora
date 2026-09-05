@@ -2,12 +2,9 @@ import { logger, serverEnv } from '@kora/core';
 import { sql } from '@kora/db';
 
 /**
- * Deletes conversations past the tenant's retention window.
- *
- * Traces contain customer personal data by design: the whole point is that an
- * operator can read what the customer said. Keeping them forever is a liability,
- * not an asset. Runs, steps, tool executions and evaluations cascade from the
- * conversation, so one delete takes the whole trail.
+ * Traces hold customer personal data by design, so they expire with the tenant's
+ * retention window. Runs, steps, tool executions and evaluations cascade from the
+ * conversation, so deleting it takes the whole trail.
  */
 export async function purgeRetentionJob(): Promise<void> {
   const env = serverEnv();

@@ -3,11 +3,8 @@ import type { Queue } from 'bullmq';
 import type { EventJob, QueueName } from '../queues.js';
 
 /**
- * Runs the alert rules and logs what is firing.
- *
- * Delivery is a log line on purpose: this repository has no pager, and wiring a
- * fake one would make the alerting look done when nothing would reach a person.
- * `KORA_ALERT_WEBHOOK_URL` is the real delivery path when it is set.
+ * Delivery is a log line on purpose: there is no pager here, and a fake one would
+ * make alerting look done. `KORA_ALERT_WEBHOOK_URL` is the real path when it is set.
  */
 export async function evaluateAlertsJob(queues: Record<QueueName, Queue<EventJob>>): Promise<void> {
   const { evaluateAlerts } = await import('@kora/evaluation');

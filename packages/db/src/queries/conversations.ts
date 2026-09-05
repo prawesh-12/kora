@@ -58,9 +58,8 @@ export function decodeCursor(raw: string): ConversationCursor | null {
 }
 
 /**
- * Keyset pagination on `(started_at, id)`. Offset pagination on this table would
- * get slower with every week of traffic, and a run inserted while an operator is
- * paging would shift every later page by one row.
+ * Keyset pagination on `(started_at, id)`: offset pagination would slow down with
+ * every week of traffic, and an insert mid-paging would shift every later page.
  */
 const ts = (d: Date): SQL => sql`${d.toISOString()}::timestamptz`;
 

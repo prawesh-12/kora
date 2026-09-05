@@ -3,9 +3,8 @@
 import { useEffect, useState } from "react";
 
 /**
- * Returns true only on devices that have a true hover (mouse / trackpad).
- * Touch devices fire phantom `:hover` on tap that sticks until tap-elsewhere
- * — gate hover-only effects (scale lifts, magnetic pulls) behind this.
+ * Gate hover-only effects behind this: touch devices fire a phantom `:hover`
+ * on tap that sticks until the user taps elsewhere.
  */
 export function useHoverCapable() {
   const [canHover, setCanHover] = useState(false);

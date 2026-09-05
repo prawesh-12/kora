@@ -33,10 +33,9 @@ export interface HandoffPayload {
 }
 
 /**
- * The handoff is built now, not lazily on read. If a policy or a document changes
- * before a human opens it, the handoff must still show what the agent actually saw.
- *
- * Escalating twice in one run is a no-op: a retry storm must not open five cases.
+ * Built now rather than lazily on read, so a policy or document changing before a
+ * human opens it does not change what the handoff shows the agent saw. Escalating
+ * twice in one run is a no-op, so a retry storm cannot open five cases.
  */
 export async function escalate(args: {
   run: RunHandle;

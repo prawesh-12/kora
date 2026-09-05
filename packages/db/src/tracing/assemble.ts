@@ -14,8 +14,6 @@ export async function assembleTrace(tenantId: string, runId: string): Promise<As
     });
   }
 
-  // Nine small indexed queries, not one multi-way join. Faster, and far easier to change.
-  //
   // Approvals are fetched for the whole conversation, not just this run. Approving
   // a high-value action resumes the work in a new run, and a trace that hid the
   // approval which unblocked it would read as an action nobody authorised.

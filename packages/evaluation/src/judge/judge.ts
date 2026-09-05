@@ -29,11 +29,7 @@ export interface JudgeResponse {
  */
 export type JudgeCaller = (call: JudgeCall) => Promise<JudgeResponse>;
 
-/**
- * A judge from the same family as the agent systematically over-rewards its own
- * outputs. This is enforced, not advised: the dashboard reading 94% for three
- * months while the agent is quietly wrong is the failure mode this prevents.
- */
+/** A judge from the same family as the agent over-rewards its own outputs. */
 export function modelFamily(modelId: string): string {
   const id = modelId.toLowerCase();
   if (
@@ -166,10 +162,6 @@ export async function judgeRun(args: {
   };
 }
 
-/**
- * The judge cannot overturn code. If a critical deterministic check is UNMET, the
- * run is non-compliant however the judge scored it.
- */
 export function combineChecks(deterministic: CheckResult[], judge: CheckResult[]): CheckResult[] {
   return [...deterministic, ...judge.map((c) => ({ ...c, critical: false }))];
 }

@@ -8,10 +8,8 @@ export interface ToolPartData {
   state: 'complete' | 'approval-requested';
 }
 
-/**
- * The customer sees what happened, not how. Rule ids, confidence scores and raw
- * tool arguments belong in the operator trace and never appear here.
- */
+/** Customer-facing: rule ids, confidence scores and raw tool arguments belong in
+ *  the operator trace and must never appear here. */
 const PLAIN_LANGUAGE: Record<string, { title: string; outcome: string }> = {
   get_subscription: {
     title: 'Looking up your subscription',

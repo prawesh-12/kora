@@ -16,9 +16,8 @@ export const policies = pgTable(
 );
 
 /**
- * Never mutated. Publishing creates a new row and closes the previous one's
- * effective window in the same transaction, so a trace months later still
- * resolves to exactly the rules that ran.
+ * Never mutated: publishing appends a row and closes the previous one's effective
+ * window, so a trace months later still resolves to the rules that ran.
  */
 export const policyVersions = pgTable(
   'policy_versions',

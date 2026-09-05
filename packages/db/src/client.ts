@@ -17,13 +17,9 @@ export function sql() {
     sqlClient = postgres(env.DATABASE_APP_URL ?? env.DATABASE_URL, {
       max: 10,
       onnotice: () => {},
-      // Row-level security reads `kora.tenant_id`. Setting it as a connection
-      // parameter means every query is covered without threading a transaction
-      // through sixty call sites, and an unset connection sees nothing at all.
-      //
-      // One tenant per process, which is the deployment shape today. A process
-      // serving several tenants must use `withTenantTx`, which overrides this per
-      // transaction.
+      // Row-level security reads `kora.tenant_id`; as a connection parameter it
+      // covers every query, and an unset connection sees nothing at all. This binds
+      // the process to one tenant — several need `withTenantTx`, which overrides it.
       connection: { 'kora.tenant_id': env.KORA_TENANT_ID },
     });
   }

@@ -26,11 +26,9 @@ export const NAV: NavItem[] = [
 ];
 
 /**
- * The nav item to highlight, by longest matching prefix.
- *
- * `/ops` is a prefix of every operator route, so any-prefix matching highlights
- * two items at once. Exact matching highlights none on a detail route. Longest
- * prefix highlights exactly one, always.
+ * Longest matching prefix, not any prefix: `/ops` prefixes every operator route,
+ * so `startsWith` would highlight two items, and exact matching would highlight
+ * none on a detail route.
  */
 export function activeNavHref(pathname: string): string | null {
   const path = pathname.split('?')[0] ?? pathname;

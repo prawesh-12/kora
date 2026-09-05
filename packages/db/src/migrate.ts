@@ -16,11 +16,8 @@ const MIGRATIONS_DIR = join(import.meta.dirname, '../migrations');
 const EXTENSIONS_SQL = join(import.meta.dirname, '../extensions.sql');
 
 /**
- * Migrations run as the database owner, never as the application role.
- *
- * `db()` prefers `DATABASE_APP_URL` so that runtime queries are subject to
- * row-level security. That role deliberately cannot run DDL, so migrations open
- * their own owner connection here rather than borrowing the shared one.
+ * Its own owner connection, not the shared one: `db()` connects as the application
+ * role, which is subject to row-level security and deliberately cannot run DDL.
  */
 export async function runMigrations(): Promise<void> {
   const owner = postgres(serverEnv().DATABASE_URL, { max: 1, onnotice: () => {} });

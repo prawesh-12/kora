@@ -15,10 +15,7 @@ export interface RetryPolicy {
   baseMs: number;
 }
 
-/**
- * The one retry table. Every layer reads its numbers from here, so raising a limit
- * is a single edit rather than a hunt through inline loops.
- */
+/** The one retry table. Every layer reads its numbers from here. */
 export const RETRY_POLICY: Record<RetryClass, RetryPolicy> = {
   model_call: { attempts: 2, backoff: 'exponential', baseMs: 250 },
   read_tool: { attempts: 3, backoff: 'exponential', baseMs: 250 },

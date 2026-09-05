@@ -56,10 +56,8 @@ interface ApiError {
   error: { code: string; message: string };
 }
 
-/**
- * The turn arrives whole rather than token by token, so there is nothing to
- * reconcile: one request in, one assistant message out.
- */
+/** The turn arrives whole rather than token by token: one request in, one
+ *  assistant message out, nothing to reconcile. */
 function assistantMessage(turn: TurnResponse): ChatMessage {
   const parts: ChatPart[] = [];
 
@@ -80,9 +78,8 @@ function assistantMessage(turn: TurnResponse): ChatMessage {
   if (turn.escalationReason) {
     parts.push({ key: 'escalation', kind: 'escalation', reason: turn.escalationReason });
   }
-  // A completed money action renders its Proof Card in the customer's own
-  // language. A resolved turn with no escalation means the read-back passed, so
-  // the card shows confirmed; anything else stays honestly pending.
+  // A resolved turn with no escalation means the read-back passed, so the card
+  // may show confirmed; anything else stays pending.
   if (completedWrite && !turn.escalationReason && !turn.approvalId) {
     const titles = PROOF_TITLES[completedWrite] ?? {
       verified: 'Action confirmed',
@@ -120,11 +117,6 @@ function PartView({ part }: { part: ChatPart }) {
   }
 }
 
-/**
- * Shown on an empty conversation. A customer landing on a blank page with a
- * floating text box has no way to know what this is or what it can do, so the
- * agent opens and offers the three things it actually handles.
- */
 const STARTERS = ['Refund my last payment', 'Cancel my subscription', 'Why was I charged'];
 
 export function ChatTranscript({

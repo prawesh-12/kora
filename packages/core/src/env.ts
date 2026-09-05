@@ -62,8 +62,7 @@ export type ServerEnv = z.infer<typeof serverSchema>;
 
 export function parseServerEnv(source: Record<string, string | undefined>): ServerEnv {
   // A key left blank in a .env file arrives as an empty string, not as absent, so
-  // every optional setting would fail its own min length. `.env.example` ships the
-  // optional keys blank, which is the shape a first setup copies.
+  // every optional setting would otherwise fail its own min length.
   const present: Record<string, string | undefined> = {};
   for (const [key, value] of Object.entries(source)) {
     if (value !== '') present[key] = value;

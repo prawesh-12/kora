@@ -1,9 +1,7 @@
 export const NO_DATA = 'no data';
 
-/** The one em dash used for an empty cell. Anywhere a value is unknown, use this. */
 export const EMPTY = '—';
 
-/** `0ms` is a claim that something took no time. An unknown duration says so instead. */
 export function formatDuration(ms: number | null | undefined): string {
   if (ms === null || ms === undefined) return EMPTY;
   if (ms < 1) return '<1ms';
@@ -12,18 +10,13 @@ export function formatDuration(ms: number | null | undefined): string {
   return `${Math.floor(ms / 60_000)}m ${Math.round((ms % 60_000) / 1000)}s`;
 }
 
-/** `null` is not zero. A rate over no eligible runs is unknown, and says so. */
 export function formatRate(rate: number | null): string {
   return rate === null ? NO_DATA : `${(rate * 100).toFixed(1)}%`;
 }
 
 /**
- * A single run costs far less than a cent, so dollars to four places renders
- * every row as `$0.0001` and the column stops carrying information.
- *
- * Micro-dollars are the unit the number is stored in and the unit that
- * distinguishes one run from another, so that is the unit shown. Anything at or
- * above a cent gets dollars, because by then dollars are readable again.
+ * A single run costs far less than a cent, so dollars would render every row as
+ * `$0.0001`. Micro-dollars are the stored unit and the one that tells runs apart.
  */
 export function formatCostMicros(micros: number | null | undefined): string {
   if (micros === null || micros === undefined) return EMPTY;
@@ -57,7 +50,6 @@ export function formatElapsed(ms: number): string {
   return `${Math.floor(hours / 24)}d ${hours % 24}h ago`;
 }
 
-/** Relative in tables, absolute on hover. Both come from the same instant. */
 export function formatRelative(at: Date | string | null | undefined): string {
   if (!at) return EMPTY;
   return formatElapsed(Date.now() - new Date(at).getTime());
@@ -68,27 +60,19 @@ export function formatAbsolute(at: Date | string | null | undefined): string {
   return new Date(at).toLocaleString();
 }
 
-/** Ids are mono and truncated. The full value belongs in a title and a copy button. */
 export function truncateId(id: string | null | undefined, length = 8): string {
   if (!id) return EMPTY;
   return id.length <= length ? id : `${id.slice(0, length)}…`;
 }
 
-/**
- * `OUT_OF_SCOPE` is an identifier, not a sentence. It stays uppercase mono only
- * in the failure-code column, where it is the thing being named; everywhere
- * else it reads as prose.
- */
 export function humanizeEnum(value: string | null | undefined): string {
   if (!value) return EMPTY;
   return value.toLowerCase().replace(/_/g, ' ');
 }
 
 /**
- * The failure breakdown reports whatever the trace had closest to a cause, and
- * some of those values are the engine talking to itself: an intent enum, or the
- * policy engine's `insufficient facts: exceedsRefundable,`. The operator reads
- * the sentence; the raw value belongs in a title attribute beside it.
+ * Failure details arrive as whatever the trace had closest to a cause, including
+ * raw engine output like the policy engine's `insufficient facts: exceedsRefundable,`.
  */
 export function humanizeFailureDetail(detail: string): string {
   if (detail.startsWith('insufficient facts:')) return 'missing billing facts';

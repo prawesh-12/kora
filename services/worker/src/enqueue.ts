@@ -4,9 +4,8 @@ import type { Queue } from 'bullmq';
 import { type EventJob, QUEUE_FOR_EVENT, type QueueName } from './queues.js';
 
 /**
- * Wires `emit` in `@kora/db` to the queues. The database package must not depend
- * on the queue library, so the connection is handed in from whoever owns it: the
- * worker process, or the web process for events it emits itself.
+ * `@kora/db` must not depend on the queue library, so whoever owns the connection
+ * hands it in here: the worker process, or the web process for its own events.
  */
 export function wireEnqueue(queues: Record<QueueName, Queue<EventJob>>): void {
   setEnqueue(async (type: EventType, eventId: string, payload: EventPayload) => {

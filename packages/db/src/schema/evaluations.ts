@@ -24,10 +24,9 @@ export const evaluations = pgTable(
   (t) => [
     index('evaluations_tenant_idx').on(t.tenantId),
     index('evaluations_tenant_verified_idx').on(t.tenantId, t.verifiedResolution),
-    // The primary failure code is `failure_codes[1]`, so the index is on that
-    // expression. Drizzle cannot express it, so it is created by hand in
-    // migration 0004 and declared here only as a comment: a `drizzle-kit generate`
-    // will not drop it, because it never knew about it.
+    // Drizzle cannot express an index on `failure_codes[1]`, so migration 0004
+    // creates it by hand. Left undeclared here so `drizzle-kit generate` cannot
+    // drop what it never knew about.
     unique('evaluations_run_unique').on(t.runId),
   ],
 );

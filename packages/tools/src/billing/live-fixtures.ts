@@ -34,8 +34,6 @@ function sleep(ms: number): Promise<void> {
 }
 
 /**
- * Builds the fixture set in a real Stripe test account.
- *
  * Every object it creates carries `metadata.koraFixture` (prices also carry a
  * stable `lookup_key`) so a person can find and delete them. Customers and
  * subscriptions hang off one named test clock, and deleting that clock in the
@@ -53,11 +51,8 @@ export class LiveFixtureBackend implements FixtureBackend {
     this.stripe = new Stripe(apiKey, { maxNetworkRetries: 2 });
   }
 
-  /**
-   * Resolves the two fixture prices. An id from the environment wins when it
-   * actually exists in this account, otherwise the price is looked up by its
-   * stable lookup key and created once.
-   */
+  /** A configured price id wins only if it still exists here; otherwise look up the
+   * stable lookup key, and create the price once if that misses too. */
   async ensurePriceIds(configured: {
     basic?: string | undefined;
     pro?: string | undefined;

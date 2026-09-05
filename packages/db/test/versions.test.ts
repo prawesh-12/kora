@@ -109,7 +109,6 @@ describe('policy versions are immutable', () => {
     const first = await publishPolicy(TENANT, 'history', refunds);
     await publishPolicy(TENANT, 'history', `${refunds}\n# newer`);
 
-    // A trace from before the change still resolves to the rules that ran.
     const old = await loadPolicyBundle(TENANT, [first.versionId]);
     expect(old.rules.length).toBeGreaterThan(0);
   });
@@ -253,7 +252,6 @@ describe('the full promotion flow', () => {
 
     await sql()`INSERT INTO conversations (id, tenant_id, external_customer_id, channel, state)
                 VALUES (${conversationId}, ${TENANT}, 'cus_promo', 'web', 'NEW')`;
-    // The run pins its version at start, which is what makes this survive.
     await sql()`INSERT INTO agent_runs
                   (id, tenant_id, conversation_id, trace_id, agent_config_version, agent_version_id, started_at)
                 VALUES (${runId}, ${TENANT}, ${conversationId}, ${newId('tr')}, ${active.id}, ${active.id}, now())`;

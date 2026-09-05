@@ -81,10 +81,7 @@ export type RunStepKind =
   | 'response'
   | 'state';
 
-/**
- * The deployment ladder. One rung at a time, and every rung above `simulation`
- * is enforced in the pipeline rather than in a prompt.
- */
+/** The ladder. Every rung above `simulation` is enforced in the pipeline, not in a prompt. */
 export type DeploymentMode = 'simulation' | 'shadow' | 'human_approval' | 'limited' | 'full';
 
 export const DEPLOYMENT_LADDER: readonly DeploymentMode[] = [
@@ -116,8 +113,8 @@ export function isTerminalState(s: AgentState): boolean {
 }
 
 /**
- * Why a run failed, from Appendix C. The order of this list is the order the
- * classifier walks: root cause first, symptom last.
+ * The order of this list is the order the classifier walks: root cause first,
+ * symptom last.
  */
 export type FailureCode =
   | 'STATE_FAILURE'
@@ -151,15 +148,10 @@ export const FAILURE_CODES: readonly FailureCode[] = [
 export type FailureSeverity = 'critical' | 'normal' | 'low';
 
 /**
- * How bad a failure is, independent of how often it happens.
- *
- * A breakdown that colours by count makes the two most dangerous codes in the
- * system the faintest rows on the page, because they are also the rarest. Count
- * belongs on the bar length. Severity belongs on the colour.
- *
- * Critical means the system did something it was not allowed to do, or told a
- * customer something untrue. Everything else is the system failing to help,
- * which is bad but recoverable.
+ * How bad a failure is, independent of how often it happens: the two most dangerous
+ * codes are also the rarest, so a breakdown puts count on the bar and severity on
+ * the colour. Critical means the system did something it was not allowed to do, or
+ * told a customer something untrue.
  */
 export const FAILURE_SEVERITY: Record<FailureCode, FailureSeverity> = {
   POLICY_FAILURE: 'critical',

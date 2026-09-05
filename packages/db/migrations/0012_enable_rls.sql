@@ -1,5 +1,5 @@
--- Layer two. Application scoping is one forgotten WHERE clause away from a leak;
--- this is what makes a single mistake not a breach.
+-- Application scoping is one forgotten WHERE clause away from a leak; this is what
+-- keeps a single mistake from being a breach.
 --
 -- `current_setting('kora.tenant_id', true)` returns NULL when unset, and
 -- `tenant_id = NULL` is NULL, so an unset connection sees nothing. Fail closed.

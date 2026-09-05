@@ -211,10 +211,9 @@ async function reconcileRefund(
 }
 
 /**
- * The billing period moved from the subscription to its items in this API
- * version, so the top-level field is absent. The stop date is the evidence the
- * run is confirmed against, and an empty one leaves the trace unable to say when
- * the subscription actually ends.
+ * The billing period moved from the subscription to its items in this API version,
+ * so the top-level field is absent. The stop date is the evidence the run is
+ * confirmed against, so an empty one leaves the trace unable to say when it ends.
  */
 function periodEndOf(subscription: Record<string, unknown>): number | null {
   const items = (

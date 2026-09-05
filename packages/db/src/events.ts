@@ -15,10 +15,7 @@ export interface EmitResult {
   enqueued: boolean;
 }
 
-/**
- * Enqueues a job for an event that has already been written. Injected because
- * `@kora/db` must not depend on the queue library or the worker service.
- */
+/** Injected, because `@kora/db` must not depend on the queue library or the worker. */
 export type Enqueue = (type: EventType, eventId: string, payload: EventPayload) => Promise<void>;
 
 let enqueue: Enqueue | null = null;
@@ -28,19 +25,15 @@ export function setEnqueue(fn: Enqueue | null): void {
 }
 
 /**
- * Writes the event row **first**, then enqueues the job.
- *
- * That order is the whole design. A lost job can be replayed from the events
- * table; a lost row cannot be replayed from anywhere. If Redis is down, the row
- * is still written with `enqueued: false` and `replayPendingEvents` picks it up
- * later. The work is delayed, never lost.
+ * The row is written before the job is enqueued: a lost job can be replayed from the
+ * events table, a lost row cannot. With Redis down the row lands as `enqueued: false`
+ * and `replayPendingEvents` picks it up later, so work is delayed, never lost.
  */
 export async function emit<T extends EventType>(
   type: T,
   payload: EventPayload<T>,
 ): Promise<EmitResult> {
-  // Rejected before the row is written: a malformed event in the log is worse
-  // than a missing one, because the log is what a lost job is replayed from.
+  // Rejected before the row is written: the log is what a lost job is replayed from.
   const parsed = parseEventPayload(type, payload);
 
   const eventId = newId('ev');
@@ -75,7 +68,7 @@ export async function emit<T extends EventType>(
   }
 }
 
-/** Events whose job never made it onto a queue. The catch-up path. */
+/** Events whose job never made it onto a queue. */
 export async function pendingEvents(tenantId: string, limit = 200) {
   return db()
     .select()

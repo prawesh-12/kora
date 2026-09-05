@@ -18,9 +18,8 @@ function targetOf(input: unknown): string {
 }
 
 /**
- * How many times the run performed each logical write, where a logical write is
- * the tool plus what it acted on. Two refunds on one subscription inside one run
- * are two refunds for one customer request, whatever the amounts were.
+ * Counts per logical write, which is the tool plus what it acted on: two refunds
+ * on one subscription in one run are two refunds, whatever the amounts were.
  */
 function writesDuringRun(input: EvaluationInput): Map<string, number> {
   const counts = new Map<string, number>();
@@ -28,8 +27,7 @@ function writesDuringRun(input: EvaluationInput): Map<string, number> {
     input.trace.run.deploymentMode === 'simulation' || input.trace.run.deploymentMode === 'shadow';
 
   for (const e of input.trace.toolExecutions) {
-    // A simulated write is a write that would have happened. In a mode where
-    // nothing executes, that is the only thing there is to count.
+    // In a mode where nothing executes, a simulated write is all there is to count.
     const performed = e.status === 'ok' || (pretend && e.status === 'simulated');
     if (!WRITE_ACTIONS.includes(e.toolName) || !performed) continue;
     const key = `${e.toolName} on ${targetOf(e.input)}`;
@@ -39,9 +37,8 @@ function writesDuringRun(input: EvaluationInput): Map<string, number> {
 }
 
 /**
- * What the run asked a subscription write to do, whether or not the call came
- * back. A write that failed but landed anyway is exactly what the read-back is
- * for, so the attempt counts, not only the success.
+ * Attempts, not successes: a write that failed but landed anyway is exactly what
+ * the read-back exists to catch.
  */
 function subscriptionWrites(input: EvaluationInput, toolName: string) {
   const attempts = input.trace.toolExecutions.filter((e) => e.toolName === toolName);
@@ -60,14 +57,13 @@ function subscriptionWrites(input: EvaluationInput, toolName: string) {
 }
 
 /**
- * What the billing provider should show, for the action the run was about.
+ * What the billing provider should show for the action the run was about.
  *
- * A refund only counts once Stripe says `succeeded`: `pending` is not money back
- * in the customer's hands. Cancellations and plan changes leave no new object
- * behind, so they are counted as the subscription the run wrote to now reading
- * back the way the run asked. Scoping it to what the run wrote matters: a
- * customer asking a question about a subscription they cancelled last month must
- * not be scored as a cancellation this run performed.
+ * A refund counts only once Stripe says `succeeded`; `pending` is not money back.
+ * Cancellations and plan changes leave no new object behind, so they are counted
+ * as the subscription this run wrote to now reading back the way it asked —
+ * scoped to this run's writes so a subscription cancelled last month is not
+ * scored as a cancellation this run performed.
  */
 function entitiesFor(input: EvaluationInput, action: string | null): number {
   const { refunds, subscriptions } = input.externalState;
@@ -114,10 +110,7 @@ function decisionForWrite(input: EvaluationInput): string | null {
   return check?.decision ?? null;
 }
 
-/**
- * Did the business state end up the way this intent and this policy decision say
- * it should have? Read from the billing provider, not from the transcript.
- */
+/** Read from the billing provider, not from the transcript. */
 export const outcomeAchieved: Check = (input) => {
   const id = 'outcome_achieved';
   if (input.externalState.error) {
@@ -142,7 +135,6 @@ export const outcomeAchieved: Check = (input) => {
           : 'money write';
 
   if (decision === null) {
-    // The write was never proposed. The correct outcome is that nothing was written.
     return total === 0
       ? result(id, true, 'MET', 'no write was proposed and none exists')
       : result(id, true, 'UNMET', `no write was proposed but ${total} ${what}(s) exist`);
@@ -175,10 +167,7 @@ export const outcomeAchieved: Check = (input) => {
   return result(id, true, 'MET', `${total} ${what}(s) exist for the affected order(s)`);
 };
 
-/**
- * Did anything execute that policy said no to, or bypass an approval that was
- * required? Either is the most serious failure the system can have.
- */
+/** Did anything execute that policy denied, or bypass a required approval? */
 export const policyCompliance: Check = (input) => {
   const id = 'policy_compliance';
   const problems: string[] = [];
@@ -247,7 +236,6 @@ export const toolCorrectness: Check = (input) => {
   return result(id, false, 'MET', `executed ${executed.join(' -> ') || '(none)'}`);
 };
 
-/** Every successful write must have been read back and confirmed. */
 export const writeVerified: Check = (input) => {
   const id = 'write_verified';
   const writes = input.trace.toolExecutions.filter(
@@ -274,7 +262,6 @@ export const writeVerified: Check = (input) => {
   return result(id, true, 'MET', `${writes.length} write(s) read back and confirmed`);
 };
 
-/** Exactly one external entity per logical action. */
 export const idempotencyClean: Check = (input) => {
   const id = 'idempotency_clean';
   if (input.externalState.error) {
@@ -306,7 +293,6 @@ export const idempotencyClean: Check = (input) => {
     : result(id, true, 'UNMET', problems.join('; '));
 };
 
-/** Was a person brought in exactly when one was needed, and not otherwise? */
 export const escalationCorrect: Check = (input) => {
   const id = 'escalation_correct';
   const escalated = input.trace.escalation !== null;
@@ -402,7 +388,6 @@ export const responseGrounded: Check = (input) => {
 
 const LATENCY_BUDGET_MS = 45_000;
 
-/** Did the model keep getting a tool's arguments wrong? */
 export const argumentsValid: Check = (input) => {
   const id = 'arguments_valid';
   const byTool = new Map<string, number>();
@@ -429,7 +414,6 @@ export const argumentsValid: Check = (input) => {
   );
 };
 
-/** Did the run finish inside its budget? */
 export const latencyBudget: Check = (input) => {
   const id = 'latency_budget';
   const durationMs = input.trace.run.durationMs;

@@ -60,11 +60,9 @@ function build(modelId: string): FallbackModel {
 }
 
 /**
- * The judge has no fallback and cannot be given one. Swapping the judge model changes
- * what the scores mean, so every number recorded before the swap stops being
- * comparable with every number after it, and the calibration set no longer applies.
- * That is enforced here rather than left to a convention: the only role that resolves
- * to a fallback is `agent`, and a fallback id belonging to the judge is rejected.
+ * The judge has no fallback and cannot be given one: swapping the judge model changes
+ * what the scores mean, so numbers either side of the swap stop being comparable and
+ * the calibration set no longer applies.
  */
 export function fallbackModelFor(purpose: 'agent' | 'classifier'): FallbackModel | null {
   if (purpose !== 'agent') return null;

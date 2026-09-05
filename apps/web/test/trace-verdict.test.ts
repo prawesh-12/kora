@@ -2,11 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { traceVerdict } from '@/components/kora/trace-verdict';
 import type { TraceDto } from '@/lib/api/schemas';
 
-/**
- * The banner answers "why did this run stop". A rule that held an action is the
- * answer only while the run is still stopped by it: once a person approves and
- * the run finishes, the answer is the outcome.
- */
+/** A rule that held an action is the verdict only while the run is still stopped
+ *  by it; once a person approves and the run finishes, the outcome is. */
 const HELD = {
   decision: 'require_approval',
   reason: 'High-value refund needs a person',

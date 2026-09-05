@@ -63,11 +63,9 @@ export interface ToolDefinition<
   terminal?: boolean;
   /**
    * Safe to re-run during replay instead of being served from the original run's
-   * recorded output. True only for tools that read nothing from the business
-   * system: retrieval and policy evaluation are things replay is meant to re-run.
-   *
-   * Defaults to false so a new tool that reads the billing provider fails loudly
-   * on replay rather than quietly comparing the new version against today's state.
+   * recorded output. True only for tools that read nothing from the business system.
+   * Defaults to false so a new tool that reads the billing provider fails loudly on
+   * replay rather than quietly comparing the new version against today's state.
    */
   rerunOnReplay?: boolean;
   inputExamples?: Array<{ input: z.infer<I> }>;

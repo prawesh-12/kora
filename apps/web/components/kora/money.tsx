@@ -16,7 +16,6 @@ function useCopied(): [boolean, () => void] {
   ];
 }
 
-/** Every money amount: Geist Mono, tabular figures, click-to-copy. */
 export function Money({
   amountMinor,
   currency,
@@ -54,7 +53,6 @@ export function Money({
   );
 }
 
-/** Every Stripe id: Geist Mono, tabular figures, truncated, click-to-copy. */
 export function StripeId({ id, className }: { id: string; className?: string }) {
   const [copied, onCopied] = useCopied();
 

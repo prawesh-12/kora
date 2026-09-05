@@ -467,9 +467,8 @@ describe('approval decisions', () => {
     expect(writes).toHaveLength(1);
     expect(writes[0]?.verified).toBe(true);
 
-    // The customer said one thing. Resuming after an approval used to write
-    // another customer message, so the transcript showed their words twice and
-    // then put words in their mouth they never said.
+    // Resuming after an approval must not write a second customer message: that
+    // puts words in the customer's mouth.
     const messages = await repos.messages.listForConversation(conversationId);
     const fromCustomer = messages.filter((m) => m.role === 'customer');
     expect(fromCustomer).toHaveLength(1);

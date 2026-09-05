@@ -8,14 +8,8 @@ import { useId, useMemo } from 'react';
 import { cn } from '@/lib/utils';
 
 /**
- * The only file in the app that imports `@tanstack/charts`.
- *
- * The library is 0.16.0 and pre-alpha: its own docs say the API may change
- * between minor releases. Scattering it across eight screens would make every
- * upgrade a rewrite. Behind this boundary, an upgrade is one file, and so is
- * swapping the library out entirely.
- *
- * `pnpm lint` fails if anything outside this directory imports it.
+ * The only file allowed to import `@tanstack/charts`, which is pre-alpha and can
+ * change its API between minor releases. `pnpm lint` fails on imports elsewhere.
  */
 
 export type LinePoint = Record<string, string | number | null>;
@@ -26,17 +20,11 @@ export interface LineChartProps {
   y: string;
   yFormat?: (n: number) => string;
   height?: number;
-  /** Required. A chart with nothing in it has to say so rather than draw an empty grid. */
   emptyMessage: string;
   ariaLabel: string;
   className?: string;
 }
 
-/**
- * A single point is not a trend, so it is not drawn as one. One dot on an empty
- * grid with a tooltip floating beside it reads as broken software; a value with
- * a caption reads as a value.
- */
 export function LineChart({
   data,
   x,
@@ -52,9 +40,8 @@ export function LineChart({
   const definition = useMemo(() => {
     if (data.length < 2) return null;
 
-    // Narrowed to a concrete shape rather than cast. The library infers its
-    // channel types from the datum, and an index signature gives it nothing to
-    // infer from.
+    // Narrowed rather than cast: the library infers channel types from the datum,
+    // and an index signature gives it nothing to infer from.
     const points = data.map((row) => ({
       label: String(row[x] ?? ''),
       value: Number(row[y] ?? 0),
@@ -106,17 +93,11 @@ export interface BarDatum {
   label: string;
   value: number;
   severity: BarSeverity;
-  /** Optional second line under the label. */
   detail?: string;
   /** The raw value behind a humanized detail, for the title attribute. */
   detailTitle?: string;
-  /**
-   * Where this row goes when clicked.
-   *
-   * A string rather than a `hrefFor` callback, because a server component
-   * cannot pass a function across the client boundary and these bars are
-   * rendered from one.
-   */
+  /** A string rather than a callback: these bars are rendered from a server
+   *  component, which cannot pass a function across the client boundary. */
   href?: string;
 }
 
@@ -129,13 +110,8 @@ export interface BarChartProps {
   className?: string;
 }
 
-/**
- * Severity picks the colour, count picks the length.
- *
- * When count drove both, the two most dangerous rows in the system were the
- * faintest and the shortest: a POLICY_FAILURE count of 2 rendered as an
- * invisible sliver in the same flat red as a count of 622.
- */
+/** Severity picks the colour, count picks the length: a rare failure must not
+ *  also be the faintest one on screen. */
 const SEVERITY_BAR: Record<BarSeverity, string> = {
   critical: 'bg-destructive',
   normal: 'bg-warning',
@@ -160,8 +136,7 @@ export function BarChart({
   return (
     <ul className={cn('flex flex-col', className)}>
       {data.map((datum) => {
-        // A minimum width, so a count of 2 beside a count of 622 is still a
-        // thing you can see and click.
+        // A floor, so a count of 2 beside a count of 622 is still clickable.
         const percent = Math.max(MIN_BAR_PERCENT, (datum.value / largest) * 100);
 
         const row = (

@@ -20,13 +20,9 @@ const CLAIM_PATTERN = /\b(?:re|sub)_[A-Za-z0-9]+/;
 const WRITE_TOOLS = STRIPE_WRITE_TOOLS;
 
 /**
- * One money write executed twice for the same request. The group is the
- * conversation, the tool, and the arguments, because the idempotency key is
- * scoped to the conversation and the action.
- *
- * Including the arguments is what keeps two legitimate partial refunds apart from
- * one refund charged twice: different amounts are different requests, the same
- * amount twice is the duplicate this is here to catch.
+ * Grouped by conversation, tool and arguments, matching the idempotency key's scope.
+ * The arguments are what keep two legitimate partial refunds apart from one refund
+ * charged twice.
  */
 async function countDuplicateSideEffects(tenantId: string, since: string): Promise<number> {
   const rows = await sql()<{ n: string }[]>`
@@ -69,17 +65,11 @@ async function countStuckRuns(tenantId: string, since: string): Promise<number> 
 }
 
 /**
- * A conversation that told the customer a Stripe id when nothing actually landed.
- *
- * "Landed" means a write finished `ok` and read back as verified, or deduplicated
- * onto one that already had. Scoped to the conversation, not the run, and that
- * matters: a double submit puts two runs on one conversation, one of them claims
- * the key and writes, the other times out waiting for it. Judged per run the
- * second one looks like a false claim. The customer sees one conversation, and in
- * that conversation the refund is real.
- *
- * Under chaos this is the tempting failure: the POST returns, the read-back times
- * out, and the agent tells the customer it is done anyway.
+ * A conversation that told the customer a Stripe id when nothing landed, where
+ * landed means a write finished `ok` and read back verified, or deduplicated onto
+ * one that had. Scoped to the conversation, not the run: a double submit puts two
+ * runs on one conversation and the run that lost the race would otherwise look
+ * like a false claim.
  */
 async function countUnverifiedClaims(tenantId: string, since: string): Promise<number> {
   const rows = await sql()<{ content: string }[]>`
@@ -149,8 +139,7 @@ export async function runChaos(args: {
         complete: true,
       });
     } catch (e) {
-      // An incomplete pass is never recorded as a pass. A chaos run that crashed
-      // half way through has proved nothing.
+      // A pass that crashed half way through has proved nothing.
       logger().error({ err: e, pass }, 'chaos pass did not finish');
       results.push(blank);
     } finally {

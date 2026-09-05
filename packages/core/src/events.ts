@@ -39,7 +39,6 @@ export const EVENT_TYPES: readonly EventType[] = [
   'document.indexed',
 ];
 
-/** Every event carries these, whatever else it says. */
 const envelope = z.object({
   tenantId: z.string().min(1),
   traceId: z.string().min(1),

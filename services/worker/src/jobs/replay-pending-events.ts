@@ -4,9 +4,8 @@ import type { Queue } from 'bullmq';
 import { type EventJob, QUEUE_FOR_EVENT, type QueueName } from '../queues.js';
 
 /**
- * Catch-up for events whose enqueue failed, usually because Redis was down when
- * they were emitted. The row was still written, which is the point of writing it
- * first, so the work is delayed rather than lost.
+ * Catch-up for events whose enqueue failed, usually because Redis was down. The row
+ * was written first either way, so the work is delayed rather than lost.
  */
 export async function replayPendingEventsJob(
   queues: Record<QueueName, Queue<EventJob>>,

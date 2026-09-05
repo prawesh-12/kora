@@ -64,9 +64,8 @@ export function buildManifest(root: string): RouteEntry[] {
 
 /**
  * Every route either requires an operator session or is on the public list with a
- * reason. A new route added without either fails the build, which is the point:
- * the failure has to come from adding the route, not from remembering to add a
- * test for it.
+ * reason. A new route with neither fails the build, so the failure comes from adding
+ * the route rather than from remembering to write a test for it.
  */
 export function unguardedRoutes(manifest: RouteEntry[]): RouteEntry[] {
   return manifest.filter((r) => !r.guarded && !PUBLIC_ROUTES.has(r.path));

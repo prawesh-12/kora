@@ -28,11 +28,8 @@ export const dynamic = 'force-dynamic';
 const RECENT_RUNS = 10;
 
 /**
- * Deliberately smaller than Evaluations.
- *
- * The two pages used to show the same five metrics, so there was no reason to
- * visit both. Overview answers "is it working right now"; Evaluations answers
- * "why", and owns latency, cost, grounding, tool success and coverage.
+ * Answers "is it working right now". The "why" metrics — latency, cost,
+ * grounding, tool success, coverage — belong to Evaluations, not here.
  */
 export default async function OverviewPage() {
   const [metrics, runs] = await Promise.all([loadMetrics(), loadRecentRuns(RECENT_RUNS)]);

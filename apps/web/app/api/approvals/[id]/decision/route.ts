@@ -24,10 +24,9 @@ const RESUME_BY_TOOL: Record<string, string> = {
 };
 
 /**
- * The resumed turn is a fresh turn, so the message has to carry enough for the
- * agent to reach the same action again. Naming the subscription is what does
- * that: without it the run has nothing to look up and hands straight back to a
- * person, which is how an approved refund quietly never happens.
+ * The resumed turn is a fresh turn, so the message must carry enough for the agent
+ * to reach the same action again. Without the subscription id the run has nothing
+ * to look up and hands back to a person, so an approved refund never happens.
  */
 function resumeMessageFor(toolName: string, proposedInput: unknown): string {
   const input = (proposedInput ?? {}) as Record<string, unknown>;
@@ -51,8 +50,7 @@ export async function POST(
 
     const tenantId = serverEnv().KORA_TENANT_ID;
 
-    // Reads and decides through the query layer, which expires an overdue approval
-    // before it looks at it. A stale pending row can never be decided.
+    // `decideApproval` expires an overdue approval first, so no expiry check here.
     const outcome = await decideApproval(tenantId, id, {
       status: decision,
       decidedBy: operator.id,
@@ -77,11 +75,8 @@ export async function POST(
 
     const resumeMessage = resumeMessageFor(decided.toolName, decided.proposedInput);
 
-    // A human has signed off, so this turn runs with the approval gate lifted. The
-    // pipeline recognises the approved row for the conversation. See docs/decisions.md.
-    //
-    // Recorded as `human_agent`, because it is an operator acting. Recording it as
-    // the customer put words in their mouth and showed their own message twice.
+    // `human_agent` because an operator is acting: recording it as the customer
+    // would put words in their mouth and show their own message twice.
     const turn = await runAgentTurn({
       tenantId,
       conversationId: decided.conversationId,

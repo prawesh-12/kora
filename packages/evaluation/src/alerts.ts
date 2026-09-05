@@ -42,10 +42,6 @@ const BREAKER_OPEN_LIMIT_MS = 5 * 60_000;
 const JUDGE_SPEND_SHARE = 0.25;
 const KAPPA_FLOOR = 0.6;
 
-/**
- * A run with a critical check unmet is the system doing the wrong thing, not
- * doing it slowly. It pages.
- */
 const criticalCheckUnmet: Rule = {
   id: 'critical_check_unmet',
   severity: 'page',
@@ -80,8 +76,7 @@ const policyComplianceBelowFloor: Rule = {
     const drillUrl = '/ops/evaluations?days=1';
     const m = await computeMetrics({ tenantId: w.tenantId, from: w.from, to: w.to });
 
-    // Missing data is not a healthy system and it is not a broken one either.
-    // `missing_rollup` covers the empty window; firing here would cry wolf.
+    // `missing_rollup` covers the empty window; firing here too would cry wolf.
     if (m.policyComplianceRate === null) {
       return quiet(drillUrl, 'no evaluated runs in the window');
     }
@@ -122,10 +117,7 @@ const vrrDroppedDayOverDay: Rule = {
   },
 };
 
-/**
- * A write that executed and could not be read back. The customer may already
- * have been told it happened, which is why this pages rather than warns.
- */
+/** Pages rather than warns: the customer may already have been told it happened. */
 const unverifiedWrite: Rule = {
   id: 'unverified_write',
   severity: 'page',
@@ -144,7 +136,6 @@ const unverifiedWrite: Rule = {
 
     const row = rows[0];
     if (!row) return quiet(drillUrl, 'every write in the window read back');
-    // Straight to the trace, not to a list. This one has a single obvious next step.
     return {
       firing: true,
       detail: `${row.n} write(s) executed but could not be verified, latest on run ${row.run_id}`,
@@ -297,8 +288,8 @@ export async function evaluateAlerts(args: {
     try {
       results.push({ ruleId: rule.id, severity: rule.severity, ...(await rule.evaluate(w)) });
     } catch (e) {
-      // A rule that cannot run is itself a problem worth showing, but it is not
-      // evidence that the thing it watches is broken.
+      // A rule that cannot run is worth showing, but is not evidence that the
+      // thing it watches is broken.
       results.push({
         ruleId: rule.id,
         severity: 'warn',

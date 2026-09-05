@@ -5,7 +5,6 @@ import { useState } from 'react';
 import { truncateId } from '@/lib/ops/format';
 import { cn } from '@/lib/utils';
 
-/** Mono, truncated to eight characters, full value on hover, copy on click. */
 export function CopyId({ id, className }: { id: string; className?: string }) {
   const [copied, setCopied] = useState(false);
 

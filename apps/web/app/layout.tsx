@@ -4,10 +4,6 @@ import type { ReactNode } from 'react';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import './globals.css';
 
-/*
- * Ledger type system (P8): Geist for UI and display, Geist Mono with tabular
- * figures for every amount and id. No third UI face.
- */
 const sans = Geist({
   subsets: ['latin'],
   variable: '--font-geist',
@@ -19,9 +15,8 @@ const mono = Geist_Mono({
   subsets: ['latin'],
   variable: '--font-geist-mono',
   display: 'swap',
-  // Nothing above the fold on any route is set in mono: it carries ids, codes
-  // and JSON further down. Preloading it competes with the display face for the
-  // window that decides largest contentful paint.
+  // Mono appears only below the fold, so preloading it would compete with the
+  // display face for largest contentful paint.
   preload: false,
 });
 

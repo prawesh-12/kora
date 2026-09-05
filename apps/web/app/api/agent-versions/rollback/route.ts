@@ -3,10 +3,7 @@ import { rollback } from '@kora/db';
 import { requireOperator } from '@/lib/api/auth';
 import { conflict, handle } from '@/lib/api/errors';
 
-/**
- * Rollback has no gates and needs no redeploy. It is always available, because
- * the moment you need it is the moment nobody has time to argue with a checklist.
- */
+// Deliberately ungated: rollback must stay available during an incident.
 export async function POST(): Promise<Response> {
   return handle(async () => {
     const operator = await requireOperator();

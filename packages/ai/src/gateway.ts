@@ -234,9 +234,8 @@ export async function callModel<T>(args: CallModelArgs<T>): Promise<Result<T, Mo
   }
   if (!fallback) return err(lastError);
 
-  // A silent fallback hides a provider outage: the primary can be down all day while
-  // every answer still looks fine. The marker on this line and the `fallback:` prefix
-  // on the `llm_calls` provider column are what make the outage visible afterwards.
+  // A silent fallback hides a provider outage. This marker and the `fallback:` prefix
+  // on the `llm_calls` provider column are what make it visible afterwards.
   logger().warn(
     {
       code: 'model.fallback_used',

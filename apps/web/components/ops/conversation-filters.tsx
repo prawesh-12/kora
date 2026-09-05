@@ -14,7 +14,6 @@ import { cn } from '@/lib/utils';
 
 const OUTCOMES = ['resolved_automatically', 'escalated', 'failed', 'abandoned'] as const;
 
-/** The four an operator actually opens. Everything else is built from the filters. */
 const SAVED_VIEWS = [
   { label: 'Failed today', query: 'outcome=failed&days=1' },
   { label: 'Escalated unclaimed', query: 'escalated=true&escalationStatus=open' },
@@ -22,11 +21,8 @@ const SAVED_VIEWS = [
   { label: 'Over latency budget', query: 'failureCode=LATENCY_FAILURE' },
 ];
 
-/**
- * A relative window rather than a from/to pair. The operator asks "what broke
- * today", not "what happened between two instants", and a window survives being
- * bookmarked where a pair of absolute dates goes stale overnight.
- */
+/** A relative window rather than a from/to pair, so a bookmarked view does not
+ *  go stale overnight. */
 const WINDOWS = [
   { value: '1', label: 'Last 24 hours' },
   { value: '7', label: 'Last 7 days' },
@@ -41,11 +37,9 @@ function options(values: readonly string[]) {
 }
 
 /**
- * The intent and failure-code lists arrive as props. `@kora/core` re-exports
+ * The intent and failure-code lists arrive as props: `@kora/core` re-exports
  * `secrets.ts`, which imports `node:crypto`, so a client component that reads
  * the enums straight from core fails the browser build.
- *
- * Each field is one URL parameter. The chip row joins them with an implicit AND.
  */
 function buildFields(
   intents: readonly string[],
@@ -144,8 +138,8 @@ export function ConversationFilters({
   const params = useSearchParams();
   const search = params.toString();
 
-  // The URL is the source of truth, so a saved view, a drill-in from the failure
-  // chart and a chip edit all land in the same place.
+  // The URL is the source of truth: a saved view, a drill-in and a chip edit all
+  // land in the same place.
   const query = useMemo<FilterQuery<string>>(
     () => ({
       id: 'root',

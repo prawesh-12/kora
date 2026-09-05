@@ -23,13 +23,6 @@ export interface Blocked {
 
 const MIN_REPLAY_CONVERSATIONS = 500;
 
-/**
- * The gates, checked before anyone can promote.
- *
- * Each exists because shipping past it has a specific cost: a failing benchmark
- * ships a known regression, a thin replay ships an unmeasured one, and an
- * unreviewed regression ships one nobody has looked at.
- */
 export function promotionGates(
   evidence: PromotionEvidence,
   acceptedRegressions: string[],
@@ -91,10 +84,8 @@ export async function promote(args: {
   const blocked = promotionGates(args.evidence, accepted);
   if (blocked.length > 0) return { blocked, promoted: false };
 
-  // A promotion is attributable to a person, so `actor_id` is a foreign key to
-  // `user`. Checked here rather than left to the constraint, because a raw
-  // foreign key violation after the version has already been activated is a
-  // confusing way to find that out.
+  // Checked before activation: a raw `actor_id` foreign key violation after the
+  // version is already live is a confusing way to find out the actor is unknown.
   await assertOperator(args.actorId);
 
   const from = await loadActive(args.tenantId).catch(() => null);
@@ -132,9 +123,7 @@ export async function rollback(
   const previous = await previousActive(tenantId);
   if (!previous) return null;
 
-  // A version whose policy bundle no longer exists cannot be restored. Policy
-  // versions are never deleted, so this should be impossible; the check is here
-  // because "should be impossible" is not a guarantee.
+  // Policy versions are never deleted, so a missing bundle should be impossible.
   const missing = await missingPolicyVersions(tenantId, previous.policyBundle);
   if (missing.length > 0) {
     throw new Error(
@@ -202,7 +191,6 @@ export async function promotionHistory(tenantId: string, limit = 50) {
     .limit(limit);
 }
 
-/** Resolves `--actor` from an email or a user id, so the CLI can name a person. */
 export async function operatorByEmailOrId(
   emailOrId: string,
 ): Promise<{ id: string; email: string } | null> {

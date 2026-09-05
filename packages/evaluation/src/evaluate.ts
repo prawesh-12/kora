@@ -16,12 +16,8 @@ import type {
 } from './types.js';
 
 /**
- * `verifiedResolution` is an AND, not a threshold. One critical `UNMET` sets it
- * false and nothing can override that.
- *
- * A correct refusal is not a resolution. Denying an out-of-policy request is the
- * system working, and `policy_compliance` and `outcome_achieved` both say so, but
- * the customer did not get what they asked for. Conflating the two inflates the
+ * An AND, not a threshold: one critical `UNMET` sets it false. A correct refusal
+ * is the system working but is not a resolution — counting it would inflate the
  * headline number with cases where nothing was fixed.
  */
 export function verifiedResolutionOf(trace: AssembledTrace, checks: CheckResult[]): boolean {
@@ -29,16 +25,12 @@ export function verifiedResolutionOf(trace: AssembledTrace, checks: CheckResult[
   if (checks.some((c) => c.critical && c.verdict !== 'MET')) return false;
   if (checks.find((c) => c.id === 'outcome_achieved')?.verdict !== 'MET') return false;
 
-  // For an intent that exists to change something, resolving means the change
-  // actually happened. A `replayed` write landed too: the run that owned the
-  // idempotency claim did the work and the verification, and this run proved it
-  // did not duplicate it.
+  // For a write intent, resolving means the change actually happened. `replayed`
+  // counts: the run holding the idempotency claim did the work and the verification.
   const WRITE_INTENTS = ['REFUND_REQUEST', 'CANCEL_SUBSCRIPTION', 'CHANGE_PLAN'];
   if (trace.run.intent && WRITE_INTENTS.includes(trace.run.intent)) {
     // Nothing executes in simulation or shadow mode, so `simulated` is the
-    // strongest claim a write can make there: the action was allowed and reached
-    // the point of execution. Requiring a verified write would score every
-    // replayed run zero and make a replay comparison meaningless.
+    // strongest claim a write can make there.
     const pretend =
       trace.run.deploymentMode === 'simulation' || trace.run.deploymentMode === 'shadow';
     const landed = trace.toolExecutions.some(
@@ -68,12 +60,9 @@ export interface EvaluateRunArgs {
    */
   judge?: { call: JudgeCaller; rubric?: Rubric };
   /**
-   * Replay only: the business state as it was during the original run.
-   *
-   * Without this the checks read Stripe as it looks *now*, and a replayed run
-   * gets marked wrong because some later run refunded the same charge. Blocking
-   * live reads inside the pipeline is not enough on its own; evaluation reads the
-   * business system too.
+   * Replay only: business state as it was during the original run. Without it the
+   * checks read Stripe as it looks now and mark a replayed run wrong because some
+   * later run refunded the same charge.
    */
   externalState?: ExternalStateSnapshot;
 }

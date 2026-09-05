@@ -4,8 +4,7 @@ import { StatusPill, type Status } from '@/components/kora/status-pill';
 import { humanizeEnum } from '@/lib/ops/format';
 import type { EvaluationDto } from '@/lib/api/schemas';
 
-/** Grey is missing data, never a soft fail. A check that could not be assessed
- *  is missing data. */
+/** Grey is missing data, never a soft fail. */
 const VERDICT_STATUS: Record<string, Status> = {
   MET: 'ok',
   UNMET: 'danger',

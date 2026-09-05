@@ -27,8 +27,6 @@ import {
   humanizeEnum,
 } from '@/lib/ops/format';
 
-/** Seven columns. Values that are constant per row (customer, ids, cost) live in
- *  the row detail below the grid rather than a column each. */
 function useColumns(onDetail: (row: ConversationSummaryDto) => void) {
   return useMemo<ColumnDef<DataGridFeatures, ConversationSummaryDto>[]>(
     () => [
@@ -121,11 +119,9 @@ function useColumns(onDetail: (row: ConversationSummaryDto) => void) {
 }
 
 /**
- * The grid's own pagination is off. This list pages by keyset over an
- * accumulating array, and TanStack's default page size of ten silently sliced
- * the row model down to ten rows before the virtualizer ever saw them, so the
- * grid rendered ten rows, never scrolled, and asked for the next page
- * immediately because it believed it was already at the bottom.
+ * The grid's own pagination is off: this list pages by keyset, and TanStack's
+ * default page size of ten silently slices the row model before the virtualizer
+ * sees it, leaving a grid that never scrolls and pages forever.
  */
 const ALL_ROWS = { pageIndex: 0, pageSize: Number.MAX_SAFE_INTEGER };
 

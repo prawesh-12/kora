@@ -3,12 +3,8 @@ import { emit } from '@kora/db';
 import type { EventJob } from '../queues.js';
 
 /**
- * Evaluation moved off the request path here. Through M0 and M1 it ran in the
- * framework's post-response hook, which was correct and cheap at one tenant and
- * stops being correct the moment a job needs retrying.
- *
- * `evaluations.run_id` is unique, so a re-delivery after a worker is killed
- * mid-job produces the same single row.
+ * `evaluations.run_id` is unique, so a re-delivery after a worker is killed mid-job
+ * produces the same single row.
  */
 export async function evaluateRunJob(job: EventJob): Promise<void> {
   const { runId, tenantId, traceId } = job.payload as {

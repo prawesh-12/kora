@@ -2,12 +2,7 @@ import { bigint, index, pgTable, text, timestamp } from 'drizzle-orm/pg-core';
 import { conversations } from './conversations.js';
 import { agentRuns } from './runs.js';
 
-/**
- * What the agent proposed against what the human actually did.
- *
- * The highest-value evaluation data that exists: real traffic with a real human
- * ground truth, at the cost of tokens only.
- */
+/** What the agent proposed against what the human actually did. */
 export const shadowComparisons = pgTable(
   'shadow_comparisons',
   {
@@ -26,7 +21,7 @@ export const shadowComparisons = pgTable(
     agreement: text('agreement')
       .$type<'match' | 'action_differs' | 'amount_differs' | 'no_human_record'>()
       .notNull(),
-    /** What the disagreement would have cost. Ranking by this is the whole point. */
+    /** What the disagreement would have cost. */
     valueAtRiskMinor: bigint('value_at_risk_minor', { mode: 'number' }).notNull().default(0),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },

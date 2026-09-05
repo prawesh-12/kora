@@ -4,13 +4,10 @@ import { jsonError, rateLimited } from '@/lib/api/errors';
 import { takeRouteSlot } from '@/lib/rate-limit';
 
 /**
- * Keyed on the client address, because the whole point here is the caller who has
- * no session yet. Ten attempts a minute is generous for a person signing in and
- * hostile to anything working through a password list.
- *
- * `x-forwarded-for` is only trustworthy behind a proxy that sets it. Without one
- * every caller shares the `unknown` bucket, which throttles more than intended
- * rather than less, and that is the right way for this to fail.
+ * Keyed on the client address because the caller has no session yet.
+ * `x-forwarded-for` is only trustworthy behind a proxy that sets it; without one
+ * every caller shares the `unknown` bucket, which over-throttles rather than
+ * under-throttles, and that is the right way for this to fail.
  */
 function callerAddress(req: Request): string {
   const forwarded = req.headers.get('x-forwarded-for');

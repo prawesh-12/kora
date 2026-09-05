@@ -94,7 +94,6 @@ export async function compareShadowDay(
 
   const byIntent = new Map<string, { n: number; matched: number }>();
   for (const row of rows) {
-    // Skipped, not counted as agreement.
     if (row.agreement === 'no_human_record') continue;
     const key = row.intent ?? 'unknown';
     const entry = byIntent.get(key) ?? { n: 0, matched: 0 };
@@ -109,14 +108,8 @@ export async function compareShadowDay(
 }
 
 /**
- * Disagreements ranked by what they would have cost. The expensive ones are the
- * ones worth reading.
- *
- * A run nobody handled is not a disagreement, so `no_human_record` is excluded
- * here rather than at render. Including it fills the table with rows where both
- * sides are empty and every amount is zero, under a heading promising the most
- * expensive disagreements first. Count them with `skippedCount` instead: that
- * number qualifies the agreement rate, it is not an example of one.
+ * A run nobody handled is not a disagreement, so `no_human_record` is excluded here
+ * rather than at render; `skippedCount` reports those separately.
  */
 export async function disagreementsByValue(tenantId: string, limit = 50) {
   return db()
@@ -146,7 +139,6 @@ export async function skippedCount(tenantId: string): Promise<number> {
   return Number(row?.n ?? 0);
 }
 
-/** How many runs matched what the person did. */
 export async function matchedCount(tenantId: string): Promise<number> {
   const [row] = await db()
     .select({ n: sqlCount })

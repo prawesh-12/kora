@@ -5,11 +5,6 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
-/**
- * When there is nothing to roll back to, the button stays and says why in its
- * tooltip. A sentence of prose in place of a control makes the reader work out
- * whether the action exists at all.
- */
 export function RollbackButton({ toVersion }: { toVersion: number | null }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);

@@ -9,12 +9,9 @@ import { costUsdMicros } from './pricing.js';
 const BATCH_SIZE = 96;
 
 /**
- * A deterministic stand-in for a real embedding model.
- *
- * Hashed token counts projected onto a fixed number of dimensions, then L2
- * normalised. It is a bag-of-words model, so cosine distance tracks word overlap:
- * enough for retrieval to rank the right chunk first and for the pgvector query
- * plan to be exercised, and it never costs anything or needs a key.
+ * Hashed token counts projected onto a fixed number of dimensions, then L2 normalised.
+ * A bag-of-words model, so cosine distance tracks word overlap: enough to rank the
+ * right chunk first and exercise the pgvector query plan, with no key and no cost.
  */
 export function mockEmbedding(text: string, dimensions: number): number[] {
   const vector = new Array<number>(dimensions).fill(0);

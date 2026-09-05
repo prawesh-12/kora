@@ -1,6 +1,5 @@
 import { ActionLink, Wordmark } from './primitives';
 
-/** Nothing here that does not resolve: two anchors on this page, two app routes. */
 const LINKS = [
   { label: 'How it works', href: '#how' },
   { label: 'From action to proof', href: '#proof' },

@@ -10,11 +10,7 @@ import { takeMessageSlot } from '@/lib/rate-limit';
 
 export const maxDuration = 60;
 
-/**
- * `runAgentTurn` is not a stream. It persists the customer message, runs the whole
- * turn while writing every step to the database, persists the assistant message and
- * then resolves. The client gets one complete turn, not tokens.
- */
+// Not a stream: the client gets one complete turn, not tokens.
 export async function POST(
   req: Request,
   { params }: { params: Promise<{ conversationId: string }> },
@@ -34,11 +30,8 @@ export async function POST(
     const { message } = await parseBody(req, SendMessageRequest);
     const result = await runAgentTurn({ tenantId, conversationId, message });
 
-    // `runAgentTurn` already emitted `run.finished`, which is what schedules the
-    // evaluation on the worker. Nothing is evaluated on the request path any more.
-    //
-    // If the worker is not running, the event row is still written and the
-    // catch-up job picks it up. Evaluation is delayed, never lost.
+    // `run.finished` was already emitted, so the worker normally schedules this.
+    // Running it inline is the fallback for a deployment with no worker.
     if (isTerminalState(result.finalState) && !workerIsWired()) {
       after(async () => {
         const { evaluateRun } = await import('@kora/evaluation');

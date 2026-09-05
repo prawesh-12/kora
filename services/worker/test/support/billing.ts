@@ -15,9 +15,9 @@ function money(amountMinor: number) {
 }
 
 /**
- * The smallest provider that lets one refund turn reach a verified resolution, so
- * the worker tests can exercise the queue path without a billing service.
- * Refunds are keyed by idempotency key, so a retry returns the first result.
+ * The smallest provider that lets one refund turn reach a verified resolution, so the
+ * worker tests need no billing service. Refunds are keyed by idempotency key, so a
+ * retry returns the first result.
  */
 export function stubBilling(): BillingProvider {
   const refunds = new Map<string, RefundRecord>();

@@ -22,11 +22,6 @@ export interface TileProps {
   tone?: StatTone;
 }
 
-/**
- * A label with a number is a tile, not a card. Nine numbers in nine bordered
- * cards is most of a screen of padding; the same nine as one strip is a third of
- * the height and never leaves an orphan on the last row.
- */
 export function Tile({ label, value, sub, tone = 'default' }: TileProps) {
   return (
     <div className="flex h-[76px] flex-col justify-center gap-0.5 bg-background px-5 py-4">
@@ -37,11 +32,6 @@ export function Tile({ label, value, sub, tone = 'default' }: TileProps) {
   );
 }
 
-/**
- * The tile count must divide evenly into the column count. A last row holding
- * one tile beside two empty columns is a broken layout, so the fix is always to
- * change the column count, never to leave the gap.
- */
 export function StatBar({ columns, children }: { columns: 3 | 4; children: ReactNode }) {
   if (process.env.NODE_ENV !== 'production') {
     const count = Children.count(children);
@@ -66,10 +56,6 @@ export function StatBar({ columns, children }: { columns: 3 | 4; children: React
   );
 }
 
-/**
- * One per page: the number the page exists to produce. Context sits on the same
- * line as the value rather than under it, so the strip stays one band tall.
- */
 export function HeroStat({
   label,
   value,
@@ -81,7 +67,7 @@ export function HeroStat({
   label: string;
   value: string;
   tone?: StatTone;
-  /** The denominator. A rate without one is not a number anyone should act on. */
+  /** The denominator behind the rate. */
   context?: string;
   /** Trend, or the reason there is no trend to draw. */
   aside?: ReactNode;

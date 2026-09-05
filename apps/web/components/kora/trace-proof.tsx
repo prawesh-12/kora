@@ -44,7 +44,6 @@ const TITLES: Record<string, Record<string, string>> = {
   },
 };
 
-/** The run's money action as a Proof Card, or null when the run wrote nothing. */
 export function proofFromTrace(trace: TraceDto): ProofCardProps | null {
   const execution = trace.toolExecutions.find((e) => WRITE_TOOLS.includes(e.toolName));
   if (!execution) return null;

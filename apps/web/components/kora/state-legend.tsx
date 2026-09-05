@@ -1,10 +1,5 @@
 import { cn } from '@/lib/utils';
 
-/**
- * The state color legend, defined once and reused everywhere a status dot
- * appears. Green means verified, amber means pending or waiting, red means
- * denied or failed, grey only ever means missing data.
- */
 const ENTRIES = [
   { dot: 'bg-success', label: 'verified' },
   { dot: 'bg-warning', label: 'waiting' },

@@ -1,7 +1,6 @@
 import { CONNECT } from './nav';
 import { ActionLink, Wordmark } from './primitives';
 
-/** Every link goes to an anchor on this page or a route in the app. */
 const COLUMNS = [
   {
     heading: 'This page',

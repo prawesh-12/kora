@@ -4,12 +4,9 @@ import { setEnqueue } from '@kora/db';
 let wired: boolean | null = null;
 
 /**
- * Points `emit` at the queues so the worker picks the job up.
- *
- * When Redis is unreachable the wiring is skipped and `emit` records the event
- * without enqueueing, which the chat route reads to decide whether to fall back
- * to evaluating inline. That fallback is what keeps a single-process deployment
- * working with no worker at all.
+ * When Redis is unreachable the wiring is skipped and `emit` records events
+ * without enqueueing, which callers read to fall back to inline evaluation. That
+ * fallback is what keeps a single-process deployment working with no worker.
  */
 export async function wireQueues(): Promise<boolean> {
   if (wired !== null) return wired;

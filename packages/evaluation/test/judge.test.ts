@@ -192,9 +192,8 @@ describe('the judge cannot overturn a critical deterministic result', () => {
     expect(deterministic.find((c) => c.id === 'policy_compliance')?.verdict).toBe('UNMET');
     expect(judged.checks.every((c) => c.verdict === 'MET')).toBe(true);
     expect(verifiedResolutionOf(input.trace, deterministic)).toBe(false);
-    // Both policy_compliance and outcome_achieved fail here, and both are right:
-    // a denied action executed, and the business state shows a write that should
-    // not exist. The judge scoring everything MET changes neither.
+    // A denied action executed and the write exists, so both fail. The judge
+    // scoring everything MET changes neither.
     const criticalFailures = combined.filter((c) => c.critical && c.verdict === 'UNMET');
     expect(criticalFailures.map((c) => c.id).sort()).toEqual([
       'outcome_achieved',

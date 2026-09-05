@@ -1,9 +1,6 @@
 import { boolean, index, jsonb, pgTable, text, timestamp } from 'drizzle-orm/pg-core';
 
-/**
- * The event log. A row is written before the job is enqueued, so a lost job can be
- * replayed from here. A lost row cannot be replayed from anywhere.
- */
+/** A row is written before the job is enqueued, so a lost job can be replayed from here. */
 export const events = pgTable(
   'events',
   {

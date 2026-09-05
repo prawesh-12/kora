@@ -13,14 +13,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 
-/**
- * Every list, table and chart ships all three of these. A screen that only
- * renders its happy path is a screen that renders a blank rectangle the first
- * time someone opens it.
- *
- * Built on shadcn's `empty` primitive. ReUI's empty-state and stats blocks need
- * a licence, so they are not used; see docs/decisions.md.
- */
+/** Built on shadcn's `empty` primitive; ReUI's equivalents need a licence. */
 
 export function EmptyState({
   icon: Icon,
@@ -31,15 +24,13 @@ export function EmptyState({
 }: {
   icon: LucideIcon;
   title: string;
-  /** One line saying what would appear here, and why it is not here yet. */
   description: string;
   action?: { label: string; href: string };
   className?: string;
 }) {
   return (
-    // `flex-none` beats the primitive's `flex-1`: inside a flex column an empty
-    // state would otherwise stretch to the height the populated component would
-    // have had, which is the one thing an empty state must not do.
+    // `flex-none` overrides the primitive's `flex-1`, which would stretch the
+    // empty state to the height of the populated component.
     <Empty className={cn('flex-none border py-8', className)}>
       <EmptyHeader>
         <EmptyMedia variant="icon">
@@ -59,10 +50,6 @@ export function EmptyState({
   );
 }
 
-/**
- * Skeleton rows at the real row height, not a spinner. A spinner in a table
- * tells you nothing about what is coming and makes the page jump when it lands.
- */
 export function TableSkeleton({ rows = 8, columns = 6 }: { rows?: number; columns?: number }) {
   return (
     <div aria-busy="true" aria-live="polite" className="w-full">
@@ -86,10 +73,6 @@ export function TableSkeleton({ rows = 8, columns = 6 }: { rows?: number; column
   );
 }
 
-/**
- * What failed, the trace id, and a way to try again. A bare "something went
- * wrong" gives an operator nothing to search for.
- */
 export function ErrorState({
   title = 'That did not load',
   description,

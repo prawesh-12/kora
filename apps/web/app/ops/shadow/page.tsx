@@ -32,8 +32,7 @@ export default async function ShadowPage() {
   const matched = byIntent.reduce((n, r) => n + Math.round(r.agreementRate * r.n), 0);
   const skipped = disagreements.filter((d) => d.agreement === 'no_human_record').length;
 
-  // A run with no human record is not a disagreement, it is a run nobody else
-  // handled. Ranking it by value would fill the table with zeroes.
+  // A run with no human record is not a disagreement, just one nobody else handled.
   const real = disagreements.filter(
     (d) => d.agreement !== 'match' && d.agreement !== 'no_human_record',
   );

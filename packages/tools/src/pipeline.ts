@@ -35,10 +35,8 @@ export interface ExecuteToolArgs {
   gathered: GatheredContext;
   run: RunHandle;
   /**
-   * Replay only. Outputs the original run recorded, keyed `toolName:json(input)`.
-   * Its presence is what puts the pipeline in replay: every call is served from
-   * here rather than from the business system, because replaying a read against
-   * today's state is how you get a confident, meaningless comparison.
+   * Replay only, keyed by `replayKey`. Its presence is what puts the pipeline in
+   * replay: every call is served from here rather than from the business system.
    */
   recordedOutputs?: Record<string, unknown>;
 }
@@ -49,12 +47,10 @@ function retryClassOf(tool: ToolDefinition): RetryClass {
 }
 
 /**
- * Keyed with canonical JSON, not `JSON.stringify`.
- *
- * The recorded side comes back out of a `jsonb` column, and Postgres does not
- * preserve key order in jsonb. Two spellings of the same input would miss each
- * other, the recorded output would be skipped, and the replay would quietly
- * compare against a synthetic response instead.
+ * Canonical JSON, not `JSON.stringify`: the recorded side comes back out of a
+ * `jsonb` column and Postgres does not preserve jsonb key order, so two spellings
+ * of the same input would miss each other and the replay would quietly compare
+ * against a synthetic response instead.
  */
 export function replayKey(toolName: string, input: unknown): string {
   return `${toolName}:${canonicalJson(input)}`;
@@ -158,11 +154,9 @@ export async function executeTool(args: ExecuteToolArgs): Promise<ToolOutcome<un
 
   const isWrite = tool.sideEffect !== 'read';
 
-  // 4. Policy check. Always written, including on allow.
-  //
-  // This runs before the deployment-mode gate rather than after it, because
-  // simulation and shadow both have to show what the policy engine *would* have
-  // decided. A replay that skipped policy evaluation would compare nothing.
+  // 4. Policy check. Always written, including on allow. It runs before the
+  // deployment-mode gate because simulation and shadow both have to show what the
+  // policy engine *would* have decided.
   const evaluatedAt = now();
   const facts = buildFacts(tool.name, gathered, evaluatedAt, input);
   const { result: decision, checkId } = await decideAndRecordPolicy({
@@ -196,8 +190,7 @@ export async function executeTool(args: ExecuteToolArgs): Promise<ToolOutcome<un
     };
   }
 
-  // 5. Limited-mode caps. Exceeding one sends the action to a person; it never
-  // fails. A rung that hard-fails is a rung operators skip.
+  // 5. Limited-mode caps. Exceeding one sends the action to a person; it never fails.
   let overCap: string | null = null;
   if (isWrite && deploymentMode === 'limited') {
     const caps = await loadCaps(args.ctx.tenantId);
@@ -264,12 +257,9 @@ export async function executeTool(args: ExecuteToolArgs): Promise<ToolOutcome<un
     }
   }
 
-  // 7. Deployment mode gate. This is the only path a write can take in simulation
-  // or shadow mode, which is what makes the assertion before execution meaningful.
-  //
-  // It sits *after* the approval branch on purpose. A write that policy says needs
-  // a person must still stop for one here: turning it into a silent simulated
-  // success would erase the one thing replay and shadow exist to measure.
+  // 7. Deployment mode gate. The only path a write can take in simulation or shadow.
+  // It sits *after* the approval branch on purpose: a write that policy says needs a
+  // person must still stop for one here rather than become a silent simulated success.
   const recorded = args.recordedOutputs?.[replayKey(tool.name, input)];
 
   if (
@@ -309,9 +299,8 @@ export async function executeTool(args: ExecuteToolArgs): Promise<ToolOutcome<un
     return { status: 'simulated', output };
   }
 
-  // A money write needs this tenant's Stripe key. A missing key is a configuration
-  // fault, not a customer one, so it fails closed and escalates instead of burning
-  // an idempotency claim or counting against the dependency's breaker.
+  // A missing tenant Stripe key is a configuration fault, not a customer one, so it
+  // is gated here: before the claim and the breaker, so it burns neither.
   if (STRIPE_WRITE_TOOLS.includes(tool.name)) {
     const keyGate = await gateTenantStripeWrite({
       tenantId: args.ctx.tenantId,
@@ -325,19 +314,9 @@ export async function executeTool(args: ExecuteToolArgs): Promise<ToolOutcome<un
   }
 
   // 8. Circuit breaker. Checked before the claim so a downed dependency costs one
-  // Redis read instead of an idempotency row and a doomed HTTP call.
-  //
-  // Degradation ladder, in the order a dependency is allowed to fail:
-  //   retrieval down     -> answer from tool results only, never from memory, and
-  //                         escalate anything that needs policy (search_knowledge
-  //                         fails here like any other read; the agent has no memory
-  //                         path to fall back to).
-  //   business API down  -> say so plainly and escalate (this gate, plus the
-  //                         TOOL_FAILED handover in @kora/ai).
-  //   models down        -> static holding message and escalate, never queued
-  //                         silently (@kora/ai gateway and agent loop).
-  //   redis down         -> fail closed on writes. A write never runs while we
-  //                         cannot tell a healthy dependency from a downed one.
+  // Redis read instead of an idempotency row and a doomed HTTP call. Redis itself
+  // being down fails writes closed: a write never runs while we cannot tell a
+  // healthy dependency from a downed one.
   const breakerKey = toolBreakerKey(args.ctx.tenantId, tool.name);
   const verdict = await breaker().gate(breakerKey, isWrite ? 'write' : 'read');
   if (!verdict.pass) {
@@ -403,10 +382,9 @@ export async function executeTool(args: ExecuteToolArgs): Promise<ToolOutcome<un
     );
   }
 
-  // A write must never get this far in shadow mode. Stage 5 is the only path a
-  // write can take there, so this is unreachable by construction, which is
-  // precisely why it is worth asserting: an unreachable branch that becomes
-  // reachable is a silent bug otherwise.
+  // Unreachable by construction: the deployment-mode gate is the only path a write
+  // takes in shadow. Asserted anyway, because an unreachable branch that becomes
+  // reachable is otherwise silent.
   if (deploymentMode === 'shadow' && isWrite) {
     throw new Error(`${tool.name} reached execution in shadow mode; nothing may be written`);
   }

@@ -41,10 +41,8 @@ const READ_TOOLS = [
 ];
 
 /**
- * Which write tool each intent is allowed to reach. A tool absent from this map
- * is never exposed for that intent, whatever the model proposes, so
- * `gateToolsByState` removes a whole class of wrong-tool errors without any
- * prompt engineering. `BILLING_QUESTION` has none by design.
+ * Which write tool each intent is allowed to reach. A tool absent from this map is
+ * never exposed for that intent, whatever the model proposes.
  */
 const WRITE_TOOLS_BY_INTENT: Record<Intent, string[]> = {
   CANCEL_SUBSCRIPTION: ['cancel_subscription', 'create_ticket'],
@@ -78,10 +76,7 @@ interface TurnState {
   terminalFailure: boolean;
 }
 
-/**
- * Every `ToolOutcome` becomes something the model can reason about. Throwing here
- * would abort the loop and lose the trace, so nothing throws.
- */
+/** Nothing throws: a throw here would abort the loop and lose the trace. */
 function toModelResult(outcome: ToolOutcome<unknown>): unknown {
   switch (outcome.status) {
     case 'ok':
@@ -128,9 +123,8 @@ function toModelResult(outcome: ToolOutcome<unknown>): unknown {
 const MAX_TOOL_OUTPUT_CHARS = 8000;
 
 /**
- * Keeps a large tool payload out of the context window without ever handing the
- * model a half-finished JSON document. Slicing the string mid-object produces
- * something that looks like data and parses like nothing.
+ * Truncates by wrapping rather than slicing: a string cut mid-object looks like
+ * data to the model and parses like nothing.
  */
 function summarizeForModel(output: unknown): string {
   const json = JSON.stringify(output ?? null);
@@ -270,15 +264,13 @@ export async function runAgentTurn(args: {
   recordedOutputs?: Record<string, unknown>;
 }): Promise<TurnResult> {
   const env = serverEnv();
-  // Pinned once, here. A version published mid-run does not change this run's
-  // behaviour, which is what makes an in-flight conversation survive a promotion.
+  // Pinned once, so a version published mid-run does not change this run's behaviour.
   const config = await resolveAgentConfig(args.tenantId, args.agentVersionId);
   const repos = withTenant(args.tenantId);
   const deploymentMode = args.deploymentMode ?? env.KORA_DEPLOYMENT_MODE;
 
-  // Resuming after an approval is a person acting, not the customer speaking
-  // again. Writing it as a customer message put the customer's own words in the
-  // transcript twice, and put words in their mouth they never said.
+  // Resuming after an approval is a person acting, not the customer speaking again,
+  // so the role must not default to `customer` there.
   const triggerMessage = await repos.messages.create({
     conversationId: args.conversationId,
     role: args.role ?? 'customer',
@@ -431,8 +423,6 @@ export async function runAgentTurn(args: {
     );
   }
 
-  // HUMAN_REQUEST and OUT_OF_SCOPE hand over with zero context-gathering calls.
-  // These hand over with zero context-gathering calls.
   if (HANDOVER_INTENTS.includes(intent)) {
     return intent === 'HUMAN_REQUEST'
       ? handOver(
@@ -470,8 +460,7 @@ export async function runAgentTurn(args: {
     ...(args.recordedOutputs ? { recordedOutputs: args.recordedOutputs } : {}),
   });
 
-  // Recorded so an operator can prove from the trace which tools were ever on the
-  // table, rather than inferring it from what happened to be called.
+  // Recorded so the trace shows which tools were on the table, not just which were called.
   const exposedTools: string[][] = [];
 
   const agent = new ToolLoopAgent({
@@ -494,8 +483,6 @@ export async function runAgentTurn(args: {
   await move('PLANNING');
 
   let text = '';
-  // The whole agent loop: every model call and every tool call inside it. This
-  // is the span that dominates a slow run, so it is the one worth recording.
   const loopStartedAt = Date.now();
   try {
     const result = await agent.generate({ prompt: args.message });
@@ -511,8 +498,6 @@ export async function runAgentTurn(args: {
     );
   }
 
-  // An unverified write is the most dangerous state the system can be in.
-  // Stop talking about it and get a person.
   if (state.unverifiedWrite) {
     if (fsm.state === 'PLANNING') await move('WAITING_FOR_TOOL');
     if (fsm.state === 'WAITING_FOR_TOOL') await move('VERIFYING');
@@ -561,9 +546,8 @@ export async function runAgentTurn(args: {
 }
 
 /**
- * Narrows the tool set per step. Read tools are always available; a write tool
- * appears only once a subscription has actually been fetched, and only if this intent
- * is allowed to reach it.
+ * Read tools are always available; a write tool appears only once a subscription has
+ * actually been fetched, and only if this intent is allowed to reach it.
  */
 export function gateToolsByState(
   config: ResolvedAgentConfig,

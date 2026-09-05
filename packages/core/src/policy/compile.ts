@@ -57,12 +57,8 @@ function parseFile(source: PolicySource) {
 }
 
 /**
- * Compiles one or more policy files into a single predicate tree.
- *
  * Rules are checked in bundle order, first match wins, so the file order in
- * `config/agent.yaml` is part of the policy. A rule records which file it came
- * from, because a `policy_checks` row stores only the rule id and someone will
- * eventually need to find it.
+ * `config/agent.yaml` is part of the policy.
  *
  * If any file fails to compile the whole bundle fails. Partial policy is worse
  * than no policy.

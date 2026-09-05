@@ -5,9 +5,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS "agent_versions_one_active"
 CREATE UNIQUE INDEX IF NOT EXISTS "policy_versions_one_active"
   ON "policy_versions" ("policy_id") WHERE status = 'active';--> statement-breakpoint
 
--- An active version is immutable. Application-level protection is not enough:
--- someone will eventually run a migration or a manual query. The only change an
--- active row may take is being archived.
+-- An active version is immutable in the database, not just in the application, so a
+-- manual query cannot rewrite one. The only change it may take is being archived.
 CREATE OR REPLACE FUNCTION kora_reject_active_version_update()
 RETURNS TRIGGER AS $$
 BEGIN

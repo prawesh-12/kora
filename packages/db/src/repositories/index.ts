@@ -24,11 +24,7 @@ function withId<T extends { id?: string }>(prefix: Parameters<typeof newId>[0], 
   return { ...row, id: row.id ?? newId(prefix) };
 }
 
-/**
- * Flips anything past its TTL to `expired` before it can be read or decided.
- * Escalating the run is the caller's job; this only closes the window in which a
- * stale row looks actionable.
- */
+/** Escalating the run is the caller's job; this only closes the decision window. */
 async function expireOverdue(tenantId: string, conn: Database | Tx): Promise<void> {
   await conn
     .update(s.approvals)
@@ -258,10 +254,9 @@ export function createRepositories(tenantId: string, conn: Database | Tx = db())
         return created!;
       },
       /**
-       * Expiry is lazy: an approval past its TTL is expired the moment anyone
-       * reads it, so the queue can never show a stale pending row and a decision
-       * on an expired approval can never succeed. `pnpm kora approvals:expire`
-       * sweeps the backlog and fires the escalations.
+       * Expiry is lazy: a read expires overdue approvals first, so a stale row can
+       * never look pending or be decided. `pnpm kora approvals:expire` sweeps the
+       * backlog and fires the escalations.
        */
       async get(id: string) {
         await expireOverdue(tenantId, conn);
@@ -288,9 +283,8 @@ export function createRepositories(tenantId: string, conn: Database | Tx = db())
           .orderBy(asc(s.approvals.requestedAt));
       },
       /**
-       * Replay conversations are excluded. Replaying historical traffic raises
-       * real approval requests, and an operator queue filling with decisions
-       * about conversations that already ended is worse than useless.
+       * Replay traffic raises real approval requests, so it is excluded here: the
+       * operator queue must not fill with conversations that already ended.
        */
       async listPending() {
         await expireOverdue(tenantId, conn);
@@ -566,11 +560,8 @@ export function withTenant(tenantId: string, conn?: Database | Tx): Repositories
 }
 
 /**
- * Repositories bound to a transaction that has `kora.tenant_id` set locally.
- *
- * The connection-level setting covers a process serving one tenant. This is what
- * a process serving several needs, and what the isolation tests use to act as a
- * different tenant without opening a second pool.
+ * Sets `kora.tenant_id` per-transaction rather than per-connection, so one process
+ * can serve several tenants (and the isolation tests can switch tenant) on one pool.
  */
 export async function withTenantTx<T>(
   tenantId: string,

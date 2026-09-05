@@ -1,10 +1,7 @@
 /**
- * The figures on the landing page. Every label is a string the repository
- * already contains, so a claim on this page can be checked by opening one file:
- *
- *   GATES   the thirteen numbered stages of `runTool` in packages/tools/src/pipeline.ts
- *   LADDER  every branch of `verifyRefund` in packages/tools/src/verify.ts
- *   FLOW    the same pipeline drawn end to end, including where it stops
+ * Every label below is copied verbatim from the implementation, so a claim on
+ * this page stays checkable: GATES and FLOW from `runTool` in
+ * packages/tools/src/pipeline.ts, LADDER from `verifyRefund` in verify.ts.
  */
 
 const GATES = [
@@ -98,11 +95,6 @@ const STOPS = [
   { x: 554, from: 629, label: 'A person', sub: 'never a check', edge: 'pending or differs' },
 ] as const;
 
-/**
- * The one diagram on the page. It draws where a run stops as well as where it
- * finishes, because a straight line from request to confirmed would be the
- * claim this product exists to disprove.
- */
 export function ActionToProofDiagram() {
   return (
     <div className="flow">

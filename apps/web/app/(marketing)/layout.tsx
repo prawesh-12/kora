@@ -2,9 +2,8 @@ import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
 import './marketing.css';
 
-// Geist and Geist Mono are loaded once in the root layout as --font-geist and
-// --font-geist-mono. This route reads those variables rather than loading a
-// second copy. The hero serif is a local stack in marketing.css.
+// Reads the --font-geist variables set by the root layout rather than loading a
+// second copy of the fonts.
 
 export const SITE_URL = process.env.KORA_APP_URL ?? 'http://localhost:3000';
 

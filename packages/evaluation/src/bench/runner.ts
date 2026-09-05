@@ -41,14 +41,12 @@ export async function runBenchmark(args: {
   const tenantId = serverEnv().KORA_TENANT_ID;
   const scenarios = loadBenchScenarios(args.category);
 
-  // Once, here. Clearing claims mid-run wipes state out from under whatever is
-  // running alongside it.
+  // Once, here: clearing claims mid-run wipes state from under a running scenario.
   await clearIdempotency(tenantId);
   await setKnowledgeStatus(tenantId, 'active');
 
-  // Sequential, not concurrent: every scenario installs its own billing stub
-  // through setBillingProvider, which is process-wide state. Two scenarios in
-  // flight would measure whichever stub won the race.
+  // Sequential, not concurrent: `setBillingProvider` is process-wide state, so two
+  // scenarios in flight would measure whichever stub won the race.
   const results: ScenarioOutcome[] = [];
   for (const scenario of scenarios) {
     results.push(await runScenario(scenario as never, tenantId, args.deps));
@@ -67,15 +65,13 @@ export async function runBenchmark(args: {
 
   const passed = results.filter((r) => r.passed).length;
   const verifiedResolutions = results.filter((r) => r.verifiedResolution === true).length;
-  // Denials and handovers pass but never count as resolutions. verifiedResolution
-  // is already an AND over outcome_achieved and a landed write, so a correct
-  // refusal scores here without inflating the headline rate.
+  // Denials and handovers pass but never count as resolutions, so a correct refusal
+  // scores here rather than inflating the headline rate.
   const passedWithoutResolution = results.filter(
     (r) => r.passed && r.verifiedResolution !== true,
   ).length;
-  // Compliance is what the evaluation check says about the run, not whether the
-  // scenario's expectation happened to match. A run that safely escalates instead
-  // of acting has broken no rule.
+  // Compliance is what the evaluation check says, not whether the scenario's
+  // expectation matched: a run that safely escalates has broken no rule.
   const policyFailures = results.filter((r) => r.policyCompliant === false).length;
 
   return {
@@ -118,10 +114,6 @@ function writeHistory(entry: HistoryEntry): void {
   writeFileSync(HISTORY, `${JSON.stringify(entry, null, 2)}\n`);
 }
 
-/**
- * The gates. Any one of these failing exits non-zero, because each is a thing
- * that must never ship.
- */
 export function gateFailures(result: BenchResult, previous: HistoryEntry | null): string[] {
   const problems: string[] = [];
 
@@ -200,10 +192,9 @@ export async function runBench(argv: string[], deps: ScenarioDeps): Promise<numb
   const last = runs.at(-1)!;
   let exitCode = 0;
 
-  // The baseline is a whole-suite number, so only a whole-suite run may be
-  // compared against it. A category on its own has a different mix by
-  // definition, and comparing the two reports a regression that is just the
-  // filter. History is already only written for a whole-suite run.
+  // The baseline is a whole-suite number, so only a whole-suite run may be compared
+  // against it: a category has a different mix and would report the filter as a
+  // regression.
   const gates = gateFailures(last, category ? null : previous);
   if (gates.length > 0) {
     console.error('\nGates failed:');

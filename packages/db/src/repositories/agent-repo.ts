@@ -30,20 +30,15 @@ export async function ensureAgent(tenantId: string, slug: string, name: string):
   return id;
 }
 
-/**
- * Changing a prompt, a tool set or a policy bundle creates a draft. There is no
- * path in the API to mutate an active version, and the database trigger means
- * there is no path outside it either.
- */
+/** Active versions are immutable; a database trigger enforces that outside the API too. */
 export async function createDraft(
   tenantId: string,
   agentId: string,
   base: AgentVersionInput,
   createdBy?: string,
 ): Promise<AgentVersion> {
-  // Serialised on the agent row. Reading the highest version and then inserting
-  // one above it is a race: two concurrent drafts both read the same number and
-  // the second hits the unique constraint.
+  // Serialised on the agent row: two concurrent drafts would otherwise read the
+  // same highest version and the second would hit the unique constraint.
   return db().transaction(async (tx) => {
     await tx.execute(sql`SELECT id FROM agents WHERE id = ${agentId} FOR UPDATE`);
 
@@ -73,9 +68,8 @@ export async function createDraft(
 }
 
 /**
- * Serialised on the agent row. Two concurrent activations would otherwise both
- * see no active version and both insert one, and the partial unique index would
- * turn that into a confusing constraint error rather than a clean wait.
+ * Serialised on the agent row: two concurrent activations would otherwise both see
+ * no active version, and the partial unique index would surface that as an error.
  */
 export async function activate(
   tenantId: string,
@@ -92,10 +86,7 @@ export async function activate(
       throw new ConfigError(`agent version ${versionId} not found`, { code: 'VERSION_NOT_FOUND' });
     }
     if (version.status === 'active') return version;
-    if (version.status === 'archived') {
-      // Rollback re-activates an archived version, which is allowed and is the
-      // whole point of keeping them.
-    }
+    // An archived version can be promoted again. That is what rollback is.
 
     await tx.execute(sql`SELECT id FROM agents WHERE id = ${version.agentId} FOR UPDATE`);
 
@@ -128,8 +119,7 @@ export async function loadActive(tenantId: string, slug = 'support'): Promise<Ag
     );
 
   if (!row) {
-    // Fail closed. Falling back to the file would mean running rules that nothing
-    // recorded, which is exactly what versioning exists to prevent.
+    // Fail closed: falling back to the file would run rules nothing recorded.
     throw new ConfigError(
       `no active agent version for "${slug}". Publish one with \`pnpm kora agent:publish\`.`,
       { code: 'NO_ACTIVE_AGENT_VERSION' },

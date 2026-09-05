@@ -18,15 +18,10 @@ const REFUND_ID = /\bREF-\d+\b/g;
 const CANCELLATION_ID = /\bCAN-\d+\b/g;
 
 /**
- * The offline judge.
- *
- * It reads the same rendered trace a real judge would and answers each criterion
- * from what the trace actually contains. It is a different family from the agent
- * planner on purpose: the family check in `@kora/evaluation` is enforced, and a
- * judge that shared the agent's reasoning would be worthless.
- *
- * What it cannot do is have an opinion. On anything requiring judgement rather
- * than a lookup, it answers CANNOT_ASSESS rather than inventing agreement.
+ * Reads the same rendered trace a real judge would. Deliberately a different family
+ * from the agent planner, since `@kora/evaluation` enforces that check. It cannot
+ * have an opinion: anything needing judgement rather than a lookup gets
+ * CANNOT_ASSESS rather than invented agreement.
  */
 export const judgePlanner: MockPlanner = (ctx: MockPlannerContext) => {
   if (ctx.options.responseFormat?.type !== 'json') return undefined;

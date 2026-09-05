@@ -19,7 +19,6 @@ export interface ProofCardProps {
   stripeId?: string | null;
   verifiedAt?: string | Date | null;
   failureReason?: string | null;
-  /** Compact inline variant for the customer chat. */
   compact?: boolean;
 }
 
@@ -50,15 +49,8 @@ function Beat({
   );
 }
 
-/**
- * The signature component. Three beats: requested (policy rule in plain
- * words), executed (real Stripe id, mono, click-to-copy), verified (read-back
- * plus time plus "Confirmed in Stripe").
- *
- * The drawn check fires once on a real confirmation only. Pending shows
- * "waiting on Stripe", never a check. Denied stops at beat one, calm. Failed
- * shows the failure and that a person was brought in, never a check.
- */
+/** The drawn check appears on a real confirmation only: never on pending,
+ *  denied or failed. */
 export function ProofCard({
   status,
   title,

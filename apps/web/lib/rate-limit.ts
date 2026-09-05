@@ -25,12 +25,11 @@ export interface RateVerdict {
 }
 
 /**
- * A sliding window held as a sorted set of request timestamps. A fixed counter lets a
- * caller send the whole budget at the end of one window and again at the start of the
- * next; the sorted set counts the last `windowMs` wherever the boundary falls.
+ * A sliding window held as a sorted set of timestamps: a fixed counter would let a
+ * caller spend the whole budget either side of a window boundary.
  *
- * A denied request is not added to the set, so a client that keeps hammering does not
- * push its own recovery further away.
+ * A denied request is not added to the set, so a client that keeps hammering does
+ * not push its own recovery further away.
  */
 export async function checkRateLimit(
   key: string,
@@ -67,10 +66,8 @@ export async function takeRouteSlot(routeClass: RouteClass, subject: string): Pr
 }
 
 /**
- * Throws rather than returning a verdict when the model provider's breaker is open:
- * a rate limit tells the caller to wait a minute, an open breaker tells them the
- * dependency is down. When both are true the breaker is the more actionable answer,
- * so it wins.
+ * An open breaker throws rather than returning a verdict: when both it and the rate
+ * limit apply, "the dependency is down" is the more actionable answer.
  */
 export async function takeMessageSlot(conversationId: string): Promise<RateVerdict> {
   const gate = await breaker().gate(modelBreakerKey(serverEnv().KORA_MODEL_PROVIDER), 'read');

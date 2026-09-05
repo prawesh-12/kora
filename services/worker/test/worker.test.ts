@@ -17,7 +17,6 @@ async function drainQueues(): Promise<void> {
   for (const queue of Object.values(handle.queues)) await queue.drain(true);
 }
 
-/** Waits for a condition rather than sleeping a fixed time. */
 async function until(check: () => Promise<boolean>, timeoutMs = 30_000): Promise<boolean> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {

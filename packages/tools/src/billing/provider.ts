@@ -5,10 +5,7 @@ import { requireTenantStripeKey } from './tenant-keys.js';
 let override: BillingProvider | null = null;
 const byTenant = new Map<string, BillingProvider>();
 
-/**
- * Replaces the real provider for every tenant. Tests and the scenario runner use
- * this; nothing in the running app does.
- */
+/** Replaces the real provider for every tenant. Test and scenario-runner seam only. */
 export function setBillingProvider(next: BillingProvider | null): void {
   override = next;
   byTenant.clear();

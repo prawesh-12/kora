@@ -134,8 +134,8 @@ export function ToolApproval({
   );
   const busy = status === "approving" || status === "running";
   const pending = status === "pending";
-  // Without a handler there is nothing to decide. A customer looking at their own
-  // approval must not be given controls that do nothing.
+  // A customer looking at their own approval gets no handlers, and must not be
+  // shown controls that do nothing.
   const decidable = pending && (onApprove !== undefined || onDeny !== undefined);
   const error = status === "error";
 

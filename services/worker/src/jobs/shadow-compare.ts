@@ -2,12 +2,9 @@ import { logger, serverEnv } from '@kora/core';
 import { STRIPE_WRITE_TOOLS } from '@kora/tools';
 
 /**
- * Compares what the agent proposed in shadow mode against what a person actually
- * did.
- *
- * The ground truth is sound here precisely because shadow mode writes nothing: a
- * refund that exists on the subscription after a shadow run was created by someone
- * else. Runs with no human record are skipped, never counted as agreement.
+ * Shadow mode writes nothing, so any change on the subscription after a shadow run
+ * was made by a person. Runs with no human record are skipped, never counted as
+ * agreement.
  */
 export async function shadowCompareJob(): Promise<void> {
   const { sql, recordShadowComparison } = await import('@kora/db');
@@ -48,9 +45,8 @@ export async function shadowCompareJob(): Promise<void> {
         ? null
         : await humanResolution(run.subscription_id, run.started_at);
 
-    // Only a refund carries an amount. A cancellation and a plan change have no
-    // money on the action itself, so comparing amounts there would report every
-    // one of them as a disagreement over nothing.
+    // Only a refund carries an amount; comparing amounts on a cancellation or a plan
+    // change would report every one of them as a disagreement over nothing.
     const carriesAmount = run.proposed_action === 'create_refund';
 
     await recordShadowComparison(

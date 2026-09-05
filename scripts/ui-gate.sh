@@ -1,10 +1,8 @@
 #!/usr/bin/env bash
 # Every rule here is a regression that already shipped once.
 #
-# The searched tree excludes node_modules, .next and the vendored registry
-# sources under components/reui and components/agents: those are upstream files
-# the project does not author, and a rule about our own markup that also reads
-# theirs can never pass.
+# components/reui and components/agents are excluded because they are vendored
+# upstream files: a rule about our own markup can never pass while it reads theirs.
 set -uo pipefail
 
 cd "$(dirname "$0")/.." || exit 1

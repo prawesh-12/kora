@@ -21,8 +21,8 @@ export function approvalWebhookUrl(): string | null {
 
 /**
  * One POST, no retries, no queue. A dead endpoint is logged and dropped: an
- * approval that a customer is already waiting on must never fail because a chat
- * integration is down. Delivery guarantees arrive with the queue in M2-01.
+ * approval a customer is already waiting on must never fail because a chat
+ * integration is down.
  */
 export async function notifyApprovalPending(
   notification: ApprovalNotification,

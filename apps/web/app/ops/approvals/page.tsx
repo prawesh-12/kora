@@ -12,7 +12,6 @@ export const dynamic = 'force-dynamic';
 const STATUSES = ['pending', 'decided', 'expired', 'all'] as const;
 type Status = (typeof STATUSES)[number];
 
-/** Bands in minor units. The last one is open-ended. */
 const BANDS = [
   { label: 'Any value', query: '' },
   { label: 'Under 1k', query: 'maxValueMinor=100000' },
@@ -69,7 +68,7 @@ export default async function ApprovalsPage({
       }),
     )
   )
-    // Money at risk leads, highest first. Nothing at risk sorts last.
+    // -1 so approvals with nothing at risk sort last rather than first.
     .sort((a, b) => (b.amountMinor ?? -1) - (a.amountMinor ?? -1));
 
   const tools = [...new Set(approvals.map((a) => a.toolName))].sort();
@@ -157,7 +156,6 @@ export default async function ApprovalsPage({
   );
 }
 
-/** Bands, statuses and tools are three questions, so each says which it answers. */
 function ChipGroup({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="flex flex-wrap items-center gap-2">

@@ -59,8 +59,7 @@ export async function startRun(input: {
         payload,
         status,
         startedAt: now(),
-        // Null, not zero. A marker step has no span, and claiming it took no
-        // time is what put `0ms` on every row of the trace.
+        // Null, not zero: a marker step has no span, so it made no timing claim.
         durationMs: durationMs ?? null,
       });
       return row.id;

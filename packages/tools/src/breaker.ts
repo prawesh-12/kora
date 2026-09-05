@@ -16,7 +16,6 @@ export type BreakerVerdict =
 
 export interface GatedBreaker extends Breaker {
   gate(key: string, kind: 'read' | 'write'): Promise<BreakerVerdict>;
-  /** Every breaker currently open, with how long it has been. For alerting and /api/status. */
   listOpen(): Promise<Array<{ key: string; openForMs: number }>>;
   close(): Promise<void>;
 }
@@ -144,10 +143,9 @@ export function createBreaker(opts: BreakerOptions = {}): GatedBreaker {
 
   /**
    * Redis being unreadable is not the same as the dependency being healthy, and the
-   * breaker cannot tell those two apart. For a write we refuse: the idempotency store
-   * is Postgres, but with the breaker unreadable we cannot say whether the dependency
-   * is up, and a duplicated or unrecorded business action cannot be taken back. For a
-   * read the worst case of going ahead is a slow failure, which is acceptable.
+   * breaker cannot tell those two apart. Writes refuse, because a duplicated or
+   * unrecorded business action cannot be taken back; reads go ahead, where the worst
+   * case is a slow failure.
    */
   async function gate(key: string, kind: 'read' | 'write'): Promise<BreakerVerdict> {
     let current: BreakerState;
@@ -169,9 +167,8 @@ export function createBreaker(opts: BreakerOptions = {}): GatedBreaker {
   async function listOpen(): Promise<Array<{ key: string; openForMs: number }>> {
     const r = redis();
 
-    // SCAN, not KEYS. This runs once a minute from the alert rules and on every
-    // status page load, and KEYS blocks the whole server for the length of the
-    // keyspace.
+    // SCAN, not KEYS: this runs once a minute from the alert rules and on every
+    // status page load, and KEYS blocks the whole server for the length of the keyspace.
     const openKeys: string[] = [];
     let cursor = '0';
     do {
@@ -209,7 +206,6 @@ export function breaker(): GatedBreaker {
   return shared;
 }
 
-/** Mirrors `setMockPlanners`: lets a test point the pipeline at a different store. */
 export function setBreaker(next: GatedBreaker | null): void {
   shared = next;
 }

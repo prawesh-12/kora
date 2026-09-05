@@ -1,12 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { NAV, activeNavHref } from '@/components/ops/nav';
 
-/**
- * Exactly one item is highlighted on every route.
- *
- * `startsWith` lights up two, because `/ops` is a prefix of every operator
- * route. Exact matching lights up none on a detail page.
- */
+/** Exactly one item is highlighted on every route: `startsWith` lights up two,
+ *  and exact matching lights up none on a detail page. */
 describe('the sidebar active item', () => {
   const routes = [
     ['/ops', '/ops'],

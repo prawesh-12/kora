@@ -15,11 +15,9 @@ import { loadAgentConfig } from './config.js';
 const REPO_ROOT = join(import.meta.dirname, '../../..');
 
 /**
- * Moves what is on disk into the database, once.
- *
  * `config/agent.yaml` and `config/policies/*.yaml` stay in the repository as the
- * source a human edits and reviews. Publishing is what makes a version real:
- * from then on the runtime reads the database, and nothing reads the file.
+ * source a human edits and reviews. Publishing is what makes a version real: from
+ * then on the runtime reads the database, and nothing reads the file.
  */
 export async function publishFromFiles(actorId?: string): Promise<{
   agentVersionId: string;

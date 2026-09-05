@@ -123,9 +123,8 @@ export function CodeBlock({
         <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground/55">
           {language}
         </span>
-        {/* kora: the completed badge is dropped. A green "Ready" check on a
-            static JSON pane that never streamed is decoration, and it reads as
-            a verdict on the content next to real pass/fail pills. */}
+        {/* kora: the registry's completed badge is dropped. Next to real pass/fail
+            pills, a green check on a static pane reads as a verdict. */}
         {streaming ? (
           <span className="ml-auto inline-flex shrink-0 items-center gap-1 font-medium text-[10px] text-info">
             <LoaderCircle className={cn("size-3", !reduce && "animate-spin")} />
