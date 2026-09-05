@@ -70,6 +70,22 @@ describe('checkGrounding', () => {
     expect(r.unsupported).toContain('INR 349');
   });
 
+  it('catches an invented amount written without a currency marker', () => {
+    const r = checkGrounding('We have refunded 9,999 to your card.', toolOutputs);
+    expect(r.grounded).toBe(false);
+    expect(r.unsupported).toContain('9,999');
+  });
+
+  it('accepts a bare amount that matches a tool result', () => {
+    const r = checkGrounding('We have refunded 3,499 to your card.', toolOutputs);
+    expect(r.grounded).toBe(true);
+  });
+
+  it('does not read a plain count as an amount', () => {
+    const r = checkGrounding('Refunds are available within 30 days of the charge.', toolOutputs);
+    expect(r.grounded).toBe(true);
+  });
+
   it('accepts a plan name quoted from a tool result', () => {
     const r = checkGrounding('You are moving to the Pro plan.', toolOutputs);
     expect(r.grounded).toBe(true);

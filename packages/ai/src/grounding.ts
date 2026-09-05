@@ -1,6 +1,12 @@
 const STRIPE_ID = /\b(?:re|sub|in|price|prod|pi|ch|cus|si)_[A-Za-z0-9]+\b/g;
 const PLAN_NAME = /\b([A-Z][A-Za-z]*(?:\s+[A-Z][A-Za-z]*)*\s+(?:plan|tier))\b/g;
-const MONEY = /(?:INR|Rs\.?|₹|\$|USD)\s?([\d,]+(?:\.\d{1,2})?)/gi;
+const MONEY_MARKED = /(?:INR|Rs\.?|₹|\$|USD)\s?([\d,]+(?:\.\d{1,2})?)/gi;
+/**
+ * An amount written without a currency marker: grouped thousands (Western or
+ * Indian) or a two-decimal fraction. "we refunded 3,499" has to be checked as
+ * hard as "we refunded ₹3,499"; "within 30 days" must not be.
+ */
+const MONEY_BARE = /\b(\d{1,3}(?:,\d{2,3})+(?:\.\d{1,2})?|\d+\.\d{2})\b/g;
 
 const GENERIC_LEADERS = new Set([
   'the',
@@ -61,11 +67,14 @@ export function checkGrounding(
     }
   }
 
-  for (const match of message.matchAll(MONEY)) {
-    const raw = (match[1] ?? '').replace(/,/g, '');
-    if (!raw) continue;
-    const minor = String(Math.round(Number(raw) * 100));
-    if (!toolTokens.has(minor)) unsupported.push(match[0]);
+  for (const pattern of [MONEY_MARKED, MONEY_BARE]) {
+    for (const match of message.matchAll(pattern)) {
+      const raw = (match[1] ?? '').replace(/,/g, '');
+      if (!raw) continue;
+      // Amounts are compared in minor units, which is how every tool reports them.
+      const minor = String(Math.round(Number(raw) * 100));
+      if (!toolTokens.has(minor)) unsupported.push(match[0]);
+    }
   }
 
   return { grounded: unsupported.length === 0, unsupported: [...new Set(unsupported)] };
