@@ -23,6 +23,9 @@ const PUBLIC_ROUTES = new Set([
   // customer-facing chat, and a customer has no operator account.
   '/api/chat/[conversationId]',
   '/api/conversations',
+  // Called by Stripe with no operator session: authenticity comes from the
+  // webhook signature check, and the handler only reconciles runs, never money.
+  '/api/webhooks/stripe',
 ]);
 
 function* routeFiles(dir: string): Generator<string> {

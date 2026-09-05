@@ -75,6 +75,23 @@ pnpm kora chaos     # break things on purpose and check nothing goes wrong
 
 ---
 
+## When money calls fail
+
+Kora fails closed: a dead dependency means escalation, never a guessed answer
+or a duplicate write. What each failure looks like and what to do:
+
+| Symptom | Likely cause | First action |
+|---|---|---|
+| "Kora cannot reach Stripe with this key" | revoked, wrong, or under-scoped tenant key | check the key and its permissions, re-set it, retry |
+| Refunds timing out, breaker flapping | Stripe rate limit (429) | stop retrying by hand, let the backoff work, lower traffic or raise quota |
+| Refund approved but never confirmed | webhook down or refund stuck `pending` | check the webhook endpoint and signature secret, re-fetch the refund in Stripe |
+
+Full steps for each are in `docs/runbook.md` (Stripe sections). The Stripe
+integration itself is still being built — `docs/00-overview/status.md` says
+exactly what is proven and what is not.
+
+---
+
 ## Where to read more
 
 Everything else is in `docs/`.

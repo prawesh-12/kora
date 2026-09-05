@@ -458,6 +458,131 @@ pnpm kora smoke:model
 
 ---
 
+## Stripe: revoked, wrong, or under-scoped key
+
+**Symptom.** Money writes for one tenant all fail at once with
+`CONFIG_ERROR`. The chat says "Kora cannot reach Stripe with this key. Check
+the key and its permissions" — never a customer-facing failure, never a
+stack trace. Other tenants are unaffected.
+
+**Cause.** The tenant's restricted Stripe key was revoked, pasted wrong, or is
+missing a scope (Customers read, Subscriptions read/write, Invoices read,
+Charges read, PaymentIntents read, Refunds read/write, Products and Prices
+read). `CONFIG_ERROR` never counts toward the circuit breaker and is never
+retried: retrying a bad key burns no money but hides the real fix.
+
+**Action.**
+
+1. Confirm it is the key and not Stripe: `GET /readyz` is green and other
+   tenants' writes succeed.
+2. Find the failing tenant in `tool_executions` by `error_code =
+   'CONFIG_ERROR'` over the last hour.
+3. Re-set the tenant key with the admin command (per-tenant encrypted store),
+   verifying the scopes above. The runtime key must not be able to create
+   customers — that needs the broader dev key used only by the fixtures
+   script.
+4. Re-run one read (`get_subscription`) before letting queued writes proceed.
+
+> Status: the per-tenant key store, the admin command, and the `CONFIG_ERROR`
+> mapping do not exist yet (`ToolErrorCode` has no `CONFIG_ERROR`). Until
+> they land, a bad key surfaces as the generic upstream failure below, and
+> this section is the target behaviour, not the current one.
+> `TODO(plan): wire CONFIG_ERROR from the Stripe provider boundary.`
+
+---
+
+## Stripe: rate limit (429)
+
+**Symptom.** Writes intermittently fail with `UPSTREAM_5XX`, the breaker for
+one `(tenant, tool)` pair flaps open and closed, resolution rate dips across
+all intents rather than one.
+
+**Cause.** Stripe returned 429. The provider maps it to `UPSTREAM_5XX`,
+retryable with backoff, counting toward the breaker — same as a 500. A dip
+across every intent points at the dependency, not at a policy or version
+(see [Verified resolution fell overnight](#verified-resolution-fell-overnight)).
+
+**Action.**
+
+1. Check `/api/status` for flapping breakers and `tool_executions` for a
+   spread of `UPSTREAM_5XX` across tools.
+2. Do not clear the breaker by hand and do not restart to "unblock" traffic:
+   the breaker closes on its own after one successful probe, and forcing it
+   closed sends real money actions at a throttled API.
+3. Lower traffic or raise the Stripe quota. Restarting changes nothing.
+4. If the rate was set deliberately for a test, check no fault override is
+   still on before treating it as an incident.
+
+---
+
+## Stripe: webhook down or rejected
+
+**Symptom.** Refunds sit in `pending` past their expected confirmation, runs
+stay in "waiting on Stripe", and no `refund.succeeded` / `refund.failed`
+reconciliation appears in the traces. If signatures fail, the endpoint logs
+rejections and every delivery looks unprocessed.
+
+**Cause.** One of: the webhook route is down (deploy, crash), the endpoint
+secret is wrong or rotated (signature verification fails), or Stripe cannot
+reach the endpoint (network, wrong URL). Duplicate `event.id` deliveries are
+normal and are no-ops by design — do not mistake the dedupe log for an
+outage.
+
+**Action.**
+
+1. `curl -s "$KORA_APP_URL/healthz"` — is the app up at all.
+2. Check the endpoint secret matches the Stripe dashboard value for this
+   endpoint; a rotation without a matching config change rejects everything.
+3. Check Stripe's delivery log for the endpoint: failed deliveries with
+   retries means reachability; 400s on every delivery means signatures.
+4. After recovery, Stripe redelivers. Reconciliation is idempotent per
+   `event.id`, so redelivery is safe — do not manually flip verifications.
+5. If events were lost (endpoint deleted, retention passed), re-fetch the
+   open refunds with `getRefund` per run and reconcile by hand from the
+   read-back, not from memory.
+
+> Status: `POST /api/webhooks/stripe` does not exist yet. Until it lands,
+> pending refunds have no automatic reconcile path — see the next section.
+> `TODO(plan): add the webhook route with signature check and event.id dedupe.`
+
+---
+
+## Stripe: refund stuck pending
+
+**Symptom.** A refund the policy allowed shows `pending` (or
+`requires_action`), verify reads it back as not-`succeeded`, and the customer
+sees "a person will confirm" — never "refund succeeded".
+
+**Cause.** This is the system working as designed. A refund whose status is
+not `succeeded` is not success: `create_refund.verify` passes only on
+`status === 'succeeded'` with amount and currency matching the request to the
+minor unit. Anything else resolves to `verified: false` and escalates, and
+the webhook flips it later.
+
+**Action.**
+
+1. Open the run in the operator UI and read the timeline: the refund id, the
+   requested amount, and what the read-back returned.
+2. Ask Stripe directly for that refund id. Trust the record, not the
+   customer's message and not the agent's draft.
+3. `succeeded`: if the webhook already reconciled, the trace shows it. If
+   not (webhook down), record the confirmation on the run by hand.
+4. Still `pending`: wait. Do not create a second refund — the claim key and
+   the Stripe idempotency key mean a retry returns the original, but a manual
+   re-issue with different input is a genuinely different action and can
+   double-pay.
+5. `failed` or `canceled`: tell the customer plainly, with the reference,
+   and let the agent try again on the next turn or redo it in Stripe.
+6. Many stuck at once: treat as [webhook down](#stripe-webhook-down-or-rejected),
+   not as N individual refund problems.
+
+> Status: the pending path (`S11`) and webhook reconcile have no tests behind
+> them yet. The generic `verified: false` handling in
+> [A write was recorded with `verified: false`](#a-write-was-recorded-with-verified-false)
+> is what runs today.
+
+---
+
 ## A migration failed halfway
 
 **What it means.** `migrate-job.sh` exited non-zero. The advisory lock is

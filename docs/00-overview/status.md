@@ -1,32 +1,56 @@
 # What is verified, and what is not
 
-Every claim Kora makes about itself is backed by something you can run. This page
-lists what holds, how to check it yourself, and where it stops.
+Every claim Kora makes about itself names the command that checks it. This page
+covers two systems: the mock-commerce baseline, which is proven, and the Stripe
+test-mode pivot from `extras/plan.md`, which is not yet built in this tree.
 
 Read it before trusting a number from anywhere else in these docs.
 
-## The guarantees
+## Stripe test mode: not implemented
 
-These are the properties the system is built to hold. Each one names the command
-that proves it.
+The money-ops pivot (Stripe Billing in test mode, S1–S12 scenarios, webhook
+reconcile, Proof Card) has no code behind it yet:
+
+- `stripe` is not in `packages/tools/package.json` (`node_modules/stripe`
+  does not exist).
+- There is no `BillingProvider` interface and no `StripeBillingProvider`.
+  `packages/tools/src/clients/` holds only `acme.ts`.
+- `scenarios/` holds N1–N10 plus H1–H2. No S-scenario exists.
+- `ToolErrorCode` in `packages/core/src/domain.ts` has no `CONFIG_ERROR`.
+- There is no `POST /api/webhooks/stripe` (`apps/web/app/api/` holds
+  agent-versions, approvals, auth, chat, conversations, metrics, status).
+- There is no Proof Card component and no `docs/pivot/design-plan.md`.
+- Policy files are `acme-*.yaml`. No `refunds.yaml`, `cancellations.yaml`,
+  `plan-changes.yaml` exists.
+
+Until those land, every Stripe claim in the plan is unproven. The rest of this
+page describes the mock-commerce baseline, which is what the commands below
+actually check.
+
+## What holds on the mock-commerce baseline
+
+Each property names the command that proves it. All commands run against the
+Acme mock commerce service, Postgres, and Redis — not against Stripe.
 
 | Property | How to check |
 |---|---|
 | A policy violation cannot produce a write | `pnpm kora scenarios` — N2, N3, N9 |
-| No duplicate write, under retry or double submit | `pnpm kora scenarios` — N6, and the concurrency test in `packages/tools` |
-| Every successful write is read back and confirmed | `pnpm kora scenarios` — N7 |
-| Nothing the agent tells a customer is invented | the grounding check, and N1 and N10 |
+| No duplicate write, under retry or double submit | `pnpm kora scenarios` — N6, and the concurrency test in `packages/tools/test/idempotency.test.ts` |
+| Every successful write is read back and confirmed | `pnpm kora scenarios` — N7; `packages/tools/test/verify.test.ts` |
+| Nothing the agent tells a customer is invented | `packages/ai/test/grounding.test.ts`, and scenarios N1, N10 |
+| A high-value write waits for a person | `pnpm kora scenarios` — N8; `apps/web/test/approvals.test.ts` |
+| An upstream timeout or 500 never produces a wrong claim | `pnpm kora scenarios` — N4, N5, N7 |
 | Every run can be rebuilt from the database alone | `packages/db/test/tracing.test.ts` |
 | A failed run records a cause you can act on | `tool_executions.error_code` |
-| An upstream timeout or 500 never produces a wrong claim | N4, N5, N7 |
-| A risky action waits for a named person | N8, and the approval tests in `apps/web` |
-| No business call happens outside the tool pipeline | `pnpm lint` |
-| One tenant cannot see another's data | `packages/db/test/isolation.test.ts` |
+| No business call happens outside the tool pipeline | `pnpm lint` (runs `scripts/check-acme-imports.ts`) |
+| One tenant cannot see another's data | `packages/db/test/isolation.test.ts`; `pnpm kora security:isolation` |
+| Self-replay produces an empty diff | `pnpm kora replay --from <v> --against <v>` exits zero |
 
 ## The numbers
 
-Measured on Postgres 17 with pgvector, Redis 8, the mock commerce service, and
-the offline model provider.
+Last recorded on Postgres 17 with pgvector, Redis 8, the mock commerce
+service, and the offline model provider. Re-run the commands to confirm; do
+not quote these without doing so.
 
 ```
 pnpm test             537 tests, all passing
@@ -46,9 +70,6 @@ pnpm kora replay      self-replay produces an empty diff
 | `@kora/worker` | 24 |
 | `@kora/mock-commerce` | 37 |
 | `web` | 82 |
-
-Three consecutive benchmark runs land on the same resolution rate, so the
-benchmark is measuring the agent rather than noise.
 
 ### Why the resolution rate is 35%
 
@@ -76,6 +97,20 @@ conversations while a fifth of its calls are failing is not being honest.
 ## Limitations
 
 Named here rather than left to be discovered.
+
+**Stripe is test mode only, when it lands.** The plan scopes the pivot to
+Stripe Billing test mode. Live keys, real charges, and real payouts are out of
+scope. Nothing here covers them.
+
+**One restricted key per tenant, no Connect.** The plan uses one restricted
+Stripe key per tenant, read from the encrypted store at tool time. Stripe
+Connect OAuth onboarding is out of scope. A tenant with no key fails closed
+and escalates. This store, the admin command to set the key, and the
+`CONFIG_ERROR` mapping do not exist yet.
+
+**The webhook covers two event families only.** Refund and subscription events,
+reconciling pending refunds and at-period-end cancellations. There is no
+general event bus. The route does not exist yet.
 
 **The model is offline by default.** Kora ships a deterministic model provider so
 everything runs with no API key. It exercises the whole path — tool loop,
