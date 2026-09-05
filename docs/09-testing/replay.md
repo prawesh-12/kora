@@ -1,7 +1,7 @@
 # Replay
 
 Run historical conversations through a different agent version without touching
-a real business system.
+Stripe.
 
 ```bash
 pnpm kora replay --from <versionId> --against <versionId> --limit 100
@@ -10,28 +10,28 @@ pnpm kora replay --limit 100        # both default to the active version: self-r
 
 ## What is reused and what is re-run
 
-**Reused:** the customer messages in order, and the business state as it was at
-the time of the original run.
+**Reused:** the customer messages in order, and the Stripe state as it was at the
+time of the original run.
 
 **Re-run:** intent classification, retrieval, model calls, tool selection, policy
 evaluation.
 
-That split is the whole design. Anything that reads the business system is served
-from what the original run recorded; anything that represents a decision is made
-again by the version under test.
+That split is the whole design. Anything that reads Stripe is served from what
+the original run recorded; anything that represents a decision is made again by
+the version under test.
 
 Which side a tool falls on is a flag on the tool definition, `rerunOnReplay`. It
-defaults to false, so a new tool that reads Acme fails loudly on replay rather
+defaults to false, so a new tool that reads Stripe fails loudly on replay rather
 than quietly comparing the new version against today's state. Only
 `search_knowledge` and `check_policy` set it.
 
 ## The three things that make a replay number real
 
 **1. Point-in-time state, everywhere it is read.** Blocking live reads inside the
-pipeline is not enough. Evaluation reads the business system too, so a replayed
-run gets `evaluateRun({ externalState })` built from the reconstructed state.
-Without that, a run is marked wrong because some later run created a replacement
-on the same order.
+pipeline is not enough. Evaluation needs the same view, so a replayed run gets
+`evaluateRun({ externalState })` built from the reconstructed subscription and
+refund records. Without that, a run is marked wrong because some later run
+refunded the same charge.
 
 **2. Canonical keys.** Recorded outputs are keyed `toolName:canonicalJson(input)`.
 The recorded side comes out of a `jsonb` column and Postgres does not preserve key
@@ -51,7 +51,7 @@ an off-by-one.
 | the original run recorded no intent | nothing to compare the new classification against |
 | the original run never finished | there is no outcome |
 | the run hit a timeout, a 5xx or a verify failure | the recorded outputs are the successful ones; a replay sails through and reports an improvement that is really a missing fault |
-| the new version called a business read the old run never made | serving it live would compare against today |
+| the new version called a Stripe read the old run never made | serving it live would compare against today |
 
 Every excluded run is printed with its reason. Silently including them is how a
 replay produces confident, meaningless comparisons.
@@ -74,7 +74,7 @@ escalationRate      38.9%   38.9%    +0.0
 ## Sampling
 
 Stratified by intent and outcome, round-robin across strata. A random sample of
-production traffic is 80% order-status lookups and tells you nothing about
+production traffic is mostly billing questions and tells you nothing about
 refunds.
 
 ## Reading the report

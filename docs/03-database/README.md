@@ -1,8 +1,10 @@
 # Database
 
-One Postgres 17 database with pgvector, running in Docker. The Kora tables and the
-Acme mock commerce tables live side by side so there is a single thing to reset.
-Acme's tables are all prefixed `acme_`.
+One Postgres 17 database with pgvector, running in Docker. It holds Kora's own
+records: conversations, runs, traces, policy checks, evaluations, approvals and
+the encrypted per-tenant settings. It does **not** hold a copy of the money.
+Subscriptions, invoices, charges and refunds live in Stripe, and Kora reads them
+when it needs them.
 
 ## How application code reaches the database
 
@@ -42,8 +44,10 @@ connection that forgot to reset would otherwise serve the previous tenant's rows
 For a transaction that needs a different tenant, `withTenantTx` sets it locally so
 it unwinds with the transaction.
 
-Twenty-two tables are covered. The auth tables are deliberately not: a user and a
-session are not tenant-owned, and scoping them would break sign-in.
+Twenty-five tables are covered, including `tenant_settings` (which holds the
+encrypted Stripe key) and `stripe_webhook_events`. The auth tables are
+deliberately not: a user and a session are not tenant-owned, and scoping them
+would break sign-in.
 
 `packages/db/test/isolation.test.ts` proves it with queries that have **no
 `WHERE tenant_id` at all**:
@@ -167,5 +171,9 @@ user. It is idempotent: it checks for the operator by email and returns early if
 one exists. The password hash is written directly in Better Auth's scrypt
 `<salt>:<key>` format so seeding does not have to boot the auth server.
 
-Acme's own seed data (customer `cus_014`, orders 9832 to 9836) is separate and
-lives in `services/mock-commerce/src/seed.ts`.
+`pnpm kora seed` then runs the Stripe fixtures for that tenant. Those are
+currently in-memory (`StubFixtureBackend`) and write a manifest to
+`tenant_settings.stripe_fixtures`; nothing is created in a Stripe account. See
+[Status](../00-overview/status.md#what-is-not-proven).
+
+The tenant's Stripe key is not seeded. Set it with `pnpm kora stripe:set-key`.

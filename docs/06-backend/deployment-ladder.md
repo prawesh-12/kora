@@ -69,31 +69,40 @@ sequenceDiagram
     participant C as Customer
     participant K as Kora (shadow)
     participant H as A person
-    participant A as Acme
+    participant S as Stripe
     participant J as shadow-compare (daily)
 
     C->>K: message
-    K->>A: reads
-    K-->>K: proposes create_replacement, executes nothing
-    H->>A: creates the replacement themselves
+    K->>S: reads
+    K-->>K: proposes create_refund, executes nothing
+    H->>S: issues the refund themselves
     J->>K: read the proposal
-    J->>A: read what exists on the order since the run
+    J->>S: read what changed on the subscription since the run
     J-->>J: match / action_differs / amount_differs / no_human_record
 ```
 
-The ground truth is sound precisely because shadow mode writes nothing: anything
-on the order after the run was done by someone else.
+The ground truth would be sound precisely because shadow mode writes nothing:
+anything on the subscription after the run was done by someone else.
 
 Two rules keep the number honest:
 
 - **No human record is skipped, not counted as agreement.** Counting it would
   make an untouched queue look like a perfect agent.
-- **Amounts are only compared for refunds.** A replacement and a cancellation
-  carry no money in Acme, so pricing the proposal but not the record would report
-  every matched replacement as a disagreement over nothing.
+- **Amounts are only compared for refunds.** A cancellation and a plan change
+  carry no money on the action itself, so pricing the proposal but not the record
+  would report every matched cancellation as a disagreement over nothing.
 
 Disagreements are ranked by value at risk. The expensive ones are the ones worth
 reading.
+
+**The last read in that diagram does not happen yet.** Reading what a person
+actually did now means reading Stripe, and only `packages/tools` may do that. No
+tool exposes "what changed on this subscription since T", so
+`services/worker/src/jobs/shadow-compare.ts` records every proposal with a null
+actual. Because a null actual is *skipped* rather than counted as agreement, the
+agreement rate stays honest — it is simply computed over nothing, and the skipped
+count on `/ops/shadow` is the whole population. Closing this needs a
+"changes since" read tool behind the chokepoint.
 
 ## Promotion
 

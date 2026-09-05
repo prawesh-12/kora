@@ -61,7 +61,7 @@ count — a 404 or a malformed body says nothing about whether the dependency is
 
 When the breaker is open the pipeline fails fast with `UPSTREAM_5XX` before the
 idempotency claim, writes the `tool_executions` row so the trace shows why nothing
-happened, and lets the agent escalate. Acme is never called.
+happened, and lets the agent escalate. Stripe is never called.
 
 A breaker whose `since` marker is more than ten minutes old is logged at error with
 `code: BREAKER_STUCK_OPEN`, at most once a minute. There is no alerting yet.

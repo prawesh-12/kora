@@ -1,6 +1,6 @@
 # Ledger: Kora Product Design Plan
 
-Direction for the Phase 8 product pass. Ledger is the visual language of a
+The design system the product is built to. Ledger is the visual language of a
 precise financial ledger: high contrast, generous whitespace, tabular
 monospace numerals for every amount and id, hairline structure that carries
 meaning, one reserved brand accent, and status color used only for state.

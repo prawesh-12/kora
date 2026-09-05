@@ -1,11 +1,14 @@
 # Kora
 
-Kora is a customer support agent. A customer describes a problem, Kora looks up
-their order, checks the rules, does the thing if the rules allow it, and then
-reads the order back to make sure it really happened before telling the customer.
+Kora is a money-operations agent for subscription businesses. A customer asks for
+a refund, a cancellation, or a plan change; Kora looks their subscription up in
+Stripe, checks the rules, does the thing if the rules allow it, and then reads it
+back out of Stripe to make sure it really happened before telling the customer.
 
-That last part is the point. It does not say a replacement was created because it
-sent the request. It says so because it looked.
+That last part is the point. It does not say a refund was issued because it sent
+the request. It says so because it looked.
+
+Stripe Billing, test mode.
 
 ---
 
@@ -20,27 +23,33 @@ worked.
 
 ## Running it
 
-You need Node 24 or newer, pnpm, and Docker. You do not need an API key. Kora
-ships with an offline model, so everything works with no account anywhere.
+You need Node 24 or newer, pnpm, and Docker. You do not need an LLM API key. Kora
+ships with an offline model, so everything runs with no account anywhere.
 
 ```bash
 cp .env.example .env
 pnpm install
-pnpm infra:reset                            # database and cache, ready to use
+pnpm infra:reset                            # database and cache, migrated and seeded
 
-pnpm --filter @kora/mock-commerce start &   # the pretend shop, on :4001
+pnpm kora stripe:set-key --key rk_test_...  # a restricted test-mode key for this tenant
+
 pnpm --filter @kora/worker start &          # background jobs
 pnpm --filter web dev &                     # Kora, on :3000
 
-pnpm kora scenarios                         # should print 12 of 12 passed
+pnpm kora scenarios                         # the acceptance suite, 22 scenarios
 ```
+
+The key is stored encrypted, per tenant. Without one, every money write fails
+closed and escalates rather than guessing — which is the correct behaviour, but
+it means nothing gets refunded.
 
 Then open http://localhost:3000/chat and say:
 
-> My coffee machine from order 9832 arrived broken. I want a replacement.
+> I want a refund for my last payment.
 
-To see the operator side, sign in at http://localhost:3000/login with
-`operator@acme.test` and `operator-password`.
+To see the operator side, sign in at http://localhost:3000/login with the
+operator credentials from your `.env` (`KORA_SEED_OPERATOR_EMAIL` and
+`KORA_SEED_OPERATOR_PASSWORD`).
 
 ---
 
@@ -48,16 +57,19 @@ To see the operator side, sign in at http://localhost:3000/login with
 
 ```
 apps/web                  the chat and the operator screens
-packages/core             types, money, ids, the rules engine
+packages/core             types, money, ids, the rules engine, secrets
 packages/db               database tables and queries
-packages/tools            the nine things the agent can do
+packages/tools            the Stripe provider and the eleven things the agent can do
 packages/ai               the agent itself
 packages/evaluation       scoring the agent and re-running old conversations
-services/mock-commerce    a pretend shop to act against
 services/worker           background jobs
 config                    the agent, the rules, the knowledge it reads
+scenarios                 the acceptance suite
 docs                      everything else
 ```
+
+Only `packages/tools` is allowed to import the Stripe SDK. `pnpm lint` fails the
+build if anything else does.
 
 ---
 
@@ -65,8 +77,9 @@ docs                      everything else
 
 ```bash
 pnpm test           # all the tests
-pnpm lint           # formatting plus a few structural checks
-pnpm kora bench     # 120 test conversations, scored
+pnpm lint           # formatting plus five structural checks
+pnpm kora scenarios # the acceptance suite
+pnpm kora bench     # the benchmark, scored
 pnpm kora replay    # run old conversations again against a new version
 pnpm kora chaos     # break things on purpose and check nothing goes wrong
 ```
@@ -86,9 +99,7 @@ or a duplicate write. What each failure looks like and what to do:
 | Refunds timing out, breaker flapping | Stripe rate limit (429) | stop retrying by hand, let the backoff work, lower traffic or raise quota |
 | Refund approved but never confirmed | webhook down or refund stuck `pending` | check the webhook endpoint and signature secret, re-fetch the refund in Stripe |
 
-Full steps for each are in `docs/runbook.md` (Stripe sections). The Stripe
-integration itself is still being built — `docs/00-overview/status.md` says
-exactly what is proven and what is not.
+Full steps for each are in `docs/runbook.md`.
 
 ---
 

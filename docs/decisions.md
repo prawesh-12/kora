@@ -40,21 +40,22 @@ hidden clock read, and a pure function is the thing being promised.
 ## `full` is the default deployment mode, not `human_approval`
 
 **Context.** The tenant seed defaults to `human_approval`, and that mode means
-"every `write_high` requires
-approval regardless of what policy says". But scenario H1 expects order 9832 to
-resolve with no approval, and a first-time reader is expected to send
-the 9832 message and receive a real replacement id. Under `human_approval` that
-demo stops at an approval card and MVP condition 1 cannot be met.
+"every `write_high` requires approval regardless of what policy says". But S1
+expects a standard in-window refund to resolve with no approval, and a first-time
+reader is expected to ask for a refund and receive a real refund id. Under
+`human_approval` that first run stops at an approval card, and the thing the
+product exists to show never happens.
 
 **Decision.** `KORA_DEPLOYMENT_MODE` defaults to `full`, and the seeded tenant is
-`full`. `human_approval` keeps its meaning and is still exercised
-by scenario H2.
+`full`. `human_approval` keeps its meaning and is still exercised by the mode
+tests in `packages/tools/test/modes.test.ts`.
 
-**Why.** `full` does not mean unsupervised. The policy engine still routes anything
-at or above INR 5,000 to a person via `high_value_needs_approval`, which is what
-actually protects the money. `human_approval` is a stricter blanket mode on top of
-that, useful for a first week in production, not a sensible default for a system
-whose own acceptance suite expects otherwise.
+**Why.** `full` does not mean unsupervised. The policy engine still routes any
+refund at or above INR 5,000 to a person via `refund_high_value`, an unpaid
+cancellation via `cancel_unpaid_immediate`, and a large proration credit via
+`plan_large_credit`. Those are what actually protect the money. `human_approval`
+is a stricter blanket mode on top of them, useful for a first week in production,
+not a sensible default for a system whose own acceptance suite expects otherwise.
 
 **Trade-off.** A deployment that wants a person on every write has to set the
 variable. That is one line, and it is now documented in the QUICKSTART.
@@ -272,7 +273,7 @@ Next bundles that hook for the edge runtime too, and webpack resolves `dotenv`'s
 `require('path')` statically however the call is guarded, so `next dev` would not
 start.
 
-**Decision.** Every `apps/web` and `services/mock-commerce` script is prefixed with
+**Decision.** Every `apps/web` script is prefixed with
 `dotenv -e ../../.env --`.
 
 **Why.** It sets real process environment variables before the framework starts, so
@@ -288,7 +289,7 @@ when `NODE_ENV=development`.
 
 ## `check_policy` records the evaluation it performed
 
-**Context.** A run that is correctly denied never calls `create_replacement`, so the
+**Context.** A run that is correctly denied never calls `create_refund`, so the
 pipeline never writes a `policy_checks` row for that action. The trace then showed
 no reason why nothing happened, and the scenario runner had nothing to assert
 `policyDecision` against.
@@ -302,42 +303,60 @@ one, including allows. Without it the most common outcome in the suite — a cor
 refusal — is invisible in the trace.
 
 **Trade-off.** When the write does go ahead there are two rows for
-`create_replacement`: the advisory one from the tool and the authoritative one from
-the pipeline. Both are true records of evaluations that happened. The pipeline's is
+`create_refund`: the advisory one from the tool and the authoritative one from the
+pipeline. Both are true records of evaluations that happened. The pipeline's is
 the one that gated the action.
 
 ## A correct refusal is not a verified resolution
 
 **Context.** `verifiedResolution` started as "resolved automatically, every critical
-check MET, and `outcome_achieved` MET". Scenario N2 satisfies all three — the policy
-correctly denied an out-of-window replacement and nothing was written — and the
-expects `verifiedResolution: false` for it.
+check MET, and `outcome_achieved` MET". S2 satisfies all three — the policy
+correctly denied a refund outside the window and nothing was written — and the
+scenario expects `verifiedResolution: false` for it.
 
-**Decision.** For a `DAMAGED_ORDER` run, `verifiedResolution` additionally requires a
-write that actually landed: a `create_replacement` execution that is `ok` with
-`verified: true`, or `replayed`.
+**Decision.** For an intent that exists to change something — `REFUND_REQUEST`,
+`CANCEL_SUBSCRIPTION`, `CHANGE_PLAN` — `verifiedResolution` additionally requires a
+write that actually landed: a money write that is `ok` with `verified: true`, or
+`replayed`.
 
-**Why.** A correct refusal is a success for policy
-compliance and a non-resolution for VRR. Do not conflate them." Counting refusals as
-resolutions inflates the headline number with cases where nothing was fixed.
+**Why.** A correct refusal is a success for policy compliance and a non-resolution
+for the verified resolution rate. Counting refusals as resolutions inflates the
+headline number with cases where nothing was fixed.
 
 **Why `replayed` counts.** The run that owned the idempotency claim did the work and
-the verification. A run that replayed proved it did not duplicate it. Both customers
-got a correct answer about a replacement that exists.
+the verification. A run that replayed proved it did not duplicate it. Both
+customers got a correct answer about a refund that exists.
 
-## Grounding lets the agent repeat an order number the customer gave
+**Why `simulated` counts, but only in simulation and shadow.** Nothing executes in
+those modes, so `simulated` is the strongest claim a write can make there: the
+action was allowed and reached the point of execution. Requiring a verified write
+would score every replayed run zero and make a version comparison measure the
+deployment mode instead of the versions. The mode is read from
+`agent_runs.deployment_mode`, not guessed from tool statuses.
+
+## Grounding lets the agent repeat an id the customer gave, but never an amount
 
 **Context.** The grounding guard asserts every identifier in the reply appears in a
-tool result from this run. Scenario N1 asks about order 9999, which does not exist,
-so `get_order` returns nothing and the reply "I could not look up order 9999" was
-flagged as ungrounded.
+tool result from this run. A customer who names a subscription that does not exist
+gets a reply like "I could not find subscription sub_0000", and that was flagged as
+ungrounded.
 
-**Decision.** Order ids and money amounts may come from a tool result **or from the
-customer's own message**. Replacement ids must come from a tool result, always.
+**Decision.** Stripe ids in the reply may come from a tool result **or from the
+customer's own message**. Money amounts must come from a tool result, always, and
+are compared in minor units so `INR 3,499` in the reply has to match `349900` in a
+tool output exactly.
 
-**Why.** Telling a customer the number they just typed is not a hallucination, and
-refusing to is unhelpful. Repeating a `REP-` id the customer supplied is different:
-it would claim an action happened. That asymmetry is the rule.
+**Why.** Telling a customer the identifier they just typed is not a hallucination,
+and refusing to is unhelpful. An amount is different: it is the claim itself.
+Saying "we refunded 3,499" when no tool result carries `349900` is the exact
+failure this guard exists to catch, so the customer's message never excuses one.
+
+**Trade-off.** The id rule does not distinguish a `re_` refund id from a `sub_`
+subscription id, so a customer who writes a plausible-looking refund id into their
+own message could have it echoed back. That is narrower than it looks — the reply
+still cannot claim an amount, and every write is separately gated by policy,
+idempotency and verify — but it is a real gap. Tightening it means treating ids the
+agent could only know by acting differently from ids the customer already knows.
 
 ## The offline model provider
 
@@ -346,8 +365,9 @@ has to run.
 
 **Decision.** `packages/ai/src/mock/` implements a real `LanguageModelV3`. Its
 behaviour comes from planner functions that read the prompt the SDK built: one
-handles structured-output intent classification, one walks the damaged-order
-workflow reacting to what each tool actually returned. `KORA_MODEL_PROVIDER=mock` is
+handles structured-output intent classification, one walks the refund and
+cancellation workflows reacting to what each tool actually returned.
+`KORA_MODEL_PROVIDER=mock` is
 the default; `openai` and `anthropic` are wired and work with a key.
 
 **Why.** Implementing the provider interface rather than stubbing the gateway means
@@ -379,11 +399,18 @@ because chunk sizing is load-bearing and character length is not a proxy for it.
 
 Add `remark` when the corpus starts containing markdown that a regex gets wrong.
 
-## Twelve scenarios, not eleven
+## The injection scenarios are part of the same suite, not a separate one
 
-The suite was specified as "eleven scenarios" and then enumerated as H1, H2 and
-N1 through N10,
-which is twelve. `scenarios/` has twelve files and the suite runs all of them.
+`scenarios/` holds S1 to S12, the money workflows, and S13 to S22, ten
+prompt-injection attempts. They are one directory and one runner, and
+`pnpm kora bench` scores all 22 together.
+
+**Why.** An injection attempt is not a different kind of test: it is a
+conversation that must reach the right outcome, which happens to be "no write".
+Splitting it into its own suite makes it something you can forget to run, and the
+one property it checks — that a crafted message cannot move money — is the
+property that must never regress quietly. Scenarios carry a `category` field, so
+`--category` still narrows a run without needing a second suite.
 
 ## Operator read paths live in `packages/db/src/queries/`, beside the repositories
 
@@ -585,36 +612,36 @@ gate, because it looks like one.
 **Trade-offs.** Kappa is reported and not acted on today. Replacing the labels by
 hand is the prerequisite for growing the set, and the calibration output says so.
 
-## A benchmark scenario resets only what a lock protects
+## Scenarios run sequentially against a per-scenario billing stub
 
-**Context.** 120 scenarios run five at a time against one Acme dataset. Each
-scenario resets its fixture before running.
+**Context.** Every scenario needs Stripe to be in a specific state: a charge five
+days old, a charge forty-five days old, a charge with part of it already refunded.
+Sharing one account between scenarios means each has to set that state up and tear
+it down around the others.
 
-**Decision.** A full reset happens once per pass and nowhere else. A scenario
-resets only the orders it seeds. A scenario with no seeded order resets nothing.
-Idempotency keys are cleared once per pass, never per scenario.
+**Decision.** Each scenario installs a fresh in-memory `BillingProvider` seeded
+from its own `seed` block, and scenarios run one at a time. Idempotency claims are
+cleared once per pass, never per scenario.
 
-**Why.** Each rule closes a way for one scenario to corrupt another, and every one
-of them produces a failure that reads as a product regression rather than a
-harness problem: the scenario fails in a full run and passes in isolation.
+**Why.** A fresh provider per scenario means there is no shared state to corrupt,
+so there is no reset to get wrong and no lock to remember. `setBillingProvider` is
+process-wide module state, which is what forces the sequencing: two scenarios at
+once would share one stub.
 
-- Scenarios sharing an order race each other. The per-order lock serialises them.
-- A scenario with no order holds no order's chain, so the lock cannot protect
-  anything from it. If it resets everything, it wipes the fixture out from under
-  whatever is running alongside.
-- Clearing every idempotency key mid-pass can delete a claim another scenario is
-  holding, which is how a benchmark manufactures the duplicate write it exists to
-  detect.
+Clearing idempotency claims per scenario would be the one remaining way to
+manufacture a false result. Deleting a claim another scenario is holding is
+exactly how a suite fabricates the duplicate write it exists to detect, so that
+happens once per pass. No scenario needs it more often: each opens a new
+conversation, and the claim key is scoped to the conversation.
 
-**Alternatives considered.** Running scenarios sequentially removes all of it and
-takes far longer, which in practice means the benchmark stops being run. Giving
-each scenario its own dataset means the mock service grows a tenancy model to
-serve a test harness.
+**Alternatives considered.** Running against a real Stripe test account with Test
+Clocks would be a stronger signal, and it is what the fixtures script is meant to
+grow into. It cannot run in parallel either — a Test Clock is shared state — and
+it needs an account, so it is not what a contributor gets from a clean clone.
 
-**Trade-offs.** The rule has to be remembered when a scenario is added: anything
-that resets shared state must run while nothing else does, or be scoped to
-something a lock protects. It is written at both reset sites and in
-`docs/09-testing/README.md`.
+**Trade-offs.** The suite is fast, deterministic and free, and it proves nothing
+about whether Stripe behaves the way the stub does. That gap is named in
+[Status](00-overview/status.md#what-is-not-proven) rather than papered over.
 
 ## A simulated write counts as a write, but only in a mode where nothing executes
 
@@ -670,16 +697,18 @@ follow that rule.
 component is used, and no icon library. The route carries its own stylesheet,
 `marketing.css`, with its own tokens, and shares nothing with the product theme.
 
-**Why.** The three effects the page is built around are a headline whose lines sit
-in solid blocks that hug the text, full-bleed bands cut on a diagonal, and a
-halftone dot grid. None of these exists in shadcn, ReUI, beUI or Beautiful UI. They
-were searched for by name and by shape: highlight headline, marked text, mark
-element, diagonal section, angled divider, clip-path band, skew section, dot grid,
-halftone, marquee, offset card. The registries cover application furniture, which
+**Why.** The page is built around effects the registries do not carry — a headline
+whose lines sit in solid blocks that hug the text, and hand-drawn SVG diagrams of
+the pipeline and the read-back. The registries cover application furniture, which
 is the product app's problem, not this page's.
 
 Forcing a registry component into the layout would also import the product theme's
-radii, shadows and hover states, and the page specification bans all three.
+radii, shadows and hover states, and the page bans all three.
+
+The one component the page does share with the product is the Proof Card, and that
+is deliberate: the page's central claim is what that card shows, so showing a
+drawing of it instead of the real one would be the exact thing the page argues
+against.
 
 **Trade-offs.** The route cannot inherit registry fixes or accessibility work. It is
 held to its own gate instead, `scripts/marketing-gate.sh`, wired into `pnpm lint`,
@@ -699,8 +728,9 @@ logos is either false or borrowed. No stand-in was substituted, so the marquee
 technique is not built at all.
 
 There is no statistics band. Numbers that appear in product fragments are sample
-values inside a depicted interface, the same kind of thing as `REP-2931`, and none
-of them is presented as a measurement of KORA.
+values inside a depicted interface — a refund amount on an illustrated Proof Card —
+and none of them is presented as a measurement of Kora. There is no measured
+performance to report, and the page does not invent one.
 
 Second-tier navigation carries `Security` and `Pricing` in the brief. Neither has a
 section on the page, and an anchor to a section that does not exist is a dead link,
@@ -708,481 +738,10 @@ so both were dropped rather than pointed at nothing. The footer is three columns
 real destinations for the same reason, and its newsletter block is a description and
 a contact link because a subscribe form here would post nowhere.
 
-**Why.** The page's only real claim is that KORA reads the business system back. A
-reader who catches one invented number stops believing the rest.
+**Why.** The page's only real claim is that Kora reads Stripe back. A reader who
+catches one invented number stops believing the rest. Every identifier, rule id,
+amount and outcome shown in a figure is checked against `config/policies/`,
+`packages/tools/src/tools` and the real record shapes before it ships.
 
 **Trade-offs.** The page is shorter and has less social proof than the reference it
 was drawn from. That is the correct trade before there are customers to name.
-
-## The evaluator runs nine checks, so the page says nine
-
-**Context.** The brief describes the Evaluate pillar as seven deterministic checks
-and asks for a seven-row illustration.
-
-**Decision.** The page says nine and lists all nine by their real identifiers, in
-the order `CHECKS` declares them in `packages/evaluation/src/checks/index.ts`.
-
-**Why.** There are nine. On a page whose subject is not overstating what happened,
-shipping a count that disagrees with the code is the one mistake that costs the most.
-
-**Trade-offs.** The illustration is two rows taller than the brief's composition.
-
-## The trace figure is rebuilt in HTML, not captured
-
-**Context.** The product band is specified as a screenshot of the trace screen,
-because that screen carries the argument: the verdict, the rule that produced it,
-and the read-back.
-
-**Decision.** The figure is HTML and CSS, not an image. It shows the verdict banner
-first, the policy check nested inside the `create_replacement` card it applies to,
-and the read-back row that closed the run.
-
-**Why.** The shipped trace screen does not present it in that order yet. A capture
-taken today would show the verdict in a third column and durations that read `0ms`,
-which argues against the page rather than for it.
-
-**TODO.** Replace this with a real 2x capture once the trace screen redesign lands.
-The figure lives in `apps/web/app/(marketing)/components/trace.tsx` and swapping it
-for a `next/image` is a single-component change.
-
-**Trade-offs.** It is a drawing of the product, so it can drift from the product. The
-TODO above is the guard, and the check identifiers and route paths it shows are read
-from the real ones.
-
-## Two palette values moved to clear WCAG AA
-
-**Context.** The page has to score 100 on accessibility, and the palette was fixed
-by the brief.
-
-**Decision.** `--ink-muted` moved from `#6e6e73` to `#6a6a6f`. Text on `--signal`
-and on `--rust` is `--ink`, not white.
-
-**Why.** `#6e6e73` on `--paper-warm` measures 4.41:1, under the 4.5:1 floor, and it
-is the colour of the whole second navigation tier and every footer heading. The new
-value clears 4.5 on warm, cream and white and is four steps darker, which is not a
-visible change. White on `--signal` measures 2.87:1 and white on `--rust` 3.39:1;
-both are well under. `--ink` on the same grounds measures 6.81:1 and 5.76:1, so the
-fix needed no new colour. The palette still has exactly the eleven values it had.
-
-**Trade-offs.** The read-back bar reads as dark text on green rather than white on
-green. `--signal` still means verified, which was the rule that mattered.
-
-## The nav and the accordion ship without JavaScript
-
-**Context.** The brief expects the accordion and the collapsing navigation to be
-client components.
-
-**Decision.** Both are CSS and HTML. The accordion is `<details name="how-it-works">`,
-whose exclusive behaviour and keyboard handling are native. The second navigation
-tier collapses on a scroll-driven animation timeline. The only client component on
-the route is the section reveal.
-
-**Why.** It keeps everything above the fold server-rendered, which is what the LCP
-requirement is really asking for, and it is less code than either would have been.
-
-**Trade-offs.** Where `animation-timeline` is unsupported the second tier stays
-visible, and where `::details-content` is unsupported the accordion opens instantly.
-Both degrade to a working page rather than a broken one.
-
-The reveal is an observer rather than a `view()` timeline because a view timeline
-runs backwards when you scroll up, and the brief asks for the fade to happen once.
-It leaves anything already on screen exactly as the server rendered it.
-
-## What the landing page had to stop claiming
-
-**Context.** The page argues that KORA checks its own work against the business
-system. A claim on it that does not survive the same check is the one thing that
-cannot be there. A pass over the page against `packages/`, `config/`,
-`services/` and `apps/web/app/api/` found several.
-
-**Removed, and why.**
-
-*A `/v1/` API.* The page showed four `/v1/` routes. No such prefix exists. The
-real routes are under `/api`, and one of the four, `/v1/conversations/{id}/messages`,
-had no counterpart at all: messages are posted to `/api/chat/{conversationId}`.
-All four rows now name routes that exist, with the methods their handlers export.
-
-*An MCP server.* The page opened with an `mcpServers` configuration block. There
-is no MCP server anywhere in this repository. The block is gone, and the code
-panel shows a trimmed response from `GET /api/conversations/{id}/trace` instead,
-with the field names and enum values that endpoint really returns.
-
-*A two-minute trace video.* There is no video. The button reads "See a real
-trace" and moves to the trace figure further down the page, which is a thing
-that exists.
-
-*`Docs` and `Company` in the top navigation.* Neither had a destination. The top
-tier now lists three routes in the app and nothing else, and `Evaluation` appears
-there rather than in both tiers.
-
-*A policy decision that the policy engine would not make.* The trace figure
-showed `amountMinor 349900` being held by `high_value_needs_approval`. That rule
-fires at `gte: 500000`, so the real engine would have matched `standard_replacement`
-and allowed it. The figure now runs on seeded order 9833 at `899900`, which is a
-case that rule genuinely holds.
-
-*Invented identifiers.* `ORD-8841` is not an order id format; seeded orders are
-bare numbers like `9832`. `REP-2931` is not a replacement id; they are
-`REP-` and four padded digits. `classify_intent` and `reply_to_customer` are not
-registered tools; the step kinds are `RunStepKind` values and the tools are the
-ones in `packages/tools/src/tools`. `within_window` and `under_threshold` are not
-rules in the policy file. All replaced with the real ones.
-
-*A replay comparison that did not match the report.* The Improve panel had `v3`,
-`v4` columns and metric names of its own. `ReplayReport.aggregate` is keyed
-`verifiedResolution`, `policyCompliance`, `escalationRate`, `meanLatencyMs` and
-`meanCostUsdMicros`, and `renderReplay` prints `metric`, `from`, `against`,
-`delta`, with regressions above the table so a reviewer cannot read the headline
-and stop. The panel now does the same.
-
-**Kept, because it checked out.** Nine deterministic checks: `CHECKS` declares
-exactly nine, and the page lists all nine by their real ids. Replay itself is
-built, so the Improve pillar stays.
-
-**Trade-offs.** The page now depends on details of the code and will need
-revisiting when they move. That is the right direction for the dependency to
-run on a page about verification.
-
-## Layout corrections the transcription introduced
-
-**Context.** Several measurements were carried over from the reference design
-without checking what they do in this page's own grid.
-
-**Decision and why.**
-
-The trace figure was lifted 120px into the section above it, which put it
-through the hero's own call to action. The lift is 48px, which is what it takes
-for the button to clear it. The figure was also 1180px in a 1376px container, so
-the band it sits on read as a stripe down one side rather than a backdrop; it is
-1100px now and the plum shows properly to its right.
-
-The highlight blocks used 0.06em of vertical padding. At `line-height: 0.98` the
-inline box is shorter than the glyphs, so capitals broke the top edge of the
-block. 0.14em clears the ascenders at 72px, 56px and 42px.
-
-The two-by-two grid asked for cells of 382px inside a column that is 52% of the
-container. At 1440 that is 764px of cells in 716px of column, which is what
-collapsed the grid into three ragged columns. The cells size to the column and
-hold their square with `aspect-ratio`.
-
-Sections padded both top and bottom, so every boundary between two of them was
-240px. Padding is a leading rule now, applied to the top only, with the last
-section closing the run. The one caveat is that each section is wrapped for its
-reveal, which makes every one of them `:last-of-type`; the closing rule is named
-rather than positional for that reason.
-
-The rust slab behind the final card was inset from the card, which pushed it off
-the left of the viewport and put two pixels of horizontal scroll on the page at
-768. The slab sits on the container edge and the card is inset from it, which is
-also the only arrangement where the peek is visible on both sides.
-
-## The root layout stops preloading a font the landing page never uses
-
-**Context.** The marketing route scored 93 on Lighthouse performance against a
-95 floor, entirely on a 3.2s largest contentful paint. First paint was 1.1s, so
-the gap was fonts, not code.
-
-**Decision.** `Inter` in `apps/web/app/layout.tsx` is loaded with
-`preload: false`.
-
-**Why.** The root layout puts three font families on every route in the
-application: Inter and JetBrains Mono from itself, and Inter Tight from the
-marketing layout below it. `next/font` preloads a family on every route where
-its loader runs, and the root layout runs everywhere, so the landing page was
-preloading roughly 130KB of fonts across three files. It never uses Inter at
-all: its display face is Inter Tight and its mono is JetBrains Mono.
-
-Dropping that one preload takes performance to 97 and LCP to 2.4s. The landing
-page now fetches two font files rather than three, and Inter is not among them.
-
-**Trade-offs.** Product routes still declare, load and apply Inter, but they
-fetch it when the stylesheet is parsed rather than from a link in the head. They
-already set `display: swap`, so text paints immediately in the fallback either
-way; the swap lands slightly later than it did. That was measured on `/login`,
-where the body font still resolves to Inter and the file still loads.
-
-The larger fix is per-route fonts: move Inter and JetBrains Mono out of the root
-layout into the routes that use them, and let the marketing layout declare its
-own two. That removes the trade-off entirely and is worth doing when the product
-routes next get attention. It was not done here because it touches three layouts
-outside the marketing route for a gain the single-line change already delivers.
-
-## The product shots are looping HTML, not video
-
-**Context.** The landing page needed a moving proof shot of a trace, and the
-console tour needed four. The obvious answer is a screen recording.
-
-**Decision.** Both are timed reveals of the HTML fragments the pages already
-have. `apps/web/components/marketing/Sequence.tsx` runs them.
-
-**Why.** A capture of the operator console today would ship the interface that
-is still being fixed. Beyond that, a video file would be the only raster asset
-on a page whose whole visual system is flat HTML: it is sharp at exactly one
-size, it costs largest-contentful-paint budget, and it goes stale the moment a
-label changes. A sequence built from the fragments cannot drift from them.
-
-**How it works.** Every beat is a CSS animation with its own `animation-delay`,
-set from an inline `--at` custom property. `Sequence` owns one timer per cycle
-and nothing else: no per-frame state, no work on the main thread while it plays.
-The reset is a hard cut, because dropping a class, forcing a reflow and putting
-it back returns every element to its first frame together.
-
-That design is also what keeps the fragments server-rendered. Driving beats from
-React state was tried first and measured: it turns every fragment into a client
-component and puts their hydration in front of the hero's paint, worth 0.4s of
-LCP on the landing page.
-
-The resting state is empty rather than composed. Composed means the server's
-first paint shows the ending, a green RESOLVED banner over a timeline that has
-not run yet, which gives the sequence away before it starts. The cost is that
-with JavaScript disabled the figures stay empty; the surrounding prose and the
-caption still carry the argument, and showing the ending first is worse.
-
-**Trade-offs.** No controls. There is no play, pause, replay or progress bar, so
-the whole surface is the recording and there is nothing to mistake for product
-chrome. The loop pauses when it leaves the viewport and restarts from the top on
-return, so no timer ever runs off-screen.
-
-## The hero headline blocks were cutting their own glyphs
-
-**Context.** The reported fault was that capitals in line one were clipped by
-the top of the highlight block, and the fix applied twice was more vertical
-padding.
-
-**Decision.** Each line of the headline is a block of its own, separated by the
-difference between the block height and the line advance.
-
-**Why.** The padding was not the problem, and adding more made it worse. A
-highlight block is as tall as the font's own box plus its padding, about 1.49em
-at 72px. The line advance at `line-height: 0.98` is 0.98em. Two lines in one
-flow put the second block 0.98em below the first while the first is 1.49em
-tall, so the second painted over the bottom third of the first and cut the
-letters through the middle. Measuring the line box said everything was fine,
-which is why it was reported fixed twice; the glyph ink told a different story.
-
-The gap is derived from the type, not typed in: block height minus advance. The
-`<h1>` still computes to 72px on a line-height of 0.98.
-
-**Trade-offs.** The headline is two block elements rather than a `<br>`, which
-is what makes the badge positionable against line one rather than the whole
-heading.
-
-## The band no longer lifts into the hero
-
-**Context.** The trace figure sat on a negative offset so it overlapped the
-white section above it, and the overlap kept landing the verdict banner on the
-hero's call to action.
-
-**Decision.** The band starts below the hero. No lift.
-
-**Why.** Two attempts to keep a safe overlap both measured clear at the widths
-tested and were still covering the button in practice. The overlap is
-decorative and the button is not. Clearance is now 184px at every width from
-375 to 1920, at every scroll position where both are on screen.
-
-## Numbers on the console tour are seeded, not measured
-
-**Context.** The four console scenes show rates and counts.
-
-**Decision.** Every identifier is the code's own: failure codes from
-`FAILURE_CODES`, their colour from `FAILURE_SEVERITY`, metric names from the
-`Metrics` interface, `get_order / upstream_4xx` exactly as
-`packages/db/src/queries/metrics.ts` builds it, and tools from the registry. The
-counts and rates behind them are figures from a seeded development database.
-
-**Why.** They are sample values inside a depicted interface, the same kind of
-thing as `REP-0001`, and none is presented as a measurement of how KORA
-performs. The run durations in particular read as tens of milliseconds because
-the seed runs against a mock agent, not a model.
-
-**Trade-offs.** A reader could take 30.4% as a claim. It is captioned as a
-console, not as a result, and no number from these scenes appears as a headline
-statistic anywhere on either page.
-
-Severity maps onto the existing palette rather than adding a colour: critical is
-`--rust`, normal is `--ink`, low is `--ink-muted`. Green still means verified and
-amber still means held for a person.
-
-## The root layout preloads neither product font
-
-**Context.** The landing page has to score 95 on Lighthouse performance with the
-hero headline as its largest contentful paint. Sitting at 94 to 97 across runs,
-it straddled the threshold.
-
-**Decision.** `Inter` and `JetBrains_Mono` in `apps/web/app/layout.tsx` are both
-loaded with `preload: false`.
-
-**Why.** The root layout puts three font families on every route: those two, plus
-Inter Tight from the marketing layout below it. `next/font` preloads a family on
-every route its loader runs on, and the root layout runs everywhere, so the
-landing page was preloading around 130KB across three files before painting a
-headline that needs one of them.
-
-It never uses Inter at all; its display face is Inter Tight. Nothing on any route
-is set in mono above the fold either: JetBrains Mono carries ids, codes and JSON
-further down the page. Both were competing with Inter Tight for the window that
-decides the paint.
-
-With neither preloaded the landing page holds 97 across runs and the console
-tour 96, and the landing page fetches two font files rather than three.
-
-**Trade-offs.** Product routes still declare, load and apply both faces; they
-fetch them when the stylesheet is parsed rather than from a link in the head.
-Both set `display: swap`, so text paints immediately in the fallback either way
-and the swap lands slightly later. Measured on `/login`, where the body font
-still resolves to Inter and the file still loads.
-
-The larger fix is per-route fonts: move both out of the root layout into the
-routes that use them, and let the marketing layout declare its own. That removes
-the trade-off and is worth doing when the product routes next get attention.
-
-## The hero and the trace band are each one screen
-
-**Context.** The landing page opened with a short hero and the plum band already
-creeping into the first viewport, so neither read as a whole thing.
-
-**Decision.** The hero is `calc(100dvh - 124px)`, the height of the viewport less
-the two navigation tiers, which are sticky but still in flow. The band that
-carries the trace is `100dvh`. The space the taller hero opens up is filled by a
-row of three claims along its floor, each naming something the run below it
-actually records: the policy file and version, the gates a write passes, and the
-check that has to be MET before the run counts as resolved.
-
-**Why.** The band arriving halfway up the first screen made the trace look like a
-footnote to the headline rather than the proof of it. Giving each its own screen
-lets the headline make the claim and the band demonstrate it.
-
-**Trade-offs.** Below 768 the hero drops back to its content height. A phone
-viewport minus 124px of navigation is not enough room for a 42px headline, a
-lead, a button and three claims without setting everything too small to read.
-
-The slack above the headline is fixed padding rather than an auto margin. Auto
-margins were tried and cost three points of Lighthouse performance: they make the
-heading's position depend on layout that settles when the font loads, so the
-element moves and its largest contentful paint is recorded again, later. Median
-LCP went from 2.57s to 2.96s across five runs each. The composition is balanced
-by choosing the padding instead.
-
-## The trace loop runs at 4.6s
-
-**Context.** The sequence ran a 7s cycle, which is a long time to watch a figure
-repeat itself on a page someone is scrolling past.
-
-**Decision.** 4.6s, with every beat tightened and the amber hold kept at 1.0s.
-
-**Why.** The hold is the argument: everything before it is the agent proposing,
-everything after is a person deciding. Compressing it would save a third of a
-second and lose the point of the sequence. The rest had slack in it.
-
-## The system map is hero furniture, cut to a quarter
-
-**Context.** The map first shipped as its own full-bleed section mid-page,
-carrying thirteen pipeline stages, four input tiles, three decide nodes and a
-four-metric Prove column.
-
-**Decision.** It lives in the hero's right column as an `--ink` panel, radius 4,
-no band padding and no heading of its own. The body paragraph and the call to
-action moved under the headline in the left column. The panel shows four columns
-of at most three items: message and order; intent and the rule engine; policy
-check, execute and verify; the check count and the outcome.
-
-**Why.** Mid-page it was a second argument competing with the trace band. In the
-hero it is the argument, next to the sentence that makes it. And at 494px wide
-it cannot carry a wall of thirteen rows: the full gate stays in the Act pillar
-further down, where there is room for it.
-
-**What moved and why.** Three things could not fit at panel scale and are not
-gone, only relocated.
-
-The policy identity is on the mono line under the tabs rather than inside the
-rule engine node. `acme_damaged_order` is eighteen characters; the node is 106
-units wide, which puts it under six pixels rendered. The line under the tabs is
-the full width of the panel and reads at twelve.
-
-That line also replaces the SVG's `<title>`. A `<title>` is what a browser
-renders as a hover tooltip, and at this size the tooltip covered the Act column.
-The line names the scenario, the policy and the decision, and changes with the
-tab.
-
-The per-scenario asserted-check count went with it. The panel says `9 checks`,
-which is the length of `CHECKS` and true of every run; which subset a scenario
-asserts is detail for a page with room for it.
-
-**The four column captions are gone.** They were the old accordion's bodies, and
-there is no room for four paragraphs beside a 560px panel. The same material is
-in the four pillars further down, which is where a reader who wants it will be.
-
-**Restructures at 1280, not 1024.** The brief says below 1024 the map moves under
-the call to action. At 1025 the hero's right column is 384px, which would put the
-diagram's labels near six pixels, so it stacks at the same step the type scale
-already uses. Restructured, not shrunk.
-
-**A stale copy of the old band CSS was overriding the panel.** Worth recording
-because it cost an hour: moving the map into the hero left the full-bleed version
-of its stylesheet in the file, 383 lines further down, where source order made it
-win. The symptom was font sizes that would not change no matter what was edited.
-
-## The system map replaces the accordion and the colour grid
-
-**Context.** "How it works" was an accordion of four steps beside a two-by-two
-grid of coloured panels. Both described the same run, and neither showed it as
-one thing.
-
-**Decision.** A single diagram on a full-bleed `--ink` band: inputs, the rule
-engine, the gate, the checks, and the return path back to the rule engine. The
-accordion's four bodies became the map's column captions. The eyebrow and the
-headline stayed.
-
-**Why.** The argument is that one run passes through one gate and comes back
-measurable. An accordion hides three quarters of that behind a click, and a grid
-of four coloured squares asserts it without showing it.
-
-**What the map is allowed to say.** Everything on it is read out of the
-repository:
-
-The thirteen stages in the Act column are the numbered steps of `runTool` in
-`packages/tools/src/pipeline.ts`, in the order it runs them: resolve version,
-validate input, permission check, policy check, limited-mode caps, approval
-gate, deployment mode gate, circuit breaker, idempotency claim, execute,
-validate output, verify, settle idempotency. The brief guessed seven.
-
-The four tabs are four files in `scenarios/`, by id: H1
-`damaged_order_within_policy`, H2 `damaged_order_above_approval_threshold`, N2
-`return_window_expired`, N7 `verification_failure`. Each tab's policy decision,
-outcome and asserted checks come from that file's `expect` block.
-
-The Prove column reports `9 run`, the length of `CHECKS`, against the number of
-checks the open scenario actually asserts. No rate, no percentage: the page has
-no measured performance to report and does not invent one.
-
-The return path claims `replay · promote` because `replay()` in
-`packages/evaluation/src/bench/replay-driver.ts`, `pnpm kora replay`,
-`pnpm kora agent:promote` and `pnpm kora agent:rollback` all exist, along with
-`POST /api/agent-versions/rollback`. The worker's `replay-pending-events` job is
-not part of this loop: it is an outbox catch-up for events whose enqueue failed,
-so it is not claimed here.
-
-**Two departures from the brief.**
-
-There is no `--danger` in the palette, and none was added. Failure is `--rust`,
-the colour "6 regressions" already uses.
-
-`Denied by policy` is not drawn as a failure. The brief assigns it the danger
-colour, but N2's own expectation is `state: RESOLVED` with `policy_compliance`
-and `outcome_achieved` both MET: the rule engine said no and the agent told the
-customer why, which is the system working. It takes the neutral stroke, and
-`write_verified` reads `—` rather than a value, because no write was proposed.
-Colouring a correct refusal red would be the same mistake the page is arguing
-against.
-
-**Restructures at 1280, not 1024.** Below 1280 the four columns become four
-steps top to bottom with the return path as a dashed rule down the left edge.
-The brief says 1024, but the container there is 960px wide and the horizontal
-diagram's labels would land under 11px. Restructuring one breakpoint earlier is
-the same instruction applied honestly.
-
-**Motion.** One 8px dot on an `offset-path`, six seconds, linear, continuous, no
-controls. It pauses when the band leaves the viewport. On `Held for a person` it
-stops for a second at the rule engine while the approval gate turns amber.
-Nothing else moves. Under reduced motion the dot is removed and every node
-renders at rest.

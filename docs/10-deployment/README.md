@@ -1,6 +1,6 @@
 # Deployment
 
-Three environments, three images, one migration rule. When something breaks, go
+Three environments, two images, one migration rule. When something breaks, go
 to [the runbook](../runbook.md).
 
 ## Environments
@@ -9,7 +9,7 @@ to [the runbook](../runbook.md).
 |---|---|---|---|
 | Postgres and Redis | `infra/docker/docker-compose.yml` | managed | managed |
 | Application | `pnpm dev` from source | the built images | the same built images |
-| Business system | mock commerce on `:4001` | mock commerce | the real Acme API |
+| Stripe | a test-mode restricted key | a test-mode restricted key | a test-mode restricted key |
 | Models | `KORA_MODEL_PROVIDER=mock` | real provider | real provider |
 | Deployment mode | `full` | `full` | `human_approval` |
 
@@ -17,9 +17,14 @@ to [the runbook](../runbook.md).
 `docker-compose.prod.yml`, different environment variables. If staging needed a
 different image it would not be testing anything.
 
-Staging keeps the mock commerce service on purpose. It is the only way to
-exercise faults, timeouts and stale reads deliberately without doing it to real
-customer orders.
+Every environment uses a **test-mode** Stripe key. Live keys are out of scope, so
+"production" here means a real deployment of the application, not real money. See
+[Status](../00-overview/status.md#limitations).
+
+The Stripe key is per tenant and lives encrypted in the database, not in the
+environment. Deploying does not carry it; `pnpm kora stripe:set-key` sets it once
+per environment. The provider caches its client for the life of the process, so
+rotating a key means restarting web and worker.
 
 ## What runs where
 
@@ -28,21 +33,25 @@ flowchart LR
   lb[Load balancer] -->|/healthz| web[web]
   web --> pg[(Postgres)]
   web --> redis[(Redis)]
-  web --> acme[Business API]
+  web --> stripe[Stripe Billing]
+  stripe -.->|"POST /api/webhooks/stripe"| web
   worker[worker] --> pg
   worker --> redis
-  worker --> acme
   redis -.->|jobs| worker
   migrate[migrate job] --> pg
 ```
 
-Three images, built from the repository root as the build context:
+The webhook endpoint must be reachable from Stripe, so it sits behind the same
+load balancer as the rest of `web`. It is the one route that authenticates by
+signature rather than by session — `scripts/isolation-suite.ts` lists it as
+public by design.
+
+Two images, built from the repository root as the build context:
 
 | Image | Dockerfile | Runs |
 |---|---|---|
 | `web` | `apps/web/Dockerfile` | `next start` on port 3000 |
 | `worker` | `services/worker/Dockerfile` | the BullMQ worker under `tsx` |
-| `mock-commerce` | `services/mock-commerce/Dockerfile` | the Acme stand-in on port 4001 |
 
 Each is multi-stage, installs only the workspace subtree it needs
 (`pnpm install --filter <pkg>...`), produces a pruned bundle with
@@ -65,7 +74,8 @@ both of those workarounds, and it needs a change to `next.config.ts`.
 ### Running the images
 
 ```bash
-export DATABASE_URL=... REDIS_URL=... BETTER_AUTH_SECRET=... ACME_API_KEY=...
+export DATABASE_URL=... REDIS_URL=... BETTER_AUTH_SECRET=... \
+       KORA_SECRET_KEY=... STRIPE_WEBHOOK_SECRET=...
 docker compose -f infra/docker/docker-compose.yml \
                -f infra/docker/docker-compose.prod.yml up -d
 ```
@@ -175,21 +185,25 @@ containers:
 5. `pnpm --filter web build`
 
 The benchmark is a separate job. It runs only when `packages/ai/**`,
-`packages/tools/**`, `config/**` or `benchmarks/**` changed, because 120
-scenarios are not worth running for a CSS change. Its gates — policy compliance
+`packages/tools/**`, `config/**` or `benchmarks/**` changed, because a full scored
+run is not worth doing for a CSS change. Note that the scenario files themselves
+live in `scenarios/`, which is **not** on that list, so editing one does not
+trigger the benchmark job on its own. Its gates — policy compliance
 at 100%, no injection write, no drop in verified resolution rate — block the
 merge, and it posts the delta as a pull request comment.
 
 `benchmarks/history.json` is not in the repository, so the baseline is restored
 from the Actions cache. Without it the "must not drop" gate has nothing to
-compare against.
+compare against and passes trivially — which is the state today, because the
+history was cleared rather than carried across the move to money operations. The
+gate becomes real again after the first whole-suite run writes a baseline.
 
 ## Deploy
 
 `.github/workflows/deploy.yml` on a push to the default branch, or by hand with
 an environment choice:
 
-1. build and push all three images to GHCR, tagged with the commit sha
+1. build and push both images to GHCR, tagged with the commit sha
 2. run the migration job against the target environment
 3. roll the images out
 4. poll `/readyz` until it answers 200, or fail

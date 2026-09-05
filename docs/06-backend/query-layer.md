@@ -59,7 +59,7 @@ not persisted next to the code. Tool failures resolve to the last failed
 everything else to the run's intent. `mode()` picks the most common one per bucket.
 
 That string is what turns a bar into a lead: `TOOL_EXECUTION_FAILURE, 117, most
-common: get_order / upstream_4xx`.
+common: get_subscription / upstream_4xx`.
 
 ## Conversations page by keyset, not offset
 
@@ -121,8 +121,9 @@ Approvals are never deleted. An expired one stays readable under `status=expired
 
 The queue sorts by money descending, because the expensive decision is the one that
 should be looked at first. The amount is a policy fact first and a tool argument
-second: the policy engine priced the action, and `create_replacement` is only told
-which items to send. Both live in `jsonb`, so the type is checked before the cast:
+second: the policy engine priced the action from the charge record, and
+`cancel_subscription` carries no amount at all. Both live in `jsonb`, so the type
+is checked before the cast:
 
 ```sql
 case when jsonb_typeof(pc.facts -> 'amountMinor') = 'number'

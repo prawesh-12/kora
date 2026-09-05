@@ -1,8 +1,8 @@
 # Architecture
 
-Kora answers a customer, takes a business action, and then proves the action
-actually happened. The proving is the point. Everything below exists to make a
-claim to a customer checkable against the business system afterwards.
+Kora answers a customer, performs a money operation on Stripe, and then proves
+the operation actually happened. The proving is the point. Everything below
+exists to make a claim to a customer checkable against Stripe afterwards.
 
 ## The shape of the system
 
@@ -17,15 +17,16 @@ flowchart TB
     DB["@kora/db<br/>schema, repositories, trace, metrics"]
     Eval["@kora/evaluation<br/>checks, benchmark, replay, alerts"]
     Worker["services/worker<br/>BullMQ: evaluation, ingestion, maintenance"]
-    Acme["services/mock-commerce<br/>Acme Store, real HTTP"]
+    Stripe[("Stripe Billing<br/>test mode")]
     PG[(Postgres 17 + pgvector)]
     Redis[(Redis)]
 
     Customer --> Web
     Operator --> Web
+    Stripe -- "webhook events" --> Web
     Web --> AI
     AI --> Tools
-    Tools --> Acme
+    Tools --> Stripe
     Tools --> Core
     Tools --> Redis
     AI --> DB
@@ -34,10 +35,12 @@ flowchart TB
     Redis --> Worker
     Worker --> Eval
     Eval --> DB
-    Eval --> Acme
     DB --> PG
-    Acme --> PG
 ```
+
+Stripe is reached from exactly one package. `@kora/evaluation` reads traces from
+the database rather than Stripe, so scoring a run never depends on the money
+system still being up.
 
 The request path never evaluates. A finished run writes a `run.finished` row to
 `events` and then enqueues it; the worker picks it up. The row is written first
@@ -60,8 +63,9 @@ core  <-  db  <-  tools  <-  ai
   JSON, errors, the policy engine, the retry table and secret encryption.
 - `db` imports `core`. Schema, tenant-scoped repositories, trace writer, trace
   assembler, metric queries.
-- `tools` imports `core` and `db`. The Acme client, the nine tools, idempotency,
-  the circuit breaker, limited-mode caps, and the execution pipeline.
+- `tools` imports `core` and `db`. The Stripe provider, the eleven tools,
+  idempotency, the circuit breaker, limited-mode caps, and the execution
+  pipeline.
 - `ai` imports `core`, `db`, `tools`. Model gateway, knowledge, intent, the
   orchestrator, the judge caller.
 - `evaluation` imports `core`, `db`, `tools`. It reads traces after the fact:
@@ -91,38 +95,43 @@ sequenceDiagram
     participant R as Retrieval
     participant P as Pipeline
     participant PE as Policy engine
-    participant A as Acme
+    participant S as Stripe
     participant T as Trace
 
-    C->>O: "My coffee machine from order 9832 arrived broken"
+    C->>O: "I want a refund for my last payment"
     O->>T: start run, state IDENTIFYING_INTENT
     O->>I: classify last 6 messages
-    I-->>O: DAMAGED_ORDER, confidence 0.94
+    I-->>O: REFUND_REQUEST, confidence 0.94
     O->>T: state GATHERING_CONTEXT
 
-    O->>P: get_order(9832)
+    O->>P: get_subscription(sub_1S...)
     P->>PE: policy check (reads always allowed)
-    P->>A: GET /orders/9832
-    A-->>P: delivered 4 days ago, INR 3,499
+    P->>S: retrieve subscription, invoice, charge
+    S-->>P: active, charged INR 3,499 five days ago
     P->>T: tool_executions + policy_checks
 
-    O->>R: search_knowledge("damaged item replacement")
+    O->>R: search_knowledge("refund policy")
     R->>T: run_steps kind=retrieval, chunk ids + distances
 
-    O->>P: create_replacement(9832)
-    P->>PE: facts built from the ORDER RECORD, not the message
-    PE-->>P: allow, rule standard_replacement
+    O->>P: create_refund(3499_00)
+    P->>PE: facts built from the CHARGE RECORD, not the message
+    PE-->>P: allow, rule refund_standard
     P->>P: claim idempotency key
-    P->>A: POST /replacements
-    A-->>P: REP-0041
-    P->>A: GET /replacements/REP-0041 (verify)
-    A-->>P: exists, one for this order
+    P->>S: refunds.create, with the claim key as the Stripe idempotency key
+    S-->>P: re_1S..., status succeeded
+    P->>S: refunds.retrieve(re_1S...) (verify)
+    S-->>P: succeeded, INR 3,499
     P->>T: tool_executions verified=true
 
     O->>O: grounding check on the draft reply
-    O->>C: "Replacement REP-0041 is on its way"
+    O->>C: "Refund re_1S... for INR 3,499 is confirmed"
     O->>T: state RESOLVED, finish run
 ```
+
+A refund Stripe returns as `pending` takes a different path: verify fails, the
+run escalates, and the customer is told a person will confirm. The
+[webhook](../08-integrations/README.md#the-webhook) reconciles it when the refund
+settles.
 
 ## The five things that make this different from a chatbot
 
@@ -131,31 +140,36 @@ compiles a YAML file into a predicate tree and evaluates it as a pure function.
 The model can be argued with. The engine cannot.
 
 **2. Policy facts come from records, never from the customer's text.**
-`packages/tools/src/facts.ts` derives `daysSinceDelivery` from
-`order.deliveredAt`, `amountMinor` from `order.totalAmountMinor`, and so on. If
-the message says the item arrived yesterday and the order says twelve days ago,
-the order wins, silently. This is the half of prompt-injection defence that
-actually works. The prompt wording is the other half, and the weaker one.
+`packages/tools/src/facts.ts` derives `daysSinceCharge` from `charge.created`,
+`remainingRefundableMinor` from captured minus already-refunded, and so on. If
+the message says the payment was yesterday and Stripe says forty-five days ago,
+Stripe wins, silently. This is the half of prompt-injection defence that actually
+works. The prompt wording is the other half, and the weaker one.
 
 **3. Every write goes through one chokepoint.**
 `packages/tools/src/pipeline.ts` runs thirteen stages in a fixed order: version,
 input, permission, policy, caps, approval, deployment mode, breaker,
-idempotency, execute, output, verify, settle. A policy check after execution is
-not a policy check. `scripts/check-acme-imports.ts` fails the build if anything
-outside `packages/tools/src/` reaches the business API. See
+idempotency, execute, output, verify, settle. A money write also passes a
+tenant-key gate between the mode gate and the breaker, so a tenant with no key
+fails closed before an idempotency claim is burned. A policy check after
+execution is not a policy check. `scripts/check-billing-imports.ts` fails the
+build if anything outside `packages/tools/src/` imports the Stripe SDK or the
+provider. See
 [the pipeline](../06-backend/tool-pipeline.md) and
 [the deployment ladder](../06-backend/deployment-ladder.md).
 
-**4. A 200 is not proof.** After a successful write the pipeline reads the entity
-back and counts how many exist. If the read-back disagrees, the run records
+**4. A 200 is not proof.** After a successful write the pipeline reads the object
+back out of Stripe. A refund passes only if its status is `succeeded` and the
+amount and currency match the request to the minor unit; `pending` and
+`requires_action` are not success. If the read-back disagrees, the run records
 `verified: false`, escalates with `VERIFICATION_FAILED`, and the customer is told
 a person will confirm. It never guesses which way the write went.
 
 **5. The reply is checked against the tool results.**
-`packages/ai/src/grounding.ts` pulls every replacement id, order id and money
-amount out of the draft and asserts each appears in a tool result from this run.
-Anything unsupported replaces the whole message with a safe fallback and
-escalates.
+`packages/ai/src/grounding.ts` pulls every refund id, subscription id, invoice id,
+plan name and money amount out of the draft and asserts each appears in a tool
+result from this run. Money must match to the minor unit. Anything unsupported
+replaces the whole message with a safe fallback and escalates.
 
 ## Agent states
 
@@ -208,7 +222,8 @@ still stops for one even in simulation. See
 [the ladder](../06-backend/deployment-ladder.md).
 
 **Replay.** Historical conversations re-run against a different agent version,
-served from the state as it was that day rather than as it is now. Self-replay
+served from the Stripe responses recorded that day rather than from Stripe as it
+is now. Self-replay
 must produce an empty diff, and the command exits non-zero if it does not. See
 [replay](../09-testing/replay.md).
 

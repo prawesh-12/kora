@@ -13,6 +13,7 @@ directly; client components talk to the HTTP API.
 | `/chat/:id` | customer | The transcript and composer |
 | `/login` | operator | Email and password |
 | `/ops` | operator | Is it working right now |
+| `/ops/connect` | operator | First run: what Kora needs from Stripe, and whether it has it |
 | `/ops/evaluations` | operator | Metrics, VRR trend, failure breakdown |
 | `/ops/conversations` | operator | Filterable, keyset-paged run list |
 | `/ops/conversations/:id` | operator | Trace inspector |
@@ -22,7 +23,7 @@ directly; client components talk to the HTTP API.
 
 The deployment mode sits in the operator header on every route. Every mode below
 `full` holds something back, so `full` is the one drawn in the destructive colour:
-it means the agent acts on a real customer's order without asking.
+it means the agent moves a real customer's money without asking.
 
 `/ops/layout.tsx` calls `currentOperator()` server-side and redirects to
 `/login?next=/ops` when there is no session. Hiding a link is not authorization, so
@@ -43,12 +44,17 @@ so the pages under `/ops` render a `<div>`; two nested mains is a duplicate
 landmark and screen readers get no useful skip target from it. The customer chat
 is its own main, with the merchant name as the page's `<h1>`.
 
-Every route reports zero axe violations across wcag2a, wcag2aa, wcag21a, wcag21aa
-and best-practice.
+`apps/web/e2e/a11y.spec.ts` runs axe over the landing page, the customer chat and
+every operator screen across `wcag2a`, `wcag2aa`, `wcag21a`, `wcag21aa` and
+`best-practice`, and asserts the console does not scroll horizontally at 390px.
+
+It is **not** part of `pnpm test`. It is `pnpm --filter web test:e2e`, and it
+needs Playwright browsers, a dev server and a seeded database, so a regression
+here does not fail the normal build.
 
 ## Internal values never reach a screen
 
-The policy engine records `insufficient facts: exceedsRemaining,` and a rule id of
+The policy engine records `insufficient facts: exceedsRefundable,` and a rule id of
 `default`, which is its name for no rule matched. Both are correct in the trace and
 useless on screen. The screens translate:
 
@@ -56,8 +62,8 @@ useless on screen. The screens translate:
   keeps the engine's own sentence in a `title`, and writes `no rule matched` rather
   than `rule default`.
 - The failure breakdown runs `humanizeFailureDetail` over the detail column, so a
-  policy row reads `missing order facts` with the raw string on hover.
-- Intents are prose everywhere they are read as words (`damaged order`). They stay
+  policy row reads `missing billing facts` with the raw string on hover.
+- Intents are prose everywhere they are read as words (`refund request`). They stay
   uppercase mono only in the primary failure column, where the code is the
   identifier being named.
 
@@ -125,14 +131,14 @@ Below it, three columns on desktop, stacked tabs below `lg`.
   it is dropped rather than drawn as a heading over an empty region.
 
   A policy check renders inside the tool card it gated. The check that blocked
-  `create_replacement` belongs in that card, not in a flat list five rows below it.
+  `create_refund` belongs in that card, not in a flat list five rows below it.
 
   Executed, replayed, simulated, denied and failed rows each get a coloured dot, a
   word and a `data-testid`, and the legend under the timeline names all four.
   Confusing "we chose not to" with "it failed" is the usual way an agent trace gets
   misread, and colour without a legend is decoration.
 
-  Tool cards summarise as `get_order(9832) -> delivered, INR 8,999` and open to the
+  Tool cards summarise as `get_subscription(sub_1S...) -> active` and open to the
   JSON on click. Three panes open by default hide the thing they are evidence for.
 - **Right** — retrieved chunks in Beautiful UI context cards, then either the
   evaluation panel or, if the run escalated, the full `HandoffPayload`.

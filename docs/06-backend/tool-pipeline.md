@@ -1,7 +1,7 @@
 # The tool execution pipeline
 
 `packages/tools/src/pipeline.ts`. Every action the agent takes goes through
-`executeTool`, and nothing reaches the business system any other way.
+`executeTool`, and nothing reaches Stripe any other way.
 
 Thirteen stages in a fixed order, and the order is the point. A policy check
 after execution is not a policy check, and a mode gate before the approval branch
@@ -19,12 +19,14 @@ flowchart TD
     CAP --> AP[6 approval gate]
     AP -->|needs a person| AP1[awaiting_approval, one pending row]
     AP --> D[7 deployment mode]
-    D -->|simulation or shadow, write| D1[simulated, Acme untouched]
+    D -->|simulation or shadow, write| D1[simulated, Stripe untouched]
     D -->|replay, recorded output| D1
-    D -->|replay, unrecorded business read| D2[failed REPLAY_GAP]
-    D --> BR[8 circuit breaker]
-    BR -->|open| BR1[failed UPSTREAM_5XX, acme untouched]
-    BR -->|redis down and write| BR2[failed UPSTREAM_5XX, acme untouched]
+    D -->|replay, unrecorded Stripe read| D2[failed REPLAY_GAP]
+    D --> KEY[money write: tenant Stripe key]
+    KEY -->|no key| KEY1[failed CONFIG_ERROR, escalated]
+    KEY --> BR[8 circuit breaker]
+    BR -->|open| BR1[failed UPSTREAM_5XX, Stripe untouched]
+    BR -->|redis down and write| BR2[failed UPSTREAM_5XX, Stripe untouched]
     BR --> F[9 idempotency claim]
     F -->|succeeded| F1[replayed, stored output]
     F -->|in progress past 5s| F2[failed, retryable]
@@ -69,14 +71,20 @@ and a `write_high` tool, or a cap was exceeded. The decision is made against the
 run must not ask again.
 
 **7. Deployment mode.** `simulation` and `shadow` return a synthetic output for
-writes and never touch Acme; reads still run. On replay every business read and
+writes and never touch Stripe; reads still run. On replay every Stripe read and
 write is served from the original run's recorded output instead, keyed by
-canonical JSON, and a business read the original run never made fails with
+canonical JSON, and a Stripe read the original run never made fails with
 `REPLAY_GAP` rather than answering from today's state.
 
 This sits **after** the approval gate on purpose. Earlier, and a write that
 policy sends to a person comes back as a silent simulated success, which erases
 the one thing replay and shadow exist to measure.
+
+**The tenant key gate**, between the mode gate and the breaker, applies only to
+`create_refund`, `cancel_subscription` and `change_plan`. A tenant with no Stripe
+key fails closed with `CONFIG_ERROR` and an escalation, before an idempotency
+claim is burned or the breaker is consulted. It sits after the mode gate so a
+simulation run still works for a tenant that has not connected Stripe yet.
 
 A write must never reach stage 10 in shadow mode, and stage 7 is the only path it
 can take. There is an assertion just before execution that throws if one gets
@@ -140,22 +148,26 @@ sequenceDiagram
     participant A as Turn A
     participant B as Turn B
     participant K as idempotency_keys
-    participant X as Acme
+    participant X as Stripe
 
     A->>K: INSERT ON CONFLICT DO NOTHING
     K-->>A: row returned, A owns the claim
     B->>K: INSERT ON CONFLICT DO NOTHING
     K-->>B: no row
     B->>K: read: status in_progress
-    A->>X: POST /replacements
-    X-->>A: REP-0041
+    A->>X: refunds.create, Idempotency-Key = the claim key
+    X-->>A: re_1S...
     A->>K: settle succeeded, store the response
     B->>K: poll (200ms): status succeeded
     K-->>B: stored response
-    B-->>B: status replayed, Acme never called twice
+    B-->>B: status replayed, Stripe never called twice
 ```
 
-The key is `sha256(tenant | conversation | tool | version | canonicalJson(input))`.
+The key is `sha256(tenant | conversation | tool | version | canonicalJson(input))`,
+and that same string is sent to Stripe as its `Idempotency-Key` on every write.
+Two independent layers: Kora's claim stops the second call before it leaves the
+process, and Stripe's key means that even if one did leave, Stripe returns the
+original result rather than acting twice.
 
 Two details matter:
 

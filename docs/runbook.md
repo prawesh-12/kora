@@ -62,9 +62,9 @@ policy decision, the tool executions, then the final message.
 pnpm kora alerts:test              # which check, and how many runs
 ```
 
-**What to do.** If a single order or tool is responsible, it is usually the
-business system behaving differently from what the tool schema expects, and the
-run will show `MALFORMED_OUTPUT` or a verify failure. If it is spread across
+**What to do.** If a single tool or one subscription is responsible, it is
+usually Stripe returning a shape the tool schema did not expect, and the run will
+show `MALFORMED_OUTPUT` or a verify failure. If it is spread across
 intents, suspect the agent version: `pnpm kora agent:versions`, then
 `pnpm kora agent:rollback`. Rollback needs no redeploy and in-flight runs
 finish on the version they started with.
@@ -122,7 +122,7 @@ been open. The duration comes from a marker that survives re-opens, so it is
 how long the dependency has actually been down, not time since the last probe.
 
 **What to do.** Fix the dependency; the breaker closes itself after a good
-probe. See [The Acme business API is down](#the-acme-business-api-is-down) or
+probe. See [Stripe is unreachable](#stripe-is-unreachable) or
 [A model provider is down](#a-model-provider-is-down). Do not clear the breaker
 by hand to "unblock" traffic: it is open because writes were failing, and
 forcing it closed sends real customer actions at a system that cannot take
@@ -309,8 +309,8 @@ Swap `evaluation` for `ingestion` or `maintenance` as needed.
 ## A write was recorded with `verified: false`
 
 **What it means.** A tool call returned success and the read-back did not find
-the change. Either the business system did not really apply it, or it applied it
-and the read is stale. **Treat it as not applied until proven otherwise.** The
+the change. Either Stripe did not really apply it, or it applied it and the read
+is stale. **Treat it as not applied until proven otherwise.** The
 agent already refuses to claim the action succeeded, so the customer has not been
 told a lie; the risk is a real action nobody follows up on.
 
@@ -328,22 +328,23 @@ Open the run in the operator UI: `$KORA_APP_URL/ops/conversations/<conversation_
 The timeline shows the tool input, the response, and what the verification read
 back.
 
-Then ask the business system directly:
-
-```bash
-curl -s -H "Authorization: Bearer $ACME_API_KEY" "$ACME_BASE_URL/orders/<order>"
-```
+Then ask Stripe directly for the object the run claims it wrote — the refund id,
+the subscription id — in the Stripe dashboard for that tenant's account, or with
+that tenant's key. Do not take the id from the customer's message; take it from
+the tool execution row.
 
 **Mitigate.**
 
-- Business system has the record: the write landed and the read was stale. No
-  customer action. If this happens repeatedly, the verification read is racing
-  the write and needs a delay or a stronger consistency guarantee upstream.
-- Business system does not have the record: the write did not land. Redo it by
-  hand in the business system, or reply to the customer and let the agent try
-  again on the next turn. The idempotency key stops a duplicate.
-- Many at once: the business system is degraded. See "The Acme business API is
-  down".
+- Stripe has the record: the write landed and the read was stale. No customer
+  action. If this happens repeatedly, the verification read is racing the write
+  and needs a delay.
+- Stripe does not have the record: the write did not land. Redo it by hand in
+  Stripe, or reply to the customer and let the agent try again on the next turn.
+  The idempotency key stops a duplicate.
+- The refund exists but is `pending`: that is not a failure. See
+  [Stripe: refund stuck pending](#stripe-refund-stuck-pending).
+- Many at once: Stripe is degraded. See
+  [Stripe is unreachable](#stripe-is-unreachable).
 
 ---
 
@@ -389,18 +390,22 @@ policy panel: which rule fired, on what facts, and what the pipeline did next.
 
 ---
 
-## The Acme business API is down
+## Stripe is unreachable
 
-**What it means.** Every tool that reads or writes the business system fails.
-Runs escalate instead of resolving. The circuit breaker opens after five failures
-in a minute and stays open for thirty seconds at a time, which is intended: it
-stops the agent hammering a dead dependency.
+**What it means.** Every tool that reads or writes Stripe fails. Runs escalate
+instead of resolving. The circuit breaker opens after five failures in a minute
+and stays open for thirty seconds at a time before it admits one probe, which is
+intended: it stops the agent hammering a dead dependency.
+
+This section is for a broad outage. For the narrower cases see
+[revoked or wrong key](#stripe-revoked-wrong-or-under-scoped-key) and
+[rate limit](#stripe-rate-limit-429).
 
 **Check first.**
 
 ```bash
-curl -s "$ACME_BASE_URL/health"
-curl -s -b cookies.txt "$KORA_APP_URL/api/status" | python3 -m json.tool   # look at breakers
+curl -s https://status.stripe.com/current                                 # is it Stripe
+curl -s -b cookies.txt "$KORA_APP_URL/api/status" | python3 -m json.tool  # look at breakers
 psql "$DATABASE_URL" -tAc "
   select tool_name, error_code, count(*)
   from tool_executions
@@ -408,19 +413,23 @@ psql "$DATABASE_URL" -tAc "
   group by 1,2 order by 3 desc"
 ```
 
+`UPSTREAM_5XX` and `UPSTREAM_TIMEOUT` spread across every tool is the dependency.
+`CONFIG_ERROR` concentrated on one tenant is that tenant's key, not an outage.
 `BREAKER_STUCK_OPEN` in the logs means a breaker has been open for more than ten
 minutes and the dependency is not recovering.
 
 **Mitigate.**
 
-- Staging: restart the mock service.
-  `docker compose -f infra/docker/docker-compose.prod.yml restart acme`.
-- Production: this is an upstream incident. Set
-  `KORA_DEPLOYMENT_MODE=simulation` if you need reads to keep working while
-  writes are suppressed and recorded rather than attempted.
-- Do not clear the breaker by hand while the dependency is still failing. It
-  closes on its own after one successful probe.
-- Check `ACME_FAULT_RATE` is not set to something non-zero from a previous test.
+- This is an upstream incident. Set `KORA_DEPLOYMENT_MODE=simulation` if you need
+  reads to keep working while writes are suppressed and recorded rather than
+  attempted.
+- Do not clear the breaker by hand while Stripe is still failing. It closes on
+  its own after one successful probe.
+- Refunds and cancellations already issued are safe. Every write carries the
+  claim key as its Stripe idempotency key, so a retry after recovery returns the
+  original result rather than acting twice.
+- If a suite was running, check no fault injection is still switched on before
+  treating this as a real incident.
 
 ---
 
@@ -477,17 +486,25 @@ retried: retrying a bad key burns no money but hides the real fix.
    tenants' writes succeed.
 2. Find the failing tenant in `tool_executions` by `error_code =
    'CONFIG_ERROR'` over the last hour.
-3. Re-set the tenant key with the admin command (per-tenant encrypted store),
-   verifying the scopes above. The runtime key must not be able to create
-   customers — that needs the broader dev key used only by the fixtures
-   script.
-4. Re-run one read (`get_subscription`) before letting queued writes proceed.
+3. Re-set the tenant key, verifying the scopes above:
 
-> Status: the per-tenant key store, the admin command, and the `CONFIG_ERROR`
-> mapping do not exist yet (`ToolErrorCode` has no `CONFIG_ERROR`). Until
-> they land, a bad key surfaces as the generic upstream failure below, and
-> this section is the target behaviour, not the current one.
-> `TODO(plan): wire CONFIG_ERROR from the Stripe provider boundary.`
+   ```bash
+   pnpm kora stripe:set-key --tenant <tenant_id> --key rk_test_...
+   ```
+
+   It is stored encrypted in `tenant_settings`. The runtime key must not be able
+   to create customers — that needs the broader dev key used only by the
+   fixtures script.
+4. **Restart the web and worker processes.** The provider caches the Stripe
+   client it built from the old key for the life of the process, and
+   `stripe:set-key` runs in a different process, so a rotated key is not picked
+   up until a restart. Skipping this looks exactly like the new key being wrong
+   too.
+5. Re-run one read (`get_subscription`) before letting queued writes proceed.
+
+A tenant with **no** key at all is a different path with the same code: the
+pipeline refuses the write before it claims an idempotency key, escalates, and
+records `CONFIG_ERROR`. Nothing is sent to Stripe.
 
 ---
 
@@ -518,9 +535,16 @@ across every intent points at the dependency, not at a policy or version
 ## Stripe: webhook down or rejected
 
 **Symptom.** Refunds sit in `pending` past their expected confirmation, runs
-stay in "waiting on Stripe", and no `refund.succeeded` / `refund.failed`
-reconciliation appears in the traces. If signatures fail, the endpoint logs
-rejections and every delivery looks unprocessed.
+stay in "waiting on Stripe", and no reconciliation step appears in the traces.
+If signatures fail, the endpoint returns 400 on every delivery and every one
+looks unprocessed.
+
+The endpoint handles two event families and ignores everything else:
+`refund.created`, `refund.updated`, `refund.failed`, and
+`customer.subscription.updated`, `customer.subscription.deleted`. A refund
+reaching `succeeded` arrives as `refund.updated` carrying the new status —
+there is no `refund.succeeded` event, so do not go looking for one in the
+Stripe delivery log.
 
 **Cause.** One of: the webhook route is down (deploy, crash), the endpoint
 secret is wrong or rotated (signature verification fails), or Stripe cannot
@@ -531,19 +555,29 @@ outage.
 **Action.**
 
 1. `curl -s "$KORA_APP_URL/healthz"` — is the app up at all.
-2. Check the endpoint secret matches the Stripe dashboard value for this
+2. Check `STRIPE_WEBHOOK_SECRET` matches the Stripe dashboard value for this
    endpoint; a rotation without a matching config change rejects everything.
+   It takes either the raw `whsec_…` value or a `v1.…` blob from the secret
+   helper. Unset, the route answers 500 `WEBHOOK_NOT_CONFIGURED` and processes
+   nothing — it never falls through to accepting unsigned events.
 3. Check Stripe's delivery log for the endpoint: failed deliveries with
-   retries means reachability; 400s on every delivery means signatures.
-4. After recovery, Stripe redelivers. Reconciliation is idempotent per
-   `event.id`, so redelivery is safe — do not manually flip verifications.
-5. If events were lost (endpoint deleted, retention passed), re-fetch the
-   open refunds with `getRefund` per run and reconcile by hand from the
-   read-back, not from memory.
+   retries means reachability; 400s on every delivery means signatures. A
+   signature more than five minutes old is also rejected, so a badly skewed
+   clock on the app host looks exactly like a wrong secret.
+4. Check what actually arrived:
 
-> Status: `POST /api/webhooks/stripe` does not exist yet. Until it lands,
-> pending refunds have no automatic reconcile path — see the next section.
-> `TODO(plan): add the webhook route with signature check and event.id dedupe.`
+   ```bash
+   psql "$DATABASE_URL" -tAc "
+     select type, outcome, count(*), max(created_at)
+     from stripe_webhook_events
+     where created_at > now() - interval '1 day' group by 1,2"
+   ```
+
+5. After recovery, Stripe redelivers. The handler claims each `event.id` once,
+   so redelivery is a no-op — do not manually flip verifications.
+6. If events were lost (endpoint deleted, retention passed), read the open
+   refunds back from Stripe per run and reconcile by hand from what Stripe
+   returns, not from memory.
 
 ---
 
@@ -576,10 +610,11 @@ the webhook flips it later.
 6. Many stuck at once: treat as [webhook down](#stripe-webhook-down-or-rejected),
    not as N individual refund problems.
 
-> Status: the pending path (`S11`) and webhook reconcile have no tests behind
-> them yet. The generic `verified: false` handling in
-> [A write was recorded with `verified: false`](#a-write-was-recorded-with-verified-false)
-> is what runs today.
+A refund that reaches `succeeded` while the webhook is working needs no action
+at all: the handler flips the execution's verification to confirmed and writes a
+`verify` step into the trace, so the run shows what happened and when. What you
+are looking at here is either a refund Stripe has genuinely not settled, or a
+webhook that never arrived.
 
 ---
 

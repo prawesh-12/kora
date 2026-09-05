@@ -6,38 +6,42 @@ you changed.
 | Level | Where | Needs |
 |---|---|---|
 | Unit | `packages/core` | nothing |
-| Integration | `packages/db`, `packages/tools`, `packages/ai` | Postgres in Docker |
-| Service | `services/mock-commerce`, `packages/tools`, `packages/ai` | Postgres and Acme on :4001 |
-| Acceptance | `pnpm kora scenarios` | Postgres, Acme, the knowledge base ingested |
+| Integration | `packages/db`, `packages/tools`, `packages/ai`, `packages/evaluation` | Postgres and Redis in Docker |
+| Service | `apps/web`, `services/worker` | Postgres and Redis in Docker |
+| Acceptance | `pnpm kora scenarios` | the above, a tenant Stripe key, the knowledge base ingested |
 
 ```bash
 pnpm --filter @kora/core test          # pure, fast, no infrastructure
-pnpm --filter @kora/tools test         # needs postgres and acme
+pnpm --filter @kora/tools test         # needs postgres
 pnpm test                              # everything, through turbo
 pnpm kora scenarios                    # the acceptance gate
 pnpm kora scenarios --repeat 3         # flake check
 ```
 
-## Infrastructure is real, not mocked
+## Infrastructure is real; Stripe is not
 
-Every test that touches the database runs against the Postgres container, and
-every test that touches the business system runs against the Acme service over a
-real socket. Nothing in the tools or evaluation suites mocks either one.
+Every test that touches the database runs against the Postgres container, over a
+real socket. Nothing in the tools, evaluation or web suites mocks it. That is
+deliberate: the timeouts, retries, verification and idempotency only mean
+anything against a real connection. An in-process fake cannot race twenty
+parallel writes.
 
-That is deliberate. The timeouts, retries, verification and idempotency only mean
-anything against a real connection. An in-process fake would pass a suite that
-proves nothing: it cannot hold a socket open for thirty seconds, and it cannot
-race twenty parallel writes.
+Stripe is the exception, and it is a real limitation rather than a design choice.
+Every suite drives an in-memory implementation of the `BillingProvider`
+interface. That exercises the pipeline, the policy engine, the idempotency claim,
+the verify read-back and the error mapping — but it cannot tell you that a Stripe
+field moved or a payload is shaped differently than the code expects. Nothing in
+this repository has ever run against a Stripe account. See
+[Status](../00-overview/status.md#what-is-not-proven).
 
 Each suite scopes itself to its own tenant id (`ten_pipeline_test`,
 `ten_agent_test`, and so on) and cleans up in `afterAll`. `fileParallelism` is
 off in every package that shares the database.
 
-The Acme dataset has no tenant column to scope by. Its orders, replacements and
-idempotency keys are one shared set, and several suites reset order `9832` or
-reseed the whole thing between tests. So `pnpm test` runs the packages one at a
-time (`turbo test --concurrency=1`). Run two of them at once and a reseed lands
-in the middle of another suite's writes.
+`pnpm test` runs the packages one at a time (`turbo test --concurrency=1`). The
+billing provider override is process-wide module state, and several suites and
+the scenario runner install their own, so two packages running at once would
+swap the provider out from under each other.
 
 The operator suites in `apps/web/test` follow the same rule with one exception:
 anything that goes through a route handler has to use the real tenant, because the
@@ -57,48 +61,72 @@ index using `vector_cosine_ops`, a unique constraint on `evaluations.run_id`),
 tenant scoping actually isolates, and the trace writer survives fifty concurrent
 steps, a throwing step, and a run that never called `finish`.
 
-**`packages/tools`** — one case per pipeline stage and per error code, fourteen
-in total, each asserting both the returned status and the database rows written.
-Plus the twenty-way idempotency race and the verification cases driven by Acme's
-fault injection.
+**`packages/tools`** — one case per pipeline stage and per error code, each
+asserting both the returned status and the database rows written. Plus the
+idempotency race, the Stripe error mapping (one case per SDK error class), the
+three verify implementations against both a real read-back and an injected
+mismatch, the no-key write gate, the fixture manifest, and the webhook signature
+and reconcile paths.
 
 **`packages/ai`** — chunking, retrieval (including a plan assertion that the
 correct ordering can use the HNSW index and that `1 - cosineDistance` cannot),
-the state machine, grounding, and the agent driven end to end against the live
-Acme service for the H1, H2 and negative scenarios.
+the state machine, intent classification across all six intents, tool gating, and
+grounding over refund ids, subscription ids, invoice ids, plan names and money
+amounts.
 
-**`packages/evaluation`** — seven trace fixtures, each built to fail exactly one
-check, plus the scenario files validated against their schema.
-
-**`services/mock-commerce`** — one case per fault, and the twenty-parallel-POST
-test that proves server-side idempotency collapses to one write.
+**`packages/evaluation`** — trace fixtures each built to fail exactly one check,
+the replay report, the chaos invariants, the benchmark suite's composition, and
+the scenario files validated against their schema and against the fixture keys
+they are allowed to name.
 
 **`apps/web`** — the API routes against the real database and agent: a full turn
 persists, an operator route without a session is 401, an unknown conversation is
-404, a double decision is 409, and the thirty-first message in a minute is 429.
+404, a double decision is 409, the thirty-first message in a minute is 429, and
+the Stripe webhook confirms, dedupes and rejects.
 
 ## The acceptance suite
 
-Twelve scenarios in `scenarios/*.json`, run by `pnpm kora scenarios`. Each one
-resets the Acme entities it touches, runs a real turn, snapshots the business
-state, evaluates the run, and asserts every field in its `expect` block. H1
-additionally asserts the twelve numbered acceptance points separately, so a
-failure names which one broke.
+22 scenarios in `scenarios/*.json`, run by `pnpm kora scenarios`. S1 to S12 are
+the money workflows; S13 to S22 are prompt-injection attempts, none of which may
+produce a write.
 
-The runner refuses to start if Acme is not reachable or the knowledge base is
-empty. Both would otherwise produce confusing failures, and an empty knowledge
-base would make N10 pass for the wrong reason.
+| id | What it proves |
+|---|---|
+| S1 | an in-window refund is allowed, executed and verified |
+| S2 | a charge outside the 30-day window is denied, with no write |
+| S3 | a request above what is still refundable is denied, and the reply states what is left |
+| S4 | a refund at or above the threshold waits for a person |
+| S5 | a cancellation lands at period end, with the stop date stated |
+| S6 | cancelling an unpaid subscription waits for a person |
+| S7 | a plan change lands on the target price, prorated |
+| S8 | a large mid-cycle credit waits for a person |
+| S9 | a billing question reads only |
+| S10 | an ambiguous message hands over instead of guessing |
+| S11 | a refund Stripe leaves `pending` is never reported as success |
+| S12 | a 500 on the write escalates rather than claiming anything |
 
-Scenarios run sequentially. They share one Acme dataset, and a scoped reset for
-one order still races a run reading the same order.
+Each scenario installs a fresh in-memory billing stub, runs a real turn through
+the real pipeline, evaluates the run, and asserts every field in its `expect`
+block: the final state, the intent, which tools ran, which tools were forbidden,
+the policy decision, the deciding rule id, and the evaluation checks.
+
+The runner refuses to start if the knowledge base is empty, because a reads-only
+scenario would otherwise pass for the wrong reason.
+
+Scenarios run sequentially. The billing provider override is process-wide, so two
+scenarios at once would share one stub.
+
+Idempotency claims are cleared once per pass, never per scenario. Deleting a
+claim another scenario is holding is how a suite manufactures the duplicate write
+it exists to detect.
 
 ## Offline by default
 
 `KORA_MODEL_PROVIDER=mock` is the default, so the whole suite runs with no API
 key and no network. The mock is a real `LanguageModelV3` implementation whose
 behaviour is decided by planner functions reading the prompt the SDK built. It
-follows the damaged-order workflow one tool at a time, reacting to what each tool
-actually returned, and it never invents an id or an amount.
+follows the refund and cancellation workflows one tool at a time, reacting to
+what each tool actually returned, and it never invents an id or an amount.
 
 That makes the suite deterministic and free. It also means the suite proves the
 *system* is correct, not that a particular model is good at the task. Those are
@@ -107,7 +135,7 @@ different questions, and the second one needs a real provider and the judge.
 
 ## The operator suites
 
-`apps/web/test`, five files, all against the real database.
+`apps/web/test`, twelve files, all against the real database.
 
 **`api.test.ts`** — the chat routes: a turn is persisted, evaluation is scheduled with
 `after()`, the rate limiter holds at 30 a minute, and an approval can be approved or
@@ -152,26 +180,16 @@ the narrower `agent_runs_tenant_idx` when the `started_at` predicate does no wor
 (`runAggregateSql`, `conversationPageSql`, `failureBreakdownSql`), not over a copy,
 so the plan cannot drift from the query.
 
-## Why the benchmark resets the way it does
+## The benchmark
 
-120 scenarios run five at a time against one Acme dataset, so who resets what is
-load-bearing.
+`pnpm kora bench` runs the same 22 scenario files and scores them. It keeps the
+honest resolution metric: a correct denial and a correct handover both pass, and
+neither counts as a resolution, because the customer's problem was not fixed.
+Counting them would inflate the headline and hide the cases that matter.
 
-- **A full reset happens once**, at the start of a pass, and nowhere else.
-- **A scenario resets only the orders it seeds.** A scoped reset for one order
-  still races a scenario reading that order, so scenarios sharing an order are
-  serialised by a per-order lock.
-- **A scenario with no seeded order resets nothing.** An empty order list must not
-  mean "reset everything". Such a scenario holds no order's chain, so the
-  per-order lock cannot protect anything from it, and it would wipe the fixture
-  out from under whatever is running alongside.
-- **Idempotency keys are cleared once per pass, never per scenario.** Deleting a
-  claim another scenario is holding is how a benchmark manufactures the duplicate
-  write it exists to detect. No scenario needs it: each opens a new conversation
-  and the key is scoped to the conversation.
-
-The rule underneath all four: anything that resets shared state must happen while
-nothing else is running, or be scoped to something a lock protects.
+A whole-suite run writes `benchmarks/history.json`, which the next run compares
+against. That file is currently empty on purpose: a baseline from a different
+version of the system reports a regression that never happened.
 
 ## Chaos testing, and why it must run alone
 
@@ -179,19 +197,31 @@ nothing else is running, or be scoped to something a lock protects.
 pnpm kora chaos --fault-rate=0.2 --repeat=3
 ```
 
-Three passes of the full benchmark with a fifth of Acme calls failing. It sets
-the fault rate on the mock service over `POST /admin/fault-rate` and clears it
-afterwards, because `serverEnv()` is parsed once per process and an environment
-variable cannot be changed from outside.
+Three passes of the full suite with a fifth of calls to the billing provider
+failing. Faults are injected by wrapping the provider
+(`FaultInjectingBillingProvider`), so they arrive exactly where a transport
+failure would: `timeout`, `500`, `slow`, mapped to `UPSTREAM_TIMEOUT` and
+`UPSTREAM_5XX`. The fault rate is a process-wide switch, because the scenario
+runner builds a fresh provider per scenario and has to know whether this pass is
+meant to be faulty.
+
+Only transport faults are injected at random. A fault that changed stored state
+would make every read non-deterministic, and the suite would stop measuring the
+agent.
 
 Four things must hold no matter how much is failing:
 
 | Column | What it counts |
 |---|---|
-| dupes | two replacements or two cancellations on one order |
-| after deny | a tool that executed although a gating policy check said no |
+| dupes | two successful money writes with identical input on one conversation |
+| after deny | a tool that executed although a non-advisory policy check denied it |
 | stuck | a run left in a non-terminal state |
-| false claims | a conversation naming REP-0041 when no write in it ever landed verified |
+| false claims | a conversation whose agent messages exist alongside a money write, where no write in that conversation ever landed `ok` and verified (or deduplicated onto one that had) |
+
+False claims are counted per **conversation**, not per run. A double submit puts
+two runs on one conversation: one claims the key and writes, the other times out
+waiting. Judged per run, the second looks like a false claim. The customer sees
+one conversation, and in it the refund is real.
 
 Resolution rate is allowed to drop, and it should. An agent still resolving 95%
 of conversations while a fifth of its calls fail is not being honest.
@@ -201,16 +231,14 @@ failure. A chaos run that crashed half way has proved nothing.
 
 ## Run one thing at a time
 
-There is one Acme service, one Postgres and one Redis, and several suites that
-run real agent turns against all three. Running two at once produces failures
-that look like flaky tests and are not.
+There is one Postgres, one Redis, and one process-wide billing provider override.
+Running two suites at once produces failures that look like flaky tests and are
+not.
 
 | Combination | What you see |
 |---|---|
 | A suite while chaos runs | Unrelated tests fail on injected faults |
-| A suite while the benchmark runs | Failures from load and from reset timing |
+| A suite while the benchmark runs | Failures from load, and from the provider being swapped mid-run |
 | The worker suite beside anything | It starts a real worker on the shared queues and asserts on what it finds, so any other source of events breaks it |
-| `mock-commerce dev` during a suite | `tsx watch` restarts the service on every edit under `packages/`, mid-run |
 
-Use `pnpm --filter @kora/mock-commerce start`, not `dev`, whenever a suite is
-running. If a test looks flaky, check this table before looking anywhere else.
+If a test looks flaky, check this table before looking anywhere else.

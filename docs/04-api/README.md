@@ -19,6 +19,7 @@ Drizzle row.
 | `GET /api/metrics/failures?from=&to=` | operator | `[{ code, count, topDetail }]` |
 | `POST /api/agent-versions/rollback` | operator | Reactivates the previous version, no gates |
 | `GET /api/status` | operator | Running version, active agent versions, queue depth, breaker state |
+| `POST /api/webhooks/stripe` | signature | Reconciles refund and subscription events |
 | `GET /healthz` | no | Liveness. Imports nothing and touches no dependency |
 | `GET /readyz` | no | Readiness. Probes Postgres, Redis and the model provider, cached 10s |
 | `/api/auth/*` | — | Better Auth handler, email and password only |
@@ -26,6 +27,14 @@ Drizzle row.
 Customer routes are not behind a session. They are scoped by the conversation id,
 which is an unguessable ULID. Operator routes call `requireOperator()` before doing
 any work, and a missing session is a 401 rather than an empty result.
+
+The Stripe webhook has no session either. It authenticates by HMAC signature over
+the raw request bytes, with a five-minute timestamp tolerance and a constant-time
+compare, and it answers 400 rather than 401 when that fails — an unsigned request
+is a malformed one, not an unauthenticated user. With no secret configured it
+answers 500 and processes nothing; it never falls through to accepting unsigned
+events. Each `event.id` is claimed once, so Stripe's redeliveries are no-ops. See
+[integrations](../08-integrations/README.md#the-webhook).
 
 `pnpm lint` runs `scripts/isolation-suite.ts`, which walks every `route.ts` under
 `app/api` and fails the build unless the handler calls `requireOperator()` or the
