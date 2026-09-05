@@ -93,11 +93,7 @@ export function HeroStat({
       <span className={LABEL}>{label}</span>
       <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
         <span className={cn('font-semibold text-4xl tabular-nums', TONE_CLASS[tone])}>
-          {countTo !== undefined ? (
-            <CountUp to={countTo} />
-          ) : (
-            value
-          )}
+          {countTo !== undefined ? <CountUp to={countTo} /> : value}
         </span>
         {context ? <span className="text-muted-foreground text-sm">{context}</span> : null}
         {aside ? <div className="ml-auto">{aside}</div> : null}
