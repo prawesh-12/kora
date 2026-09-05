@@ -76,9 +76,7 @@ describe('circuit breaker', () => {
 
     billing.fault = null;
     const before = billing.calls.length;
-    const sixth = await executeTool(
-      argsFor('create_refund', refundOf(6000), run, conversationId),
-    );
+    const sixth = await executeTool(argsFor('create_refund', refundOf(6000), run, conversationId));
 
     expect(sixth.status).toBe('failed');
     if (sixth.status === 'failed') {

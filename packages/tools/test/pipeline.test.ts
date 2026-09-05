@@ -94,13 +94,9 @@ describe('tool execution pipeline', () => {
   it('4. denies on policy and records the rule id', async () => {
     const { run, conversationId } = await newRun();
     const outcome = await executeTool(
-      argsFor(
-        'create_refund',
-        { ...REFUND, invoiceId: 'in_3S' },
-        run,
-        conversationId,
-        { gathered: { subscription: SUBSCRIPTION, charge: OLD_CHARGE } },
-      ),
+      argsFor('create_refund', { ...REFUND, invoiceId: 'in_3S' }, run, conversationId, {
+        gathered: { subscription: SUBSCRIPTION, charge: OLD_CHARGE },
+      }),
     );
 
     expect(outcome.status).toBe('denied');
@@ -114,13 +110,12 @@ describe('tool execution pipeline', () => {
     const { run, conversationId } = await newRun();
 
     const outcome = await executeTool(
-      argsFor(
-        'create_refund',
-        { ...REFUND, amountMinor: 600_000 },
-        run,
-        conversationId,
-        { gathered: { subscription: SUBSCRIPTION, charge: { ...CHARGE, remainingRefundable: { amountMinor: 1_200_000, currency: 'INR' } } } },
-      ),
+      argsFor('create_refund', { ...REFUND, amountMinor: 600_000 }, run, conversationId, {
+        gathered: {
+          subscription: SUBSCRIPTION,
+          charge: { ...CHARGE, remainingRefundable: { amountMinor: 1_200_000, currency: 'INR' } },
+        },
+      }),
     );
 
     expect(outcome.status).toBe('awaiting_approval');
@@ -254,7 +249,12 @@ describe('tool execution pipeline', () => {
   it('15. refuses to run once the deadline has passed and never calls the provider', async () => {
     const { run, conversationId } = await newRun();
 
-    const args = argsFor('get_subscription', { subscriptionId: SUBSCRIPTION.id }, run, conversationId);
+    const args = argsFor(
+      'get_subscription',
+      { subscriptionId: SUBSCRIPTION.id },
+      run,
+      conversationId,
+    );
     args.ctx.deadlineAt = new Date(now().getTime() - 1000);
 
     const outcome = await executeTool(args);
