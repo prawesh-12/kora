@@ -5,4 +5,5 @@ export * from './schemas.js';
 export * from './manifest.js';
 export * from './tenant-keys.js';
 export * from './fixtures.js';
+export * from './live-fixtures.js';
 export * from './write-gate.js';

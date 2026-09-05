@@ -9,10 +9,12 @@ import {
   DAY_MS,
   STUB_FROZEN_TIME,
   StubFixtureBackend,
+  advanceClockTo,
   ensureStripeFixtures,
   gateStripeWrite,
   refundWindowStatus,
   stripeFixtureManifestSchema,
+  type FixtureBackend,
   type FixtureStore,
   type StripeEscalationSink,
   type StripeKeyStore,
@@ -192,6 +194,57 @@ describe('stripe fixtures', () => {
         windowDays: 30,
       }),
     ).toBe('outside');
+  });
+
+  it('bills the subscriptions oldest first and leaves the clock at the frozen time', async () => {
+    const stub = new StubFixtureBackend();
+    const events: string[] = [];
+    let clockId = '';
+    const recorder: FixtureBackend = {
+      name: stub.name,
+      ensureTestClock: async (startTime) => {
+        const clock = await stub.ensureTestClock(startTime);
+        clockId = clock.id;
+        events.push(`clock@${startTime}`);
+        return clock;
+      },
+      ensureCustomer: (i) => stub.ensureCustomer(i),
+      ensureSubscription: async (i) => {
+        events.push(`${i.key}@${(await stub.clockNow(clockId)).now}`);
+        return stub.ensureSubscription(i);
+      },
+      ensurePaidCharge: (i) => stub.ensurePaidCharge(i),
+      advanceClock: (id, seconds) => stub.advanceClock(id, seconds),
+      clockNow: (id) => stub.clockNow(id),
+    };
+    const { manifest } = await ensureStripeFixtures({
+      tenantId: TENANT,
+      backend: recorder,
+      store: memoryStore(),
+      frozenTime: STUB_FROZEN_TIME,
+      windowDays: 30,
+      priceIds: PRICES,
+    });
+
+    const day = (offset: number) =>
+      new Date(new Date(STUB_FROZEN_TIME).getTime() + offset * DAY_MS).toISOString();
+    expect(events).toEqual([
+      `clock@${day(-45)}`,
+      `old-sub@${day(-45)}`,
+      `borderline-sub@${day(-20)}`,
+      `recent-sub@${day(0)}`,
+    ]);
+    expect((await stub.clockNow(manifest.testClockId)).now).toBe(STUB_FROZEN_TIME);
+  });
+
+  it('never walks a clock backwards', async () => {
+    const backend = new StubFixtureBackend();
+    const { id } = await backend.ensureTestClock(STUB_FROZEN_TIME);
+    const before = { ...backend.calls };
+    expect(await advanceClockTo(backend, id, '2025-01-01T00:00:00.000Z')).toEqual({
+      now: STUB_FROZEN_TIME,
+    });
+    expect(backend.calls).toEqual(before);
   });
 
   it('rejects stored garbage instead of treating it as fixtures', () => {

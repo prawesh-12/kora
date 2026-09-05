@@ -3,6 +3,13 @@ import { stripeFixtureManifestSchema, type StripeFixtureManifest } from './manif
 export const STUB_FROZEN_TIME = '2026-01-05T00:00:00.000Z';
 export const DAY_MS = 86_400_000;
 
+/**
+ * A fixture subscription is billed by its own price, so the charge amounts the
+ * manifest records are only true if the prices carry these amounts.
+ */
+export const FIXTURE_CURRENCY = 'INR';
+export const FIXTURE_PLAN_AMOUNTS = { basic: 349_900, pro: 899_900 } as const;
+
 export interface FixtureCustomerInput {
   key: string;
   email: string;
@@ -13,6 +20,8 @@ export interface FixtureSubscriptionInput {
   key: string;
   customerId: string;
   priceId: string;
+  /** Clock time the first invoice should be paid at. */
+  createdAt: string;
 }
 
 export interface FixtureChargeInput {
@@ -26,10 +35,13 @@ export interface FixtureChargeInput {
 
 export interface FixtureBackend {
   readonly name: 'live' | 'stub';
-  ensureTestClock(frozenTime: string): Promise<{ id: string }>;
+  /** A test clock only moves forward, so it starts at the oldest fixture date. */
+  ensureTestClock(startTime: string): Promise<{ id: string }>;
   ensureCustomer(input: FixtureCustomerInput): Promise<{ id: string; paymentMethodId: string }>;
   ensureSubscription(input: FixtureSubscriptionInput): Promise<{ id: string; status: string }>;
-  ensurePaidCharge(input: FixtureChargeInput): Promise<{ id: string; invoiceId: string }>;
+  ensurePaidCharge(
+    input: FixtureChargeInput,
+  ): Promise<{ id: string; invoiceId: string; createdAt?: string }>;
   advanceClock(clockId: string, seconds: number): Promise<{ now: string }>;
   clockNow(clockId: string): Promise<{ now: string }>;
 }
@@ -64,6 +76,18 @@ function isoShift(iso: string, days: number): string {
   return new Date(new Date(iso).getTime() + days * DAY_MS).toISOString();
 }
 
+/** Moves a clock to `target`, or leaves it alone when it is already at or past it. */
+export async function advanceClockTo(
+  backend: Pick<FixtureBackend, 'advanceClock' | 'clockNow'>,
+  clockId: string,
+  target: string,
+): Promise<{ now: string }> {
+  const current = await backend.clockNow(clockId);
+  const seconds = Math.round((new Date(target).getTime() - new Date(current.now).getTime()) / 1000);
+  if (seconds <= 0) return current;
+  return backend.advanceClock(clockId, seconds);
+}
+
 export async function ensureStripeFixtures(
   input: EnsureFixturesInput,
 ): Promise<{ manifest: StripeFixtureManifest; created: boolean }> {
@@ -79,13 +103,22 @@ export async function ensureStripeFixtures(
     return { manifest: stored.data, created: false };
   }
 
-  const currency = input.currency ?? 'INR';
-  const { id: testClockId } = await input.backend.ensureTestClock(input.frozenTime);
+  const currency = input.currency ?? FIXTURE_CURRENCY;
+
+  // Stripe cannot backdate: a subscription bills at whatever the test clock reads,
+  // and the clock only moves forward. So the whole fixture set is built oldest
+  // first, starting the clock at the oldest date and walking it up to frozenTime.
+  const paidAt = {
+    old: isoShift(input.frozenTime, -45),
+    borderline: isoShift(input.frozenTime, -20),
+    recent: input.frozenTime,
+  };
+  const { id: testClockId } = await input.backend.ensureTestClock(paidAt.old);
 
   const customerInputs: FixtureCustomerInput[] = [
-    { key: 'recent-payer', email: 'recent-payer@kora.test', name: 'Recent Payer' },
-    { key: 'borderline-payer', email: 'borderline-payer@kora.test', name: 'Borderline Payer' },
     { key: 'old-payer', email: 'old-payer@kora.test', name: 'Old Payer' },
+    { key: 'borderline-payer', email: 'borderline-payer@kora.test', name: 'Borderline Payer' },
+    { key: 'recent-payer', email: 'recent-payer@kora.test', name: 'Recent Payer' },
   ];
   const customers = [];
   for (const c of customerInputs) {
@@ -101,19 +134,27 @@ export async function ensureStripeFixtures(
 
   const subscriptionInputs: FixtureSubscriptionInput[] = [
     {
-      key: 'recent-sub',
-      customerId: customerByKey.get('recent-payer')!.id,
-      priceId: input.priceIds.basic,
+      key: 'old-sub',
+      customerId: customerByKey.get('old-payer')!.id,
+      priceId: input.priceIds.pro,
+      createdAt: paidAt.old,
     },
     {
       key: 'borderline-sub',
       customerId: customerByKey.get('borderline-payer')!.id,
       priceId: input.priceIds.basic,
+      createdAt: paidAt.borderline,
     },
-    { key: 'old-sub', customerId: customerByKey.get('old-payer')!.id, priceId: input.priceIds.pro },
+    {
+      key: 'recent-sub',
+      customerId: customerByKey.get('recent-payer')!.id,
+      priceId: input.priceIds.basic,
+      createdAt: paidAt.recent,
+    },
   ];
   const subscriptions = [];
   for (const s of subscriptionInputs) {
+    await advanceClockTo(input.backend, testClockId, s.createdAt);
     const created = await input.backend.ensureSubscription(s);
     subscriptions.push({ ...s, id: created.id, status: created.status });
   }
@@ -121,34 +162,39 @@ export async function ensureStripeFixtures(
 
   const chargeInputs: FixtureChargeInput[] = [
     {
-      key: 'recent-charge',
-      customerId: customerByKey.get('recent-payer')!.id,
-      subscriptionId: subscriptionByKey.get('recent-sub')!.id,
-      amountMinor: 349900,
+      key: 'old-charge',
+      customerId: customerByKey.get('old-payer')!.id,
+      subscriptionId: subscriptionByKey.get('old-sub')!.id,
+      amountMinor: FIXTURE_PLAN_AMOUNTS.pro,
       currency,
-      createdAt: input.frozenTime,
+      createdAt: paidAt.old,
     },
     {
       key: 'borderline-charge',
       customerId: customerByKey.get('borderline-payer')!.id,
       subscriptionId: subscriptionByKey.get('borderline-sub')!.id,
-      amountMinor: 349900,
+      amountMinor: FIXTURE_PLAN_AMOUNTS.basic,
       currency,
-      createdAt: isoShift(input.frozenTime, -20),
+      createdAt: paidAt.borderline,
     },
     {
-      key: 'old-charge',
-      customerId: customerByKey.get('old-payer')!.id,
-      subscriptionId: subscriptionByKey.get('old-sub')!.id,
-      amountMinor: 899900,
+      key: 'recent-charge',
+      customerId: customerByKey.get('recent-payer')!.id,
+      subscriptionId: subscriptionByKey.get('recent-sub')!.id,
+      amountMinor: FIXTURE_PLAN_AMOUNTS.basic,
       currency,
-      createdAt: isoShift(input.frozenTime, -45),
+      createdAt: paidAt.recent,
     },
   ];
   const charges = [];
   for (const c of chargeInputs) {
     const created = await input.backend.ensurePaidCharge(c);
-    charges.push({ ...c, id: created.id, invoiceId: created.invoiceId });
+    charges.push({
+      ...c,
+      id: created.id,
+      invoiceId: created.invoiceId,
+      createdAt: created.createdAt ?? c.createdAt,
+    });
   }
 
   const manifest = stripeFixtureManifestSchema.parse({
@@ -174,7 +220,7 @@ export async function ensureStripeFixtures(
 
 export class StubFixtureBackend implements FixtureBackend {
   readonly name = 'stub' as const;
-  private clocks = new Map<string, { frozenTime: string; now: string }>();
+  private clocks = new Map<string, { startTime: string; now: string }>();
   private customers = new Map<string, { id: string; paymentMethodId: string }>();
   private subscriptions = new Map<string, { id: string; status: string }>();
   private charges = new Map<string, { id: string; invoiceId: string }>();
@@ -190,12 +236,12 @@ export class StubFixtureBackend implements FixtureBackend {
     return `${prefix}_stub_${this.seq}`;
   }
 
-  async ensureTestClock(frozenTime: string): Promise<{ id: string }> {
+  async ensureTestClock(startTime: string): Promise<{ id: string }> {
     this.count('ensureTestClock');
-    const existing = [...this.clocks.entries()].find(([, c]) => c.frozenTime === frozenTime);
+    const existing = [...this.clocks.entries()].find(([, c]) => c.startTime === startTime);
     if (existing) return { id: existing[0] };
     const id = this.nextId('tc');
-    this.clocks.set(id, { frozenTime, now: frozenTime });
+    this.clocks.set(id, { startTime, now: startTime });
     return { id };
   }
 
