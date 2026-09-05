@@ -16,5 +16,5 @@ export const getCustomer = defineTool({
   maxRetries: 2,
   idempotent: true,
   inputExamples: [{ input: { customerId: 'cus_014' } }],
-  execute: (input, _ctx) => billingProvider().getCustomer(input.customerId),
+  execute: (input, ctx) => billingProvider(ctx.tenantId).getCustomer(input.customerId),
 });

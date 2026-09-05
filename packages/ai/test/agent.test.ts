@@ -17,7 +17,7 @@ import type {
   RefundRecord,
   SubscriptionRecord,
 } from '@kora/tools';
-import { setBillingProvider } from '@kora/tools';
+import { setBillingProvider, setTenantStripeKey } from '@kora/tools';
 import { readFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
@@ -232,6 +232,9 @@ async function turn(message: string, deploymentMode: 'full' | 'human_approval' =
 beforeAll(async () => {
   await sql()`INSERT INTO tenants (id, name) VALUES (${TENANT}, 'Agent test')
               ON CONFLICT (id) DO NOTHING`;
+  // The pipeline gates money writes on the tenant having a key. The stub provider
+  // never reads it, but without a row every write stops before it runs.
+  await setTenantStripeKey(TENANT, 'sk_test_agent');
   await publishMoneyOpsVersion();
   await ingestDirectory({ tenantId: TENANT, dir: KNOWLEDGE_DIR });
 });

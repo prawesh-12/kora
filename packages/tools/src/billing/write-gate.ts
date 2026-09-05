@@ -2,6 +2,12 @@ import type { EscalationReason, ToolErrorCode } from '@kora/core';
 import { withTenant } from '@kora/db';
 import { hasTenantStripeKey } from './tenant-keys.js';
 
+/**
+ * The writes that spend a tenant's Stripe key. `create_ticket` and
+ * `escalate_to_human` are writes too, but they never reach Stripe.
+ */
+export const STRIPE_WRITE_TOOLS = ['create_refund', 'cancel_subscription', 'change_plan'];
+
 export interface StripeWriteGateRequest {
   tenantId: string;
   conversationId: string;

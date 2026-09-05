@@ -37,7 +37,7 @@ export const createRefund = defineTool({
     },
   ],
   async execute(input, ctx) {
-    const provider = billingProvider();
+    const provider = billingProvider(ctx.tenantId);
     let invoiceId = input.invoiceId;
     if (!invoiceId) {
       const subscription = await provider.getSubscription(input.subscriptionId);
@@ -67,9 +67,9 @@ export const createRefund = defineTool({
       currency: refund.amount.currency,
     };
   },
-  verify: (input, output, _ctx) =>
+  verify: (input, output, ctx) =>
     verifyRefund(
-      billingProvider(),
+      billingProvider(ctx.tenantId),
       { amountMinor: input.amountMinor },
       { id: output.refundId, amountMinor: output.amountMinor, currency: output.currency },
     ),

@@ -21,13 +21,13 @@ export const cancelSubscription = defineTool({
   idempotent: true,
   inputExamples: [{ input: { subscriptionId: 'sub_1S', mode: 'at_period_end' as const } }],
   async execute(input, ctx) {
-    const provider = billingProvider();
+    const provider = billingProvider(ctx.tenantId);
     await provider.getSubscription(input.subscriptionId);
     return provider.cancelSubscription(input, ctx.idempotencyKey);
   },
-  verify: (input, output, _ctx) =>
+  verify: (input, output, ctx) =>
     verifyCancelSubscription(
-      billingProvider(),
+      billingProvider(ctx.tenantId),
       { subscriptionId: input.subscriptionId, mode: input.mode },
       { subscriptionId: output.id },
     ),

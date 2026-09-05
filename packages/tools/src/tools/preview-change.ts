@@ -30,5 +30,5 @@ export const previewChange = defineTool({
       },
     },
   ],
-  execute: (input, _ctx) => billingProvider().previewChange(input),
+  execute: (input, ctx) => billingProvider(ctx.tenantId).previewChange(input),
 });

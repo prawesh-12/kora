@@ -47,9 +47,9 @@ const READ_TOOLS = [
  * prompt engineering. `BILLING_QUESTION` has none by design.
  */
 const WRITE_TOOLS_BY_INTENT: Record<Intent, string[]> = {
-  CANCEL_SUBSCRIPTION: ['cancel_subscription'],
-  REFUND_REQUEST: ['create_refund'],
-  CHANGE_PLAN: ['change_plan'],
+  CANCEL_SUBSCRIPTION: ['cancel_subscription', 'create_ticket'],
+  REFUND_REQUEST: ['create_refund', 'create_ticket'],
+  CHANGE_PLAN: ['change_plan', 'create_ticket'],
   BILLING_QUESTION: [],
   HUMAN_REQUEST: [],
   OUT_OF_SCOPE: [],
@@ -179,7 +179,7 @@ function buildTools(args: {
         });
 
         args.state.toolsCalled.push(def.name);
-        await recordOutcome(def, outcome, args.state);
+        await recordOutcome(def, outcome, args.state, args.ctx.tenantId);
         return toModelResult(outcome);
       },
       toModelOutput: ({ output }: { output: unknown }) => ({
@@ -210,6 +210,7 @@ async function recordOutcome(
   def: ToolDefinition,
   outcome: ToolOutcome<unknown>,
   state: TurnState,
+  tenantId: string,
 ): Promise<void> {
   if (outcome.status === 'awaiting_approval') {
     state.approvalId = outcome.approvalId;
@@ -240,7 +241,7 @@ async function recordOutcome(
     state.gathered.invoice = output as unknown as NonNullable<GatheredContext['invoice']>;
     const invoiceId = (output as { id?: unknown }).id;
     if (typeof invoiceId === 'string' && invoiceId.length > 0) {
-      const charge = await resolveChargeForInvoice(invoiceId).catch(() => null);
+      const charge = await resolveChargeForInvoice(tenantId, invoiceId).catch(() => null);
       if (charge) {
         state.gathered.charge = charge as unknown as NonNullable<GatheredContext['charge']>;
       }
@@ -573,7 +574,7 @@ export function gateToolsByState(
   const active = [...READ_TOOLS, 'escalate_to_human'].filter((n) => registered.has(n));
 
   if (READ_ONLY_INTENTS.includes(intent)) return active;
-  if (!state.gathered.order && !state.gathered.subscription) return active;
+  if (!state.gathered.subscription) return active;
 
   for (const name of WRITE_TOOLS_BY_INTENT[intent]) {
     if (registered.has(name)) active.push(name);

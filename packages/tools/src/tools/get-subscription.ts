@@ -16,5 +16,5 @@ export const getSubscription = defineTool({
   maxRetries: 2,
   idempotent: true,
   inputExamples: [{ input: { subscriptionId: 'sub_1S' } }],
-  execute: (input, _ctx) => billingProvider().getSubscription(input.subscriptionId),
+  execute: (input, ctx) => billingProvider(ctx.tenantId).getSubscription(input.subscriptionId),
 });

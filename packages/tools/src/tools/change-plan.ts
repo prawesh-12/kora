@@ -35,14 +35,14 @@ export const changePlan = defineTool({
     },
   ],
   async execute(input, ctx) {
-    const provider = billingProvider();
+    const provider = billingProvider(ctx.tenantId);
     const preview = invoicePreviewSchema.parse(await provider.previewChange(input));
     const subscription = await provider.changePlan(input, ctx.idempotencyKey);
     return { subscription, quotedNextChargeMinor: preview.nextChargeMinor };
   },
   verify: (input, output, ctx) =>
     verifyChangePlan(
-      billingProvider(),
+      billingProvider(ctx.tenantId),
       {
         subscriptionId: input.subscriptionId,
         subscriptionItemId: input.subscriptionItemId,

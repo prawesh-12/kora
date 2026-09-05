@@ -16,6 +16,7 @@ import {
 } from '@kora/core';
 import { type RunHandle, db, withTenant } from '@kora/db';
 import { capExceeded, loadCaps, spentToday } from './caps.js';
+import { STRIPE_WRITE_TOOLS, gateTenantStripeWrite } from './billing/write-gate.js';
 import { breaker, toolBreakerKey } from './breaker.js';
 import { buildFacts } from './facts.js';
 import { decideAndRecordPolicy } from './policy-gate.js';
@@ -306,6 +307,21 @@ export async function executeTool(args: ExecuteToolArgs): Promise<ToolOutcome<un
       durationMs: 0,
     });
     return { status: 'simulated', output };
+  }
+
+  // A money write needs this tenant's Stripe key. A missing key is a configuration
+  // fault, not a customer one, so it fails closed and escalates instead of burning
+  // an idempotency claim or counting against the dependency's breaker.
+  if (STRIPE_WRITE_TOOLS.includes(tool.name)) {
+    const keyGate = await gateTenantStripeWrite({
+      tenantId: args.ctx.tenantId,
+      conversationId: args.ctx.conversationId,
+      runId: run.runId,
+      toolName: tool.name,
+    });
+    if (!keyGate.ok) {
+      return fail(keyGate.outcome.code, keyGate.outcome.error, keyGate.outcome.retryable, input);
+    }
   }
 
   // 8. Circuit breaker. Checked before the claim so a downed dependency costs one

@@ -16,5 +16,5 @@ export const getInvoice = defineTool({
   maxRetries: 2,
   idempotent: true,
   inputExamples: [{ input: { invoiceId: 'in_1S' } }],
-  execute: (input, _ctx) => billingProvider().getInvoice(input.invoiceId),
+  execute: (input, ctx) => billingProvider(ctx.tenantId).getInvoice(input.invoiceId),
 });
