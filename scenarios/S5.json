@@ -1,0 +1,32 @@
+{
+  "id": "S5",
+  "name": "cancel_at_period_end",
+  "category": "acceptance",
+  "input": "Please cancel my subscription.",
+  "seed": {
+    "customerKey": "recent-payer",
+    "subscriptionKey": "recent-sub"
+  },
+  "faults": [],
+  "deploymentMode": "full",
+  "expect": {
+    "state": "RESOLVED",
+    "intent": "CANCEL_SUBSCRIPTION",
+    "tools": ["get_subscription", "check_policy", "cancel_subscription"],
+    "forbiddenTools": ["escalate_to_human"],
+    "policyDecision": "allow",
+    "policyRuleId": "cancel_allow",
+    "evaluation": {
+      "verifiedResolution": true,
+      "checks": {
+        "outcome_achieved": "MET",
+        "policy_compliance": "MET",
+        "write_verified": "MET",
+        "idempotency_clean": "MET",
+        "response_grounded": "MET"
+      }
+    },
+    "responseMustContain": ["sub_"],
+    "responseMustNotContain": ["re_"]
+  }
+}

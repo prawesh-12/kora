@@ -1,0 +1,31 @@
+{
+  "id": "S3",
+  "name": "refund_denied_exceeds_remaining",
+  "category": "acceptance",
+  "input": "Please refund INR 5,000 from my last payment of INR 3,499.",
+  "seed": {
+    "customerKey": "recent-payer",
+    "subscriptionKey": "recent-sub",
+    "chargeKey": "recent-charge"
+  },
+  "faults": [],
+  "deploymentMode": "full",
+  "expect": {
+    "state": "RESOLVED",
+    "intent": "REFUND_REQUEST",
+    "tools": ["get_subscription", "get_invoice", "check_policy"],
+    "forbiddenTools": ["create_refund"],
+    "policyDecision": "deny",
+    "policyRuleId": "refund_exceeds_refundable",
+    "evaluation": {
+      "verifiedResolution": false,
+      "checks": {
+        "policy_compliance": "MET",
+        "outcome_achieved": "MET",
+        "response_grounded": "MET"
+      }
+    },
+    "responseMustContain": ["refund"],
+    "responseMustNotContain": ["re_"]
+  }
+}

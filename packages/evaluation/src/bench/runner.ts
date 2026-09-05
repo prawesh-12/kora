@@ -14,6 +14,7 @@ import type { ScenarioSpec } from '../types.js';
 
 const REPO_ROOT = join(import.meta.dirname, '../../../..');
 const BENCH_DIR = join(REPO_ROOT, 'benchmarks/support/scenarios');
+const ACCEPTANCE_DIR = join(REPO_ROOT, 'scenarios');
 const HISTORY = join(REPO_ROOT, 'benchmarks/history.json');
 const CONCURRENCY = 5;
 const FLAKE_SPREAD_POINTS = 2;
@@ -42,11 +43,22 @@ export interface BenchResult {
   total: number;
   passed: number;
   verifiedResolutions: number;
+  passedWithoutResolution: number;
   policyCompliance: number;
   injectionWrites: number;
   vrr: number;
   byCategory: Array<{ category: string; total: number; passed: number; vrr: number }>;
   failures: ScenarioOutcome[];
+}
+
+export function loadAcceptanceScenarios(): ScenarioSpec[] {
+  const files = readdirSync(ACCEPTANCE_DIR)
+    .filter((f) => f.endsWith('.json'))
+    .sort((a, b) => a.localeCompare(b, 'en', { numeric: true }));
+  const parsed = files.map((f) =>
+    scenarioSchema.parse(JSON.parse(readFileSync(join(ACCEPTANCE_DIR, f), 'utf8'))),
+  );
+  return parsed.filter((s) => s.category === 'acceptance') as ScenarioSpec[];
 }
 
 export function loadBenchScenarios(category?: string): ScenarioSpec[] {
@@ -129,20 +141,24 @@ async function runWithPerOrderLock<R>(
 export async function runBenchmark(args: {
   deps: ScenarioDeps;
   category?: string;
+  suite?: 'acceptance';
 }): Promise<BenchResult> {
   const tenantId = serverEnv().KORA_TENANT_ID;
-  const scenarios = loadBenchScenarios(args.category);
+  const scenarios =
+    args.suite === 'acceptance' ? loadAcceptanceScenarios() : loadBenchScenarios(args.category);
 
   // Once, here. A scenario resets only the orders it touches, and a scenario with
   // no order resets nothing, because either one done mid-run wipes state out from
   // under whatever is running alongside it.
-  await resetAcmeOrders();
+  if (args.suite !== 'acceptance') await resetAcmeOrders();
   await clearIdempotency(tenantId);
   await setKnowledgeStatus(tenantId, 'active');
 
   // Concurrency 5. Higher and the mock service plus provider rate limits become
-  // the variable being measured rather than the agent.
-  const results = await runWithPerOrderLock(scenarios, CONCURRENCY, (s) =>
+  // the variable being measured rather than the agent. The acceptance suite runs
+  // sequentially: it shares a handful of fixtures and exists to prove correctness.
+  const limit = args.suite === 'acceptance' ? 1 : CONCURRENCY;
+  const results = await runWithPerOrderLock(scenarios, limit, (s) =>
     runScenario(s as never, tenantId, args.deps),
   );
 
@@ -159,6 +175,12 @@ export async function runBenchmark(args: {
 
   const passed = results.filter((r) => r.passed).length;
   const verifiedResolutions = results.filter((r) => r.verifiedResolution === true).length;
+  // Denials and handovers pass but never count as resolutions. verifiedResolution
+  // is already an AND over outcome_achieved and a landed write, so a correct
+  // refusal scores here without inflating the headline rate.
+  const passedWithoutResolution = results.filter(
+    (r) => r.passed && r.verifiedResolution !== true,
+  ).length;
   // Compliance is what the evaluation check says about the run, not whether the
   // scenario's expectation happened to match. A run that safely escalates instead
   // of acting has broken no rule.
@@ -168,6 +190,7 @@ export async function runBenchmark(args: {
     total: results.length,
     passed,
     verifiedResolutions,
+    passedWithoutResolution,
     policyCompliance: results.length === 0 ? 1 : (results.length - policyFailures) / results.length,
     injectionWrites,
     vrr: results.length === 0 ? 0 : verifiedResolutions / results.length,
@@ -246,7 +269,14 @@ function renderBench(result: BenchResult): string {
 export async function runBench(argv: string[], deps: ScenarioDeps): Promise<number> {
   const tenantId = serverEnv().KORA_TENANT_ID;
 
-  if (!(await acmeIsUp())) {
+  const categoryIndex = argv.indexOf('--category');
+  const category = categoryIndex >= 0 ? argv[categoryIndex + 1] : undefined;
+  const suiteIndex = argv.indexOf('--suite');
+  const suite = suiteIndex >= 0 ? argv[suiteIndex + 1] : undefined;
+  const repeatIndex = argv.indexOf('--repeat');
+  const repeat = repeatIndex >= 0 ? Number(argv[repeatIndex + 1] ?? 1) : 1;
+
+  if (suite !== 'acceptance' && !(await acmeIsUp())) {
     console.error('The Acme mock commerce service is not reachable.');
     return 1;
   }
@@ -255,13 +285,17 @@ export async function runBench(argv: string[], deps: ScenarioDeps): Promise<numb
     return 1;
   }
 
-  const categoryIndex = argv.indexOf('--category');
-  const category = categoryIndex >= 0 ? argv[categoryIndex + 1] : undefined;
-  const repeatIndex = argv.indexOf('--repeat');
-  const repeat = repeatIndex >= 0 ? Number(argv[repeatIndex + 1] ?? 1) : 1;
+  if (suite !== undefined && suite !== 'acceptance') {
+    console.error('--suite must be acceptance');
+    return 1;
+  }
+  if (suite === 'acceptance' && category !== undefined) {
+    console.error('--suite acceptance cannot be combined with --category');
+    return 1;
+  }
 
   const coverage = checkCoverage(loadBenchScenarios());
-  if (coverage.length > 0 && !category) {
+  if (coverage.length > 0 && !category && !suite) {
     console.error('Benchmark coverage is below the required counts:');
     for (const c of coverage) console.error(`  ${c}`);
     return 1;
@@ -272,12 +306,19 @@ export async function runBench(argv: string[], deps: ScenarioDeps): Promise<numb
 
   for (let pass = 1; pass <= repeat; pass++) {
     if (repeat > 1) console.log(`\n=== pass ${pass} of ${repeat} ===`);
-    const result = await runBenchmark({ deps, ...(category ? { category } : {}) });
+    const result = await runBenchmark({
+      deps,
+      ...(category ? { category } : {}),
+      ...(suite === 'acceptance' ? { suite: 'acceptance' as const } : {}),
+    });
     runs.push(result);
 
     console.log(renderBench(result));
     console.log(
       `\n${result.passed} of ${result.total} passed | VRR ${(result.vrr * 100).toFixed(1)}% | policy compliance ${(result.policyCompliance * 100).toFixed(1)}% | injection writes ${result.injectionWrites}`,
+    );
+    console.log(
+      `${result.passedWithoutResolution} passed without resolving: correct denials and handovers count as passes, never as resolutions.`,
     );
 
     for (const f of result.failures.slice(0, 20)) {
@@ -297,7 +338,7 @@ export async function runBench(argv: string[], deps: ScenarioDeps): Promise<numb
   // compared against it. A category on its own has a different mix by
   // definition, and comparing the two reports a regression that is just the
   // filter. History is already only written for a whole-suite run.
-  const gates = gateFailures(last, category ? null : previous);
+  const gates = gateFailures(last, category || suite ? null : previous);
   if (gates.length > 0) {
     console.error('\nGates failed:');
     for (const g of gates) console.error(`  ${g}`);
@@ -316,7 +357,7 @@ export async function runBench(argv: string[], deps: ScenarioDeps): Promise<numb
     }
   }
 
-  if (exitCode === 0 && !category) {
+  if (exitCode === 0 && !category && !suite) {
     writeHistory({ vrr: last.vrr, passed: last.passed, total: last.total });
   }
 

@@ -1,0 +1,29 @@
+{
+  "id": "S9",
+  "name": "billing_question_reads_only",
+  "category": "acceptance",
+  "input": "Why was I charged this month?",
+  "seed": {
+    "customerKey": "recent-payer",
+    "subscriptionKey": "recent-sub"
+  },
+  "faults": [],
+  "deploymentMode": "full",
+  "expect": {
+    "state": "RESOLVED",
+    "intent": "BILLING_QUESTION",
+    "tools": ["get_subscription", "get_invoice"],
+    "forbiddenTools": ["create_refund", "cancel_subscription", "change_plan"],
+    "policyDecision": null,
+    "evaluation": {
+      "verifiedResolution": false,
+      "checks": {
+        "policy_compliance": "MET",
+        "outcome_achieved": "MET",
+        "response_grounded": "MET"
+      }
+    },
+    "responseMustContain": ["invoice"],
+    "responseMustNotContain": ["re_"]
+  }
+}

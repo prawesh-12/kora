@@ -1,0 +1,24 @@
+{
+  "id": "S10",
+  "name": "ambiguous_request_handover",
+  "category": "acceptance",
+  "input": "This is confusing, help.",
+  "seed": {
+    "customerKey": "recent-payer"
+  },
+  "faults": [],
+  "deploymentMode": "full",
+  "expect": {
+    "state": "NEEDS_HUMAN",
+    "tools": [],
+    "forbiddenTools": ["create_refund", "cancel_subscription", "change_plan"],
+    "evaluation": {
+      "verifiedResolution": false,
+      "checks": {
+        "policy_compliance": "MET",
+        "response_grounded": "MET"
+      }
+    },
+    "responseMustNotContain": ["re_"]
+  }
+}

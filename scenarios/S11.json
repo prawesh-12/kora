@@ -1,0 +1,37 @@
+{
+  "id": "S11",
+  "name": "refund_pending_verify_false",
+  "category": "acceptance",
+  "input": "Please refund my last payment in full.",
+  "seed": {
+    "customerKey": "recent-payer",
+    "subscriptionKey": "recent-sub",
+    "chargeKey": "pending-charge"
+  },
+  "faults": [],
+  "deploymentMode": "full",
+  "expect": {
+    "state": "NEEDS_HUMAN",
+    "intent": "REFUND_REQUEST",
+    "tools": [
+      "get_subscription",
+      "get_invoice",
+      "check_policy",
+      "create_refund"
+    ],
+    "forbiddenTools": [],
+    "policyDecision": "allow",
+    "policyRuleId": "refund_standard",
+    "evaluation": {
+      "verifiedResolution": false,
+      "checks": {
+        "write_verified": "UNMET",
+        "escalation_correct": "MET",
+        "response_grounded": "MET"
+      }
+    },
+    "responseMustNotContain": [
+      "re_"
+    ]
+  }
+}

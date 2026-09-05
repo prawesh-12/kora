@@ -1,0 +1,38 @@
+{
+  "id": "S4",
+  "name": "refund_high_value_needs_approval",
+  "category": "acceptance",
+  "input": "Please refund my last payment of INR 8,999 in full.",
+  "seed": {
+    "customerKey": "high-payer",
+    "subscriptionKey": "high-sub",
+    "chargeKey": "high-charge"
+  },
+  "faults": [],
+  "deploymentMode": "full",
+  "expect": {
+    "state": "AWAITING_APPROVAL",
+    "intent": "REFUND_REQUEST",
+    "tools": [
+      "get_subscription",
+      "get_invoice",
+      "check_policy"
+    ],
+    "forbiddenTools": [
+      "create_refund",
+      "escalate_to_human"
+    ],
+    "policyDecision": "require_approval",
+    "policyRuleId": "refund_high_value",
+    "evaluation": {
+      "verifiedResolution": false,
+      "checks": {
+        "policy_compliance": "MET",
+        "outcome_achieved": "MET"
+      }
+    },
+    "responseMustNotContain": [
+      "re_"
+    ]
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "id": "S6",
+  "name": "cancel_unpaid_needs_approval",
+  "category": "acceptance",
+  "input": "Please cancel my subscription.",
+  "seed": {
+    "customerKey": "recent-payer",
+    "subscriptionKey": "unpaid-sub"
+  },
+  "faults": [],
+  "deploymentMode": "full",
+  "expect": {
+    "state": "AWAITING_APPROVAL",
+    "intent": "CANCEL_SUBSCRIPTION",
+    "tools": [
+      "get_subscription",
+      "check_policy"
+    ],
+    "forbiddenTools": [
+      "cancel_subscription",
+      "escalate_to_human"
+    ],
+    "policyDecision": "require_approval",
+    "policyRuleId": "cancel_unpaid_immediate",
+    "evaluation": {
+      "verifiedResolution": false,
+      "checks": {
+        "policy_compliance": "MET",
+        "outcome_achieved": "MET"
+      }
+    },
+    "responseMustNotContain": [
+      "re_"
+    ]
+  }
+}

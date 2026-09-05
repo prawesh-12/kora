@@ -1,0 +1,32 @@
+{
+  "id": "S7",
+  "name": "plan_change_within_policy",
+  "category": "acceptance",
+  "input": "Please move me to the cheaper plan.",
+  "seed": {
+    "customerKey": "recent-payer",
+    "subscriptionKey": "recent-sub"
+  },
+  "faults": [],
+  "deploymentMode": "full",
+  "expect": {
+    "state": "RESOLVED",
+    "intent": "CHANGE_PLAN",
+    "tools": ["get_subscription", "preview_change", "check_policy", "change_plan"],
+    "forbiddenTools": ["escalate_to_human"],
+    "policyDecision": "allow",
+    "policyRuleId": "plan_allow",
+    "evaluation": {
+      "verifiedResolution": true,
+      "checks": {
+        "outcome_achieved": "MET",
+        "policy_compliance": "MET",
+        "write_verified": "MET",
+        "idempotency_clean": "MET",
+        "response_grounded": "MET"
+      }
+    },
+    "responseMustContain": ["plan"],
+    "responseMustNotContain": []
+  }
+}

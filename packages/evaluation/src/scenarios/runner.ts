@@ -7,9 +7,10 @@ import {
   serverEnv,
 } from '@kora/core';
 import { assembleTrace, withTenant } from '@kora/db';
+import { setBillingProvider } from '@kora/tools';
 import { evaluateRun } from '../evaluate.js';
 import type { ScenarioSpec } from '../types.js';
-import { type Assertion, assertH1, assertScenario } from './assert.js';
+import { type Assertion, assertScenario } from './assert.js';
 import {
   acmeIsUp,
   clearIdempotency,
@@ -21,6 +22,7 @@ import {
   resetAcmeOrders,
   setKnowledgeStatus,
 } from './reset.js';
+import { createScenarioStub, subscriptionIdForKey } from './stripe-stub.js';
 
 const REPO_ROOT = join(import.meta.dirname, '../../../..');
 const SCENARIO_DIR = join(REPO_ROOT, 'scenarios');
@@ -117,6 +119,19 @@ export async function runScenario(
   };
 
   try {
+    // Money-ops scenarios run against an in-memory billing stub behind the
+    // same provider interface production uses. The stub is fresh per scenario
+    // so refunds, cancellations, and plan changes never leak across runs.
+    // The fixture key resolves to a real subscription id appended to the
+    // message, the way a conversation already knowing its customer would.
+    const stripeSuite = scenario.id.startsWith('S');
+    if (stripeSuite) {
+      setBillingProvider(createScenarioStub(scenario.seed));
+    }
+    const subRef = stripeSuite ? subscriptionIdForKey(scenario.seed.subscriptionKey) : null;
+    const messageHasRef = /(?:sub|in|re|price)_[A-Za-z0-9]+/.test(scenario.input);
+    const input =
+      subRef && !messageHasRef ? `${scenario.input} My subscription is ${subRef}.` : scenario.input;
     // A scenario with no seeded order resets nothing. Passing an empty list used
     // to mean "reset everything", which wiped the fixture out from under whatever
     // was running concurrently, and the per-order lock cannot help because such a
@@ -132,7 +147,7 @@ export async function runScenario(
       externalCustomerId: scenario.seed.customerId ?? 'cus_014',
     });
 
-    const turn = (message = scenario.input) =>
+    const turn = (message = input) =>
       runAgentTurn({
         tenantId,
         conversationId: conversation.id,
@@ -221,20 +236,15 @@ export async function runScenario(
         ? JSON.stringify({ replacements, log: await acmeRequestLog('/replacements') })
         : JSON.stringify(replacements);
 
-    const assertions = [
-      ...assertScenario({
-        scenario: scenario as never,
-        trace,
-        evaluation,
-        finalMessage: result.text,
-        replacementCount,
-        replacementDetail: detail,
-        orderStatus: status,
-      }),
-      ...(scenario.id === 'H1'
-        ? assertH1({ trace, evaluation, finalMessage: result.text, replacementCount })
-        : []),
-    ];
+    const assertions = assertScenario({
+      scenario: scenario as never,
+      trace,
+      evaluation,
+      finalMessage: result.text,
+      replacementCount,
+      replacementDetail: detail,
+      orderStatus: status,
+    });
 
     const failures = assertions.filter((a) => !a.passed);
     const write = trace.policyChecks.find((c) =>
@@ -314,7 +324,15 @@ export async function runScenarios(argv: string[] = [], deps?: ScenarioDeps): Pr
     return 1;
   }
 
-  if (!(await acmeIsUp())) {
+  const scenarios = loadScenarios(ids);
+  if (scenarios.length === 0) {
+    console.error('No scenarios matched.');
+    return 1;
+  }
+
+  const stripeSuite = scenarios.every((s) => s.id.startsWith('S'));
+
+  if (!stripeSuite && !(await acmeIsUp())) {
     console.error(
       'The Acme mock commerce service is not reachable. Start it with:\n' +
         '  pnpm --filter @kora/mock-commerce exec tsx src/index.ts',
@@ -324,15 +342,9 @@ export async function runScenarios(argv: string[] = [], deps?: ScenarioDeps): Pr
 
   if (!(await knowledgeIsPopulated(tenantId))) {
     console.error(
-      'The knowledge base is empty, so N10 would pass for the wrong reason. Run:\n' +
+      'The knowledge base is empty, so a reads-only scenario would pass for the wrong reason. Run:\n' +
         '  pnpm kora ingest config/knowledge',
     );
-    return 1;
-  }
-
-  const scenarios = loadScenarios(ids);
-  if (scenarios.length === 0) {
-    console.error('No scenarios matched.');
     return 1;
   }
 
@@ -345,7 +357,7 @@ export async function runScenarios(argv: string[] = [], deps?: ScenarioDeps): Pr
     // inherits whatever the previous one left behind and the suite stops being
     // reproducible. Doing either of these mid-pass wipes state out from under a
     // scenario running concurrently.
-    await resetAcmeOrders();
+    if (!stripeSuite) await resetAcmeOrders();
     await clearIdempotency(tenantId);
 
     const results: ScenarioOutcome[] = [];

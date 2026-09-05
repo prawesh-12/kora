@@ -105,6 +105,7 @@ export async function runChaos(args: {
   faultRate: number;
   repeat: number;
   category?: string;
+  suite?: 'acceptance';
 }): Promise<ChaosResult[]> {
   const env = serverEnv();
   if (env.NODE_ENV === 'production') {
@@ -129,9 +130,11 @@ export async function runChaos(args: {
     try {
       await acmeAdmin.setFaultRate(args.faultRate);
       const bench = await runBenchmark(
-        args.category === undefined
-          ? { deps: args.deps }
-          : { deps: args.deps, category: args.category },
+        args.suite === 'acceptance'
+          ? { deps: args.deps, suite: 'acceptance' as const }
+          : args.category === undefined
+            ? { deps: args.deps }
+            : { deps: args.deps, category: args.category },
       );
 
       results.push({

@@ -13,7 +13,16 @@ export const scenarioSchema = z
     input: z.string().min(1),
     /** Extra customer turns, sent in order after the first. */
     followUps: z.array(z.string()).default([]),
-    seed: z.object({ orderId: z.string().optional(), customerId: z.string().optional() }).strict(),
+    seed: z
+      .object({
+        orderId: z.string().optional(),
+        customerId: z.string().optional(),
+        customerKey: z.string().optional(),
+        subscriptionKey: z.string().optional(),
+        chargeKey: z.string().optional(),
+        invoiceKey: z.string().optional(),
+      })
+      .strict(),
     faults: z
       .array(
         z

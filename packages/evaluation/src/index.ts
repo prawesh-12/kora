@@ -15,5 +15,6 @@ export * from './scenarios/runner.js';
 export * from './bench/replay.js';
 export * from './bench/runner.js';
 export * from './bench/chaos.js';
+export * from './bench/billing-chaos.js';
 export * from './bench/replay-driver.js';
 export * from './alerts.js';

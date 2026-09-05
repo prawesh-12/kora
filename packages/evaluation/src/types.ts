@@ -38,7 +38,14 @@ export interface ScenarioSpec {
   category?: string;
   input: string;
   followUps?: string[];
-  seed: { orderId?: string; customerId?: string };
+  seed: {
+    orderId?: string;
+    customerId?: string;
+    customerKey?: string;
+    subscriptionKey?: string;
+    chargeKey?: string;
+    invoiceKey?: string;
+  };
   faults: Array<{ onTool: string; fault: string; times?: number }>;
   emptyKnowledge?: boolean;
   deploymentMode?: 'simulation' | 'human_approval' | 'full';

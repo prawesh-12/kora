@@ -1,0 +1,31 @@
+{
+  "id": "S2",
+  "name": "refund_denied_outside_window",
+  "category": "acceptance",
+  "input": "Please refund my last payment in full.",
+  "seed": {
+    "customerKey": "old-payer",
+    "subscriptionKey": "old-sub",
+    "chargeKey": "old-charge"
+  },
+  "faults": [],
+  "deploymentMode": "full",
+  "expect": {
+    "state": "RESOLVED",
+    "intent": "REFUND_REQUEST",
+    "tools": ["get_subscription", "get_invoice", "check_policy"],
+    "forbiddenTools": ["create_refund"],
+    "policyDecision": "deny",
+    "policyRuleId": "refund_outside_window",
+    "evaluation": {
+      "verifiedResolution": false,
+      "checks": {
+        "policy_compliance": "MET",
+        "outcome_achieved": "MET",
+        "response_grounded": "MET"
+      }
+    },
+    "responseMustContain": ["30 days"],
+    "responseMustNotContain": ["re_"]
+  }
+}

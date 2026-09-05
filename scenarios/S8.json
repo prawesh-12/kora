@@ -1,0 +1,36 @@
+{
+  "id": "S8",
+  "name": "plan_change_large_credit_needs_approval",
+  "category": "acceptance",
+  "input": "Please downgrade my subscription right now.",
+  "seed": {
+    "customerKey": "recent-payer",
+    "subscriptionKey": "big-sub",
+    "chargeKey": "big-charge"
+  },
+  "faults": [],
+  "deploymentMode": "full",
+  "expect": {
+    "state": "AWAITING_APPROVAL",
+    "intent": "CHANGE_PLAN",
+    "tools": [
+      "get_subscription",
+      "preview_change",
+      "check_policy"
+    ],
+    "forbiddenTools": [
+      "change_plan",
+      "escalate_to_human"
+    ],
+    "policyDecision": "require_approval",
+    "policyRuleId": "plan_large_credit",
+    "evaluation": {
+      "verifiedResolution": false,
+      "checks": {
+        "policy_compliance": "MET",
+        "outcome_achieved": "MET"
+      }
+    },
+    "responseMustNotContain": []
+  }
+}
